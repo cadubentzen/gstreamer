@@ -1,0 +1,7 @@
+meta,
+    args = {
+        "webstreamsrc location=\"http://localhost:8080/media/mp4/raw_h264.0.mp4\" ! qtdemux name=demux demux. ! video/x-h264 ! webcodecsviddech264hw ! webcanvassink",
+    }
+
+seek, playback-time=0.5, rate=1.0, start=5.0, flags=flush+key-unit
+seek, playback-time=6.0, rate=1.0, start=2.0, flags=flush+key-unit

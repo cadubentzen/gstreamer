@@ -59,7 +59,9 @@
 #include "gst-validate-utils.h"
 #include "gst-validate-internal.h"
 #include "validate.h"
+#ifndef __EMSCRIPTEN__
 #include "validate-resources.h"
+#endif
 #include <gst/controller/controller.h>
 #include <gst/app/app.h>
 #include <gst/validate/gst-validate-override.h>
@@ -8029,6 +8031,7 @@ register_action_types (void)
   _gst_validate_action_type = gst_validate_action_get_type ();
   _gst_validate_action_type_type = gst_validate_action_type_get_type ();
 
+#ifndef __EMSCRIPTEN__
   GResource *resource = validate_get_resource ();
   g_assert (resource);
   GBytes *meta_config_doc =
@@ -8043,6 +8046,14 @@ register_action_types (void)
   GBytes *meta_overrides_doc =
       g_resource_lookup_data (resource, "/validate/doc/meta-overrides.md",
       G_RESOURCE_LOOKUP_FLAGS_NONE, NULL);
+#define META_DOC_DATA(b) g_bytes_get_data (b, NULL)
+#else
+#define META_DOC_DATA(b) b
+  const gchar *meta_config_doc = "configs documentation (unavailable in WASM)";
+  const gchar *meta_expected_issues_doc = "expected-issues documentation (unavailable in WASM)";
+  const gchar *meta_features_rank_doc = "features-rank documentation (unavailable in WASM)";
+  const gchar *meta_overrides_doc = "overrides documentation (unavailable in WASM)";
+#endif
 
   /*  *INDENT-OFF* */
   REGISTER_ACTION_TYPE ("meta", NULL,
@@ -8205,7 +8216,7 @@ register_action_types (void)
       },
       {
         .name="configs",
-        .description=g_bytes_get_data (meta_config_doc, NULL),
+        .description=META_DOC_DATA (meta_config_doc),
         .mandatory = FALSE,
         .types = "{GstStructure as string}",
         .possible_variables = NULL,
@@ -8213,7 +8224,7 @@ register_action_types (void)
       },
       {
         .name="expected-issues",
-        .description=g_bytes_get_data (meta_expected_issues_doc, NULL),
+        .description=META_DOC_DATA (meta_expected_issues_doc),
         .mandatory = FALSE,
         .types = "{GstStructure as string}",
         .possible_variables = NULL,
@@ -8221,7 +8232,7 @@ register_action_types (void)
       },
       {
         .name="overrides",
-        .description=g_bytes_get_data (meta_overrides_doc, NULL),
+        .description=META_DOC_DATA (meta_overrides_doc),
         .mandatory = FALSE,
         .types = "{GstStructure as string}",
         .possible_variables = NULL,
@@ -8229,7 +8240,7 @@ register_action_types (void)
       },
       {
         .name="features-rank",
-        .description=g_bytes_get_data (meta_features_rank_doc, NULL),
+        .description=META_DOC_DATA (meta_features_rank_doc),
         .mandatory = FALSE,
         .types = "bool",
         .possible_variables = NULL,
@@ -8257,9 +8268,12 @@ register_action_types (void)
       }),
       "Scenario metadata.\n\nNOTE: it used to be called \"description\"",
       GST_VALIDATE_ACTION_TYPE_CONFIG);
+#ifndef __EMSCRIPTEN__
   g_bytes_unref (meta_config_doc);
   g_bytes_unref (meta_expected_issues_doc);
   g_bytes_unref (meta_features_rank_doc);
+#endif
+#undef META_DOC_DATA
 
   REGISTER_ACTION_TYPE ("seek", _execute_seek,
       ((GstValidateActionParameter [])  {

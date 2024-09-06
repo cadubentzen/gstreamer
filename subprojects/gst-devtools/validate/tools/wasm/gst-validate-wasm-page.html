@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+  <head>
+    <title>GstValidate WASM Runner</title>
+  </head>
+  <body>
+    <canvas id="canvas" width="640px" height="480px"></canvas>
+    <pre id="output"></pre>
+    <script>
+      var Module = {
+        canvas: document.getElementById('canvas'),
+        locateFile: function(path) {
+          return '/' + path;
+        },
+        preRun: [function() {
+          ENV["GST_DEBUG"] = "validate*:5,*:3";
+          ENV["GST_DEBUG_NO_COLOR"] = "1";
+        }],
+        print: function(text) {
+          console.log(text);
+          document.getElementById('output').textContent += text + '\n';
+        },
+        printErr: function(text) {
+          console.error(text);
+          document.getElementById('output').textContent += text + '\n';
+        },
+      };
+    </script>
+    <script src="/gst-validate-wasm-1.0.js"></script>
+  </body>
+</html>

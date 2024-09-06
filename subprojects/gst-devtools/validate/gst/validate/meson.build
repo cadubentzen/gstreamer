@@ -58,14 +58,21 @@ gst_validate_enums = gnome.mkenums('gstvalidateenumtypes',
   install_dir : join_paths(get_option('includedir'), 'gstreamer-1.0/gst/validate'))
 
 
-validate_resources = gnome.compile_resources(
-    'validate-resources', 'validate.res',
-    source_dir: '.',
-    c_name: 'validate'
-)
+if host_machine.system() != 'emscripten'
+  validate_resources = gnome.compile_resources(
+      'validate-resources', 'validate.res',
+      source_dir: '.',
+      c_name: 'validate'
+  )
+else
+  validate_resources = []
+endif
 
 validate_deps = [gst_check_dep, gst_dep, gst_controller_dep, gstbase_dep, gstapp_dep,
                  gio_dep, gmodule_dep, gst_pbutils_dep, mathlib, json_dep]
+if host_machine.system() == 'emscripten'
+  validate_deps += [declare_dependency(link_args: ['-lwebsocket.js'])]
+endif
 gstvalidate = library('gstvalidate-@0@'.format(api_version),
     sources: gstvalidate_sources + gst_validate_enums + runner_file + validate_resources,
     version : libversion,

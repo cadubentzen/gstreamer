@@ -65,6 +65,10 @@ if not get_option('tools').disabled() and not static_build
   endforeach
 endif
 
+if host_machine.system() == 'emscripten'
+  subdir('wasm')
+endif
+
 tmpconf = configuration_data()
 tmpconf.set('LIBDIR', join_paths(get_option('prefix'), get_option('libdir')))
 tmpconf.set('BUILDDIR', meson.current_build_dir())

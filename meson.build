@@ -565,17 +565,38 @@ if building_full
         endif
       endforeach
 
+      extra_c_args = data.get('extra_c_args', [])
+
+      # For the WASM validate runner, link the Rust validate plugin
+      # (provides check-last-frame-qrcode action). This must happen here
+      # because gst-plugins-rs is processed after gst-devtools.
+      if tool == 'gst-validate-wasm'
+        gstrsvalidate_dep = dependency('gstrsvalidate', required: false)
+        if gstrsvalidate_dep.found()
+          deps += gstrsvalidate_dep
+          extra_c_args += '-DHAVE_RSVALIDATE=1'
+        endif
+      endif
+
+      exe_kwargs = {
+        'install': data.get('install', true),
+        'install_tag': data.get('install_tag', 'bin'),
+        'install_dir': data.get('install_dir', get_option('bindir')),
+        'include_directories': data.get('include_directories', [configinc]),
+        'dependencies': [gst_full_dep] + deps,
+        'c_args': extra_c_args + gst_c_args + ['-DG_LOG_DOMAIN="@0@"'.format(exe_name)],
+        'cpp_args': data.get('extra_cpp_args', []),
+        'objc_args': data.get('extra_objc_args', []),
+        'link_args': data.get('extra_link_args', []),
+        'override_options': data.get('override_options', []),
+      }
+      if data.has_key('name_suffix')
+        exe_kwargs += {'name_suffix': data.get('name_suffix')}
+      endif
+
       exe = executable(exe_name,
         data.get('files'),
-        install: data.get('install', true),
-        install_tag: data.get('install_tag', 'bin'),
-        install_dir: data.get('install_dir', get_option('bindir')),
-        include_directories : data.get('include_directories', [configinc]),
-        dependencies : [gst_full_dep] + deps,
-        c_args: data.get('extra_c_args', []) + gst_c_args + ['-DG_LOG_DOMAIN="@0@"'.format(exe_name)],
-        cpp_args: data.get('extra_cpp_args', []),
-        objc_args: data.get('extra_objc_args', []),
-        override_options: data.get('override_options', []),
+        kwargs: exe_kwargs,
       )
 
       if(data.has_key('env'))

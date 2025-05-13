@@ -185,9 +185,9 @@ relative_seek (GESLauncher * self, gdouble percent, GESFrameNumber nframes)
         ges_timeline_get_frame_time (self->priv->timeline, MAX (0,
             cframe + nframes));
 
-    gst_println ("Setting from frame %" G_GINT64_FORMAT "(%" GST_TIMEP_FORMAT
-        ") to %" G_GINT64_FORMAT " (%" GST_TIMEP_FORMAT ")", cframe, &pos,
-        cframe + nframes, &new_pos);
+    gst_validate_printr ("Setting from frame %" G_GINT64_FORMAT
+        "(%" GST_TIMEP_FORMAT ") to %" G_GINT64_FORMAT
+        " (%" GST_TIMEP_FORMAT ")", cframe, &pos, cframe + nframes, &new_pos);
     play_do_seek (self, new_pos, self->priv->rate, self->priv->trick_mode);
 
     return;
@@ -208,11 +208,15 @@ relative_seek (GESLauncher * self, gdouble percent, GESFrameNumber nframes)
       return;
     }
 
+    gst_validate_printr ("Seeking to %" GST_TIMEP_FORMAT " @%f", &dur,
+        self->priv->rate);
     play_do_seek (self, dur - 1, self->priv->rate, self->priv->trick_mode);
   } else {
     if (pos < 0)
       pos = 0;
 
+    gst_validate_printr ("Seeking to %" GST_TIMEP_FORMAT " @%f", &pos,
+        self->priv->rate);
     play_do_seek (self, pos, self->priv->rate, self->priv->trick_mode);
   }
 
@@ -245,8 +249,7 @@ play_set_playback_rate (GESLauncher * self, gdouble rate)
   GstPlayTrickMode mode = self->priv->trick_mode;
 
   if (play_set_rate_and_trick_mode (self, rate, mode)) {
-    gst_print ("Playback rate: %.2f", rate);
-    gst_print ("                               \n");
+    gst_validate_printr ("Playback rate: %.2f", rate);
   } else {
     gst_print ("\n");
     gst_print ("Could not change playback rate to %.2f", rate);
@@ -307,8 +310,8 @@ play_switch_trick_mode (GESLauncher * self)
   mode_desc = trick_mode_get_description (new_mode);
 
   if (play_set_rate_and_trick_mode (self, self->priv->rate, new_mode)) {
-    gst_print ("Rate: %.2f (%s)                      \n", self->priv->rate,
-        mode_desc);
+    gst_validate_printr ("Rate: %.2f (%s)                      \n",
+        self->priv->rate, mode_desc);
   } else {
     gst_print ("\nCould not change trick mode to %s.\n", mode_desc);
   }
@@ -1781,10 +1784,10 @@ handle_key_press (GESLauncher * self, const gchar * key_input)
     case 'y':
       self->priv->jkl_mode = !self->priv->jkl_mode;
       if (self->priv->jkl_mode) {
-        gst_println ("JKL shuttle mode enabled");
+        gst_validate_printr ("JKL shuttle mode enabled");
         self->priv->trick_mode = GST_PLAY_TRICK_MODE_DEFAULT;
       } else {
-        gst_println ("JKL shuttle mode disabled");
+        gst_validate_printr ("JKL shuttle mode disabled");
         self->priv->trick_mode = GST_PLAY_TRICK_MODE_NONE;
         if (self->priv->rate != 1.0) {
           play_set_playback_rate (self, 1.0);
@@ -1807,7 +1810,7 @@ handle_key_press (GESLauncher * self, const gchar * key_input)
         toggle_paused (self);
       } else {
         if (self->priv->desired_state != GST_STATE_PAUSED) {
-          gst_println ("Pausing pipeline to step frame");
+          gst_validate_printr ("Pausing pipeline to step frame");
           toggle_paused (self);
           if (gst_element_get_state (GST_ELEMENT (self->priv->pipeline), NULL,
                   NULL, GST_SECOND * 10) != GST_STATE_CHANGE_SUCCESS) {
@@ -1837,7 +1840,7 @@ handle_key_press (GESLauncher * self, const gchar * key_input)
         relative_seek (self, 0, 0);
         toggle_paused (self);
       } else if (self->priv->desired_state != GST_STATE_PAUSED) {
-        gst_println ("Pausing pipeline to step frame");
+        gst_validate_printr ("Pausing pipeline to step frame");
         toggle_paused (self);
         if (gst_element_get_state (GST_ELEMENT (self->priv->pipeline), NULL,
                 NULL, GST_SECOND * 10) != GST_STATE_CHANGE_SUCCESS) {

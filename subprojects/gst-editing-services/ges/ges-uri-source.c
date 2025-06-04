@@ -520,11 +520,17 @@ ges_uri_source_create_uridecodepoolsrc (GESUriSource * self)
   g_object_set (decodebin, "uri", self->uri, "stream-id", wanted_id, "caps",
       caps, NULL);
 
-  g_signal_connect_data (decodebin, "get-initial-seek",
-      G_CALLBACK (uridecodepoolsrc_get_initial_seek_cb), self, NULL, 0);
+  if (!is_image && !GES_IS_AUDIO_SOURCE (self->element)) {
+    g_signal_connect_data (decodebin, "get-initial-seek",
+        G_CALLBACK (uridecodepoolsrc_get_initial_seek_cb), self, NULL, 0);
+  } else {
+    self->disable_seek_in_ready = TRUE;
+  }
+
   GstElement *nle_source = ges_track_element_get_nleobject (self->element);
   g_signal_connect (nle_source, "can-seek-in-ready",
       G_CALLBACK (ges_uri_source_can_seek_in_ready_cb), self);
+
   if (clip_asset) {
     g_object_get (G_OBJECT (clip_asset), "is-nested-timeline",
         &self->controls_nested_timeline, NULL);

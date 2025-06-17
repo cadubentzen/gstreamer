@@ -488,6 +488,8 @@ nle_object_to_media_time (NleObject * object, GstClockTime otime,
   gboolean ret = TRUE;
 
   g_return_val_if_fail (mtime, FALSE);
+  g_assert (G_UNLIKELY (!(NLE_IS_SOURCE (object)
+              && NLE_SOURCE (object)->reverse)));
 
   GST_DEBUG_OBJECT (object, "ObjectTime : %" GST_TIME_FORMAT,
       GST_TIME_ARGS (otime));
@@ -589,9 +591,7 @@ nle_media_to_object_time (NleObject * object, GstClockTime mtime,
     GstClockTime * otime)
 {
   g_return_val_if_fail (otime, FALSE);
-
-  GST_DEBUG_OBJECT (object, "MediaTime : %" GST_TIME_FORMAT,
-      GST_TIME_ARGS (mtime));
+  gboolean has_inpoint = GST_CLOCK_TIME_IS_VALID (object->inpoint);
 
   GST_DEBUG_OBJECT (object,
       "Start/Stop:[%" GST_TIME_FORMAT " -- %" GST_TIME_FORMAT "] "
@@ -604,9 +604,32 @@ nle_media_to_object_time (NleObject * object, GstClockTime mtime,
     return TRUE;
   }
 
+  if (NLE_IS_SOURCE (object) && NLE_SOURCE (object)->reverse) {
+    GstClockTime media_stop = has_inpoint ? object->inpoint : 0;
+    GstClockTime media_start = media_stop + object->duration;
+
+    /* the internal time should never go below the in-point! */
+    if (mtime > media_start) {
+      GST_DEBUG_OBJECT (object,
+          "media time is after media start time, forcing to start");
+      *otime = media_start;
+      return FALSE;
+    }
+
+    *otime = media_start - mtime;
+
+    GST_DEBUG_OBJECT (object,
+        "otime(%" GST_TIME_FORMAT ") = media_start(%" GST_TIME_FORMAT
+        "), - media_time(%" GST_TIME_FORMAT ") = %" GST_TIME_FORMAT,
+        GST_TIME_ARGS (mtime), GST_TIME_ARGS (media_start),
+        GST_TIME_ARGS (mtime), GST_TIME_ARGS (*otime));
+
+    return TRUE;
+  }
+
+  /* Forward playback */
   /* the internal time should never go below the in-point! */
-  if (G_UNLIKELY (GST_CLOCK_TIME_IS_VALID (object->inpoint)
-          && (mtime < object->inpoint))) {
+  if (G_UNLIKELY (has_inpoint && (mtime < object->inpoint))) {
     GST_DEBUG_OBJECT (object, "media time is before inpoint, forcing to start");
     *otime = object->start;
     return FALSE;
@@ -614,7 +637,7 @@ nle_media_to_object_time (NleObject * object, GstClockTime mtime,
 
   /* first we convert the timestamp to the object's external source/sink
    * coordinates by removing the in-point */
-  if (G_LIKELY (GST_CLOCK_TIME_IS_VALID (object->inpoint)))
+  if (G_LIKELY (has_inpoint))
     *otime = mtime - object->inpoint;
   else
     *otime = mtime;

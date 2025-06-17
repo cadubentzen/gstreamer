@@ -42,7 +42,7 @@ struct _NlePadPrivate
 /**
  * nle_object_translate_incoming_seek:
  * @object: A #NleObject.
- * @event: (transfer full) A #GstEvent to translate
+ * @event: (transfer full) A seek #GstEvent to translate
  *
  * Returns: (transfer full) new translated seek event
  */
@@ -73,52 +73,71 @@ nle_object_translate_incoming_seek (NleObject * object, GstEvent * event)
     goto invalid_format;
 
 
+  ncurtype = GST_SEEK_TYPE_SET;
   if (NLE_IS_SOURCE (object) && NLE_SOURCE (object)->reverse) {
     GST_DEBUG_OBJECT (object, "Reverse playback! %d", seqnum);
     rate = -rate;
-  }
+    if (curtype != GST_SEEK_TYPE_SET || stoptype != GST_SEEK_TYPE_SET) {
+      GST_WARNING_OBJECT (object,
+          "In reverse playback, only `SET` is suppot as SeekType-s");
+    }
 
-  /* convert cur */
-  ncurtype = GST_SEEK_TYPE_SET;
-  if (G_LIKELY ((curtype == GST_SEEK_TYPE_SET)
-          && (nle_object_to_media_time (object, cur, &ncur)))) {
-    /* cur is TYPE_SET and value is valid */
-    if (ncur > G_MAXINT64)
-      GST_WARNING_OBJECT (object, "return value too big...");
-    GST_LOG_OBJECT (object, "Setting cur to %" GST_TIME_FORMAT,
-        GST_TIME_ARGS (ncur));
-  } else if ((curtype != GST_SEEK_TYPE_NONE)) {
-    GST_DEBUG_OBJECT (object, "Limiting seek start to inpoint");
-    ncur = object->inpoint;
+    if (!GST_CLOCK_TIME_IS_VALID (stop)) {
+      GST_WARNING_OBJECT (object, "Invalid seek.stop time, using object->stop");
+      stop = object->stop;
+    }
+
+    if (!GST_CLOCK_TIME_IS_VALID (cur)) {
+      GST_WARNING_OBJECT (object, "Invalid seek.cur time, using object->start");
+      stop = object->start;
+    }
+
+    GstClockTime inpoint =
+        GST_CLOCK_TIME_IS_VALID (object->inpoint) ? object->inpoint : 0;
+    ncur = inpoint + MAX (0, GST_CLOCK_DIFF (stop, object->stop));
+    nstop = ncur + MIN (stop - cur, object->stop - cur);
   } else {
-    GST_DEBUG_OBJECT (object, "leaving GST_SEEK_TYPE_NONE");
-    ncur = cur;
-    ncurtype = GST_SEEK_TYPE_NONE;
+
+    /* convert cur */
+    ncurtype = GST_SEEK_TYPE_SET;
+    if (G_LIKELY ((curtype == GST_SEEK_TYPE_SET)
+            && (nle_object_to_media_time (object, cur, &ncur)))) {
+      /* cur is TYPE_SET and value is valid */
+      if (ncur > G_MAXINT64)
+        GST_WARNING_OBJECT (object, "return value too big...");
+      GST_LOG_OBJECT (object, "Setting cur to %" GST_TIME_FORMAT,
+          GST_TIME_ARGS (ncur));
+    } else if ((curtype != GST_SEEK_TYPE_NONE)) {
+      GST_DEBUG_OBJECT (object, "Limiting seek start to inpoint");
+      ncur = object->inpoint;
+    } else {
+      GST_DEBUG_OBJECT (object, "leaving GST_SEEK_TYPE_NONE");
+      ncur = cur;
+      ncurtype = GST_SEEK_TYPE_NONE;
+    }
+
+    /* convert stop, we also need to limit it to object->stop */
+    if (G_LIKELY ((stoptype == GST_SEEK_TYPE_SET)
+            && (nle_object_to_media_time (object, stop, &nstop)))) {
+      if (nstop > G_MAXINT64)
+        GST_WARNING_OBJECT (object, "return value too big...");
+      GST_LOG_OBJECT (object, "Setting stop to %" GST_TIME_FORMAT,
+          GST_TIME_ARGS (nstop));
+    } else {
+      /* NOTE: for an element that is upstream from a time effect we do not
+       * want to limit the seek to the object->stop because a time effect
+       * can reasonably increase the final time.
+       * In such situations, the seek stop should be set once by the
+       * source pad of the most downstream object (highest priority in the
+       * nlecomposition). */
+      GST_DEBUG_OBJECT (object, "Limiting end of seek to media_stop");
+      nle_object_to_media_time (object, object->stop, &nstop);
+      if (nstop > G_MAXINT64)
+        GST_WARNING_OBJECT (object, "return value too big...");
+      GST_LOG_OBJECT (object, "Setting stop to %" GST_TIME_FORMAT,
+          GST_TIME_ARGS (nstop));
+    }
   }
-
-  /* convert stop, we also need to limit it to object->stop */
-  if (G_LIKELY ((stoptype == GST_SEEK_TYPE_SET)
-          && (nle_object_to_media_time (object, stop, &nstop)))) {
-    if (nstop > G_MAXINT64)
-      GST_WARNING_OBJECT (object, "return value too big...");
-    GST_LOG_OBJECT (object, "Setting stop to %" GST_TIME_FORMAT,
-        GST_TIME_ARGS (nstop));
-  } else {
-    /* NOTE: for an element that is upstream from a time effect we do not
-     * want to limit the seek to the object->stop because a time effect
-     * can reasonably increase the final time.
-     * In such situations, the seek stop should be set once by the
-     * source pad of the most downstream object (highest priority in the
-     * nlecomposition). */
-    GST_DEBUG_OBJECT (object, "Limiting end of seek to media_stop");
-    nle_object_to_media_time (object, object->stop, &nstop);
-    if (nstop > G_MAXINT64)
-      GST_WARNING_OBJECT (object, "return value too big...");
-    GST_LOG_OBJECT (object, "Setting stop to %" GST_TIME_FORMAT,
-        GST_TIME_ARGS (nstop));
-  }
-
-
   /* add accurate seekflags */
   if (G_UNLIKELY (!(flags & GST_SEEK_FLAG_ACCURATE))) {
     GST_DEBUG_OBJECT (object, "Adding GST_SEEK_FLAG_ACCURATE");
@@ -235,7 +254,8 @@ invalid_format:
 }
 
 static GstEvent *
-translate_outgoing_segment (NleObject * object, GstEvent * event)
+translate_outgoing_segment (NleObject * object, NlePadPrivate * priv,
+    GstEvent * event)
 {
   const GstSegment *orig;
   GstSegment segment;
@@ -334,7 +354,7 @@ internalpad_event_function (GstPad * internal, GstObject * parent,
     case GST_PAD_SRC:{
       switch (GST_EVENT_TYPE (event)) {
         case GST_EVENT_SEGMENT:
-          event = translate_outgoing_segment (object, event);
+          event = translate_outgoing_segment (object, priv, event);
           break;
         case GST_EVENT_EOS:
           break;

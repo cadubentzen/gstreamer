@@ -43,6 +43,10 @@ static const gchar*
 gst_gl_cocoa_keycode_to_keyname (NSEvent *event)
 {
   switch ([event keyCode]) {
+    /* The key codes are taken from Events.h which is included only from
+     * Carbon/Carbon.h, which is deprecated in macOS 10.8, using their values
+     * directly as cocoa does not provide any replacement for those.
+     */
     case 0x18: return "equal";
     case 0x1B: return "minus";
     case 0x1E: return "bracketright";
@@ -91,7 +95,6 @@ gst_gl_cocoa_keycode_to_keyname (NSEvent *event)
     default: return [event characters].UTF8String;
   }
 }
-
 /* =============================================================*/
 /*                                                              */
 /*               GstGLNSWindow declaration                      */

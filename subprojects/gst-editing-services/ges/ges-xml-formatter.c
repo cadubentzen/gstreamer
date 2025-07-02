@@ -1424,7 +1424,11 @@ _save_children_properties (GString * str, GESTimelineElement * element,
 
       _init_value_from_spec_for_serialization (&val, spec);
       ges_timeline_element_get_child_property_by_pspec (element, spec, &val);
-      gst_structure_set_value (structure, spec_name, &val);
+      if (spec->value_type == GST_TYPE_STRUCTURE && val.data->v_pointer == NULL) {
+        GST_DEBUG ("Not serializing empty GstStructure as property");
+      } else {
+        gst_structure_set_value (structure, spec_name, &val);
+      }
 
       g_free (spec_name);
       g_value_unset (&val);

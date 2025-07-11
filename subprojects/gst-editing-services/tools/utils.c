@@ -466,7 +466,7 @@ print_timeline (GESTimeline * timeline)
       if (GES_TIMELINE_ELEMENT_INPOINT (clip->data))
         gst_print (" inpoint=%" GST_TIME_FORMAT,
             GST_TIME_ARGS (GES_TIMELINE_ELEMENT_INPOINT (clip->data)));
-      gst_print (" duration=%" GST_TIME_FORMAT "\n",
+      gst_print (" end=%" GST_TIME_FORMAT "\n",
           GST_TIME_ARGS (GES_TIMELINE_ELEMENT_END (clip->data)));
     }
     if (layer->next)

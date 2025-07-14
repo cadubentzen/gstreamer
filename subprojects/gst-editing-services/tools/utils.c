@@ -23,6 +23,7 @@
 #include <gst/gst.h>
 #include "utils.h"
 #include "../ges/ges-internal.h"
+#include "ges/ges-timeline-element.h"
 
 #undef GST_CAT_DEFAULT
 
@@ -424,6 +425,104 @@ describe_discoverer (GstDiscovererInfo * info)
   return g_string_free (desc, FALSE);
 }
 
+static gchar *
+ges_clip_get_time_effects_rates (GESClip * clip)
+{
+  GList *l, *effects;
+  GString *rates_str = g_string_new ("");
+  gboolean reverse = FALSE;
+  GstClockTime duration = GES_TIMELINE_ELEMENT_DURATION (clip);
+  GHashTable *track_rates =
+      g_hash_table_new_full (g_direct_hash, g_direct_equal, NULL, g_free);
+  gboolean all_same_rate = TRUE;
+  gfloat first_rate = 0.0;
+
+  ges_timeline_element_get_child_properties (GES_TIMELINE_ELEMENT (clip),
+      "reverse", &reverse, NULL);
+
+  effects = ges_clip_get_top_effects (clip);
+  for (l = effects; l; l = l->next) {
+    GESBaseEffect *effect = GES_BASE_EFFECT (l->data);
+    GESTrack *track = ges_track_element_get_track (GES_TRACK_ELEMENT (effect));
+    GHashTable *values;
+    GstClockTime transformed_duration = duration;
+    gfloat *track_rate;
+
+    if (!track)
+      continue;
+
+    values = ges_base_effect_get_time_property_values (effect);
+    if (!values)
+      continue;
+
+    if (reverse) {
+      /* In reverse mode, we need to transform times differently */
+      transformed_duration =
+          ges_base_effect_translate_sink_to_source_time (effect, duration,
+          values);
+    } else {
+      transformed_duration =
+          ges_base_effect_translate_source_to_sink_time (effect, duration,
+          values);
+    }
+    g_hash_table_unref (values);
+
+    /* Get or create rate for this track */
+    track_rate = g_hash_table_lookup (track_rates, track);
+    if (!track_rate) {
+      track_rate = g_new (gfloat, 1);
+      *track_rate = 1.0;
+      g_hash_table_insert (track_rates, track, track_rate);
+    }
+
+    /* Apply this effect's transformation to the track's rate */
+    if (duration > 0 && transformed_duration > 0)
+      *track_rate =
+          *track_rate * ((gfloat) transformed_duration / (gfloat) duration);
+  }
+
+  g_list_free_full (effects, gst_object_unref);
+
+  /* Check if all tracks have the same rate */
+  GHashTableIter iter;
+  gpointer key, value;
+  g_hash_table_iter_init (&iter, track_rates);
+
+  while (g_hash_table_iter_next (&iter, &key, &value)) {
+    gfloat *rate = (gfloat *) value;
+    if (first_rate == 0.0) {
+      first_rate = *rate;
+    } else if (first_rate != *rate) {
+      all_same_rate = FALSE;
+    }
+  }
+
+  /* Format the output string */
+  if (g_hash_table_size (track_rates) > 0) {
+    if (all_same_rate && first_rate != 1.0) {
+      g_string_append_printf (rates_str, " @ %.2fx", first_rate);
+    } else if (!all_same_rate) {
+      gboolean first = TRUE;
+      g_string_append (rates_str, " @");
+      g_hash_table_iter_init (&iter, track_rates);
+      while (g_hash_table_iter_next (&iter, &key, &value)) {
+        GESTrack *track = (GESTrack *) key;
+        gfloat *rate = (gfloat *) value;
+        if (*rate != 1.0) {
+          const gchar *track_type = track->type == GES_TRACK_TYPE_VIDEO ? "V" :
+              track->type == GES_TRACK_TYPE_AUDIO ? "A" : "?";
+          g_string_append_printf (rates_str, "%s %s:%.2fx",
+              first ? "" : ",", track_type, *rate);
+          first = FALSE;
+        }
+      }
+    }
+  }
+
+  g_hash_table_destroy (track_rates);
+  return g_string_free (rates_str, FALSE);
+}
+
 void
 print_timeline (GESTimeline * timeline)
 {
@@ -466,8 +565,10 @@ print_timeline (GESTimeline * timeline)
       if (GES_TIMELINE_ELEMENT_INPOINT (clip->data))
         gst_print (" inpoint=%" GST_TIME_FORMAT,
             GST_TIME_ARGS (GES_TIMELINE_ELEMENT_INPOINT (clip->data)));
-      gst_print (" end=%" GST_TIME_FORMAT "\n",
-          GST_TIME_ARGS (GES_TIMELINE_ELEMENT_END (clip->data)));
+      gchar *rates = ges_clip_get_time_effects_rates (clip->data);
+      gst_print (" end=%" GST_TIME_FORMAT "%s\n",
+          GST_TIME_ARGS (GES_TIMELINE_ELEMENT_END (clip->data)), rates);
+      g_free (rates);
     }
     if (layer->next)
       gst_printerr ("\n");

@@ -279,7 +279,7 @@ ges_base_effect_register_time_property (GESBaseEffect * effect,
  * coordinates to the sink coordinates of @effect
  * @sink_to_source_func: (nullable) (scope notified) (closure user_data): The
  * function to use for querying how a time is translated from the sink
- * coordinates to the source coordinates of @effect 
+ * coordinates to the source coordinates of @effect
  * @user_data: Data to pass to both @source_to_sink_func and
  * @sink_to_source_func
  * @destroy: (destroy user_data) (nullable): Method to call to destroy

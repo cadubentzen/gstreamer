@@ -91,4 +91,15 @@ ges_base_effect_set_time_translation_funcs (GESBaseEffect * effect,
 GES_API gboolean
 ges_base_effect_is_time_effect             (GESBaseEffect * effect);
 
+GES_API GHashTable *
+ges_base_effect_get_time_property_values      (GESBaseEffect * effect);
+GES_API GstClockTime
+ges_base_effect_translate_source_to_sink_time (GESBaseEffect * effect,
+                                               GstClockTime time,
+                                               GHashTable * time_property_values);
+GES_API GstClockTime
+ges_base_effect_translate_sink_to_source_time (GESBaseEffect * effect,
+                                               GstClockTime time,
+                                               GHashTable * time_property_values);
+
 G_END_DECLS

@@ -563,16 +563,6 @@ G_GNUC_INTERNAL gchar *
 ges_base_effect_get_time_property_name        (GESBaseEffect * effect,
                                                GObject * child,
                                                GParamSpec * pspec);
-G_GNUC_INTERNAL GHashTable *
-ges_base_effect_get_time_property_values      (GESBaseEffect * effect);
-G_GNUC_INTERNAL GstClockTime
-ges_base_effect_translate_source_to_sink_time (GESBaseEffect * effect,
-                                               GstClockTime time,
-                                               GHashTable * time_property_values);
-G_GNUC_INTERNAL GstClockTime
-ges_base_effect_translate_sink_to_source_time (GESBaseEffect * effect,
-                                               GstClockTime time,
-                                               GHashTable * time_property_values);
 G_GNUC_INTERNAL GstElement *
 ges_effect_from_description                   (const gchar *bin_desc,
                                                GESTrackType type,

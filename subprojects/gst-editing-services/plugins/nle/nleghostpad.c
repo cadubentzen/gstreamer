@@ -95,7 +95,7 @@ nle_object_translate_incoming_seek (NleObject * object, GstEvent * event)
     GstClockTime inpoint =
         GST_CLOCK_TIME_IS_VALID (object->inpoint) ? object->inpoint : 0;
     ncur = inpoint + MAX (0, GST_CLOCK_DIFF (stop, object->stop));
-    nstop = ncur + MIN (stop - cur, object->stop - cur);
+    nstop = ncur + stop - cur;
   } else {
 
     /* convert cur */

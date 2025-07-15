@@ -18,6 +18,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
+#include "glib-object.h"
 #include "gst/gststructure.h"
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -113,6 +114,7 @@ enum
 enum
 {
   COMMIT_SIGNAL,
+  CAN_SEEK_IN_READY_SIGNAL,
   LAST_SIGNAL
 };
 
@@ -134,6 +136,7 @@ static GstStateChangeReturn nle_object_change_state (GstElement * element,
 static gboolean nle_object_prepare_func (NleObject * object);
 static gboolean nle_object_cleanup_func (NleObject * object);
 static gboolean nle_object_commit_func (NleObject * object, gboolean recurse);
+static gboolean nle_object_can_seek_in_ready_func (NleObject * object);
 
 static GstStateChangeReturn nle_object_prepare (NleObject * object);
 
@@ -227,6 +230,8 @@ nle_object_class_init (NleObjectClass * klass)
   nleobject_class->commit_signal_handler =
       GST_DEBUG_FUNCPTR (nle_object_commit);
   nleobject_class->commit = GST_DEBUG_FUNCPTR (nle_object_commit_func);
+  nleobject_class->can_seek_in_ready =
+      GST_DEBUG_FUNCPTR (nle_object_can_seek_in_ready_func);
 
   /**
    * NleObject:start
@@ -377,6 +382,21 @@ nle_object_class_init (NleObjectClass * klass)
       G_STRUCT_OFFSET (NleObjectClass, commit_signal_handler), NULL, NULL, NULL,
       G_TYPE_BOOLEAN, 1, G_TYPE_BOOLEAN);
 
+  /**
+   * NleObject::can-seek-in-ready:
+   * @object: a #NleObject
+   *
+   * Signal emitted to determine if the object can perform seek operations
+   * while in the READY state. The user of NLE becomes responsible for
+   * answering this query by connecting to this signal.
+   *
+   * Returns: %TRUE if the object can seek in READY state, %FALSE otherwise
+   */
+  _signals[CAN_SEEK_IN_READY_SIGNAL] = g_signal_new ("can-seek-in-ready",
+      G_TYPE_FROM_CLASS (klass), G_SIGNAL_RUN_FIRST,
+      G_STRUCT_OFFSET (NleObjectClass, can_seek_in_ready), NULL, NULL, NULL,
+      G_TYPE_BOOLEAN, 0);
+
   gst_type_mark_as_plugin_api (NLE_TYPE_OBJECT, 0);
 
 #ifdef HAVE_GST_VALIDATE
@@ -400,7 +420,6 @@ nle_object_init (NleObject * object, NleObjectClass * klass)
   object->segment_rate = 1.0;
   object->segment_start = -1;
   object->segment_stop = -1;
-  object->can_seek_in_ready = TRUE;
 
   object->srcpad = nle_object_ghost_pad_no_target (object,
       "src", GST_PAD_SRC,
@@ -641,6 +660,15 @@ static gboolean
 nle_object_cleanup_func (NleObject * object)
 {
   GST_DEBUG_OBJECT (object, "default cleanup function, returning TRUE");
+
+  return TRUE;
+}
+
+static gboolean
+nle_object_can_seek_in_ready_func (NleObject * object)
+{
+  GST_DEBUG_OBJECT (object,
+      "default can_seek_in_ready function, returning TRUE");
 
   return TRUE;
 }
@@ -920,6 +948,21 @@ nle_object_seek_all_children (NleObject * object, GstEvent * seek_event)
 
   gst_iterator_free (it);
   gst_event_unref (seek_event);
+}
+
+gboolean
+nle_object_can_seek_in_ready (NleObject * object)
+{
+  gboolean can_seek = FALSE;
+
+  g_return_val_if_fail (NLE_IS_OBJECT (object), FALSE);
+
+  g_signal_emit (object, _signals[CAN_SEEK_IN_READY_SIGNAL], 0, &can_seek);
+
+  GST_DEBUG_OBJECT (object, "can-seek-in-ready signal returned %s",
+      can_seek ? "TRUE" : "FALSE");
+
+  return can_seek;
 }
 
 void

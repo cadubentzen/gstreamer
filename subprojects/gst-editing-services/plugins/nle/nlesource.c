@@ -199,8 +199,6 @@ nle_source_handle_message (GstBin * bin, GstMessage * message)
 static void
 nle_source_constructed (GObject * obj)
 {
-  NLE_OBJECT (obj)->can_seek_in_ready = FALSE;
-
   ((GObjectClass *) parent_class)->constructed (obj);
 }
 
@@ -532,16 +530,6 @@ nle_source_control_element_func (NleSource * source, GstElement * element)
   return TRUE;
 }
 
-static void
-nle_source_check_can_seek_in_ready (const GValue * v, NleSource * source)
-{
-  GstElement *element = g_value_get_object (v);
-  // FIXME: This assume that any source that has a BaseSrc in it in NULL static_assert(
-  // can be seeked in READY state, that is not totally correct and should be
-  // enhanced
-  NLE_OBJECT (source)->can_seek_in_ready |= GST_IS_BASE_SRC (element);
-}
-
 static gboolean
 nle_source_add_element (GstBin * bin, GstElement * element)
 {
@@ -553,19 +541,6 @@ nle_source_add_element (GstBin * bin, GstElement * element)
   if (source->element) {
     GST_WARNING_OBJECT (bin, "NleSource can only handle one element at a time");
     return FALSE;
-  }
-
-  NLE_OBJECT (source)->can_seek_in_ready = GST_IS_BASE_SRC (element);
-  if (GST_IS_BIN (element)) {
-    GstIterator *iter;
-
-    iter = gst_bin_iterate_recurse (GST_BIN (element));
-    while (gst_iterator_foreach (iter,
-            (GstIteratorForeachFunction) nle_source_check_can_seek_in_ready,
-            source)) {
-      gst_iterator_resync (iter);
-    }
-    gst_iterator_free (iter);
   }
 
   /* call parent add_element */
@@ -611,7 +586,6 @@ nle_source_remove_element (GstBin * bin, GstElement * element)
     priv->dynamicpads = FALSE;
     gst_object_unref (element);
     source->element = NULL;
-    NLE_OBJECT (source)->can_seek_in_ready = FALSE;
   }
   return pret;
 }
@@ -627,7 +601,6 @@ nle_source_send_event (GstElement * element, GstEvent * event)
     case GST_EVENT_SEEK:
       if (gst_structure_has_field (gst_event_get_structure (event),
               "nlecomposition-seek")) {
-        g_assert (NLE_OBJECT (source)->can_seek_in_ready);
         nle_object_seek_all_children (NLE_OBJECT (element), event);
       } else {
         g_mutex_lock (&source->priv->seek_lock);

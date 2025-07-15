@@ -38,6 +38,7 @@ struct _GESUriSource
 
   GList *parent_ges_uri_sources;
   gboolean controls_nested_timeline;
+   gboolean disable_seek_in_ready;
 };
 
 G_GNUC_INTERNAL gboolean      ges_uri_source_select_pad   (GESSource *self, GstPad *pad);

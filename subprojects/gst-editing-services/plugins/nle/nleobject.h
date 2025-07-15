@@ -140,7 +140,6 @@ struct _NleObject
   gint64 segment_stop;
 
   gboolean in_composition;
-  gboolean can_seek_in_ready;
 };
 
 struct _NleObjectClass
@@ -149,6 +148,7 @@ struct _NleObjectClass
 
   /* Signal method handler */
   gboolean (*commit_signal_handler) (NleObject * object, gboolean recurse);
+  gboolean (*can_seek_in_ready) (NleObject * object);
 
   /* virtual methods for subclasses */
     gboolean (*prepare) (NleObject * object);
@@ -182,6 +182,8 @@ GstStateChangeReturn
 nle_object_cleanup (NleObject * object) G_GNUC_INTERNAL;
 
 void nle_object_seek_all_children (NleObject *object, GstEvent *seek_event) G_GNUC_INTERNAL;
+
+gboolean nle_object_can_seek_in_ready (NleObject *object) G_GNUC_INTERNAL;
 
 G_END_DECLS
 #endif /* __NLE_OBJECT_H__ */

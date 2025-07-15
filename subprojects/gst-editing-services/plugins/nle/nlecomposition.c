@@ -1369,7 +1369,6 @@ nle_composition_constructed (GObject * obj)
 
   priv->id = gst_pad_create_stream_id (NLE_OBJECT_SRC (obj),
       GST_ELEMENT (obj), NULL);
-  NLE_OBJECT (obj)->can_seek_in_ready = FALSE;
 
   ((GObjectClass *) parent_class)->constructed (obj);
 }
@@ -2687,7 +2686,7 @@ get_stack_list (NleComposition * comp, GstClockTime timestamp,
           GST_LOG_OBJECT (comp, "adding %s: sorted to the stack",
               GST_OBJECT_NAME (object));
 
-          *can_seek_in_ready &= object->can_seek_in_ready;
+          *can_seek_in_ready &= nle_object_can_seek_in_ready (object);
           if (NLE_IS_OPERATION (object) && NLE_OPERATION (object)->time_effect) {
             *can_seek_in_ready = FALSE;
           }
@@ -2716,7 +2715,7 @@ get_stack_list (NleComposition * comp, GstClockTime timestamp,
             ((!activeonly) || (NLE_OBJECT_ACTIVE (object)))) {
           GST_LOG_OBJECT (comp, "adding %s: sorted to the stack",
               GST_OBJECT_NAME (object));
-          *can_seek_in_ready &= object->can_seek_in_ready;
+          *can_seek_in_ready &= nle_object_can_seek_in_ready (object);
           if (NLE_IS_OPERATION (object) && NLE_OPERATION (object)->time_effect) {
             *can_seek_in_ready = FALSE;
           }
@@ -2737,7 +2736,8 @@ get_stack_list (NleComposition * comp, GstClockTime timestamp,
     for (tmp = comp->priv->expandables; tmp; tmp = tmp->next) {
       GST_DEBUG_OBJECT (comp, "Adding expandable %s sorted to the list",
           GST_OBJECT_NAME (tmp->data));
-      *can_seek_in_ready &= NLE_OBJECT (tmp->data)->can_seek_in_ready;
+      *can_seek_in_ready &=
+          nle_object_can_seek_in_ready (NLE_OBJECT (tmp->data));
 
       if (NLE_IS_OPERATION (tmp->data)
           && NLE_OPERATION (tmp->data)->time_effect) {

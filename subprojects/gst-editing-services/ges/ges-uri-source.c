@@ -415,6 +415,25 @@ uridecodepoolsrc_create_filter (GstElement * uridecodepoolsrc,
   return g_object_ref_sink (filter);
 }
 
+static gboolean
+ges_uri_source_can_seek_in_ready_cb (GstElement * nleobject,
+    GESUriSource * self)
+{
+  if (self->disable_seek_in_ready) {
+    GST_ERROR_OBJECT (self->element, "Seeking in READY is DISABLED for %s",
+        GES_TIMELINE_ELEMENT_NAME (self->element));
+    return FALSE;
+  }
+
+  if (self->controls_nested_timeline) {
+    GST_ERROR_OBJECT (self->element,
+        "Controls a nested timeline, not seeking in READY");
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
 static GstElement *
 ges_uri_source_create_uridecodepoolsrc (GESUriSource * self)
 {
@@ -501,11 +520,11 @@ ges_uri_source_create_uridecodepoolsrc (GESUriSource * self)
   g_object_set (decodebin, "uri", self->uri, "stream-id", wanted_id, "caps",
       caps, NULL);
 
-  if (!is_image && !GES_IS_AUDIO_SOURCE (self->element)) {
-    g_signal_connect_data (decodebin, "get-initial-seek",
-        G_CALLBACK (uridecodepoolsrc_get_initial_seek_cb), self, NULL, 0);
-  }
-
+  g_signal_connect_data (decodebin, "get-initial-seek",
+      G_CALLBACK (uridecodepoolsrc_get_initial_seek_cb), self, NULL, 0);
+  GstElement *nle_source = ges_track_element_get_nleobject (self->element);
+  g_signal_connect (nle_source, "can-seek-in-ready",
+      G_CALLBACK (ges_uri_source_can_seek_in_ready_cb), self);
   if (clip_asset) {
     g_object_get (G_OBJECT (clip_asset), "is-nested-timeline",
         &self->controls_nested_timeline, NULL);
@@ -531,6 +550,11 @@ ges_uri_source_create_source (GESUriSource * self)
 
   if (ges_source_uses_uridecodepoolsrc (GES_SOURCE (self->element)))
     return ges_uri_source_create_uridecodepoolsrc (self);
+
+  GstElement *nle_source = ges_track_element_get_nleobject (self->element);
+  self->disable_seek_in_ready = TRUE;
+  g_signal_connect (nle_source, "can-seek-in-ready",
+      G_CALLBACK (ges_uri_source_can_seek_in_ready_cb), self);
 
   track = ges_track_element_get_track (self->element);
 

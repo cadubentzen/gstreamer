@@ -455,16 +455,9 @@ ges_clip_get_time_effects_rates (GESClip * clip)
     if (!values)
       continue;
 
-    if (reverse) {
-      /* In reverse mode, we need to transform times differently */
-      transformed_duration =
-          ges_base_effect_translate_sink_to_source_time (effect, duration,
-          values);
-    } else {
-      transformed_duration =
-          ges_base_effect_translate_source_to_sink_time (effect, duration,
-          values);
-    }
+    transformed_duration =
+        ges_base_effect_translate_source_to_sink_time (effect, duration,
+        values);
     g_hash_table_unref (values);
 
     /* Get or create rate for this track */
@@ -476,9 +469,16 @@ ges_clip_get_time_effects_rates (GESClip * clip)
     }
 
     /* Apply this effect's transformation to the track's rate */
-    if (duration > 0 && transformed_duration > 0)
-      *track_rate =
-          *track_rate * ((gfloat) transformed_duration / (gfloat) duration);
+    if (duration > 0 && transformed_duration > 0) {
+      if (reverse) {
+        /* In reverse mode, we need to adjust the rate inversely */
+        *track_rate =
+            *track_rate * (gfloat) transformed_duration / (gfloat) duration;
+      } else {
+        *track_rate =
+            *track_rate * ((gfloat) duration / (gfloat) transformed_duration);
+      }
+    }
   }
 
   g_list_free_full (effects, gst_object_unref);
@@ -500,19 +500,22 @@ ges_clip_get_time_effects_rates (GESClip * clip)
   /* Format the output string */
   if (g_hash_table_size (track_rates) > 0) {
     if (all_same_rate && first_rate != 1.0) {
-      g_string_append_printf (rates_str, " @ %.2fx", first_rate);
+      g_string_append_printf (rates_str, " @ %s%.2fx", reverse ? "-" : "",
+          first_rate);
     } else if (!all_same_rate) {
       gboolean first = TRUE;
+
       g_string_append (rates_str, " @");
       g_hash_table_iter_init (&iter, track_rates);
       while (g_hash_table_iter_next (&iter, &key, &value)) {
         GESTrack *track = (GESTrack *) key;
         gfloat *rate = (gfloat *) value;
+
         if (*rate != 1.0) {
           const gchar *track_type = track->type == GES_TRACK_TYPE_VIDEO ? "V" :
               track->type == GES_TRACK_TYPE_AUDIO ? "A" : "?";
-          g_string_append_printf (rates_str, "%s %s:%.2fx",
-              first ? "" : ",", track_type, *rate);
+          g_string_append_printf (rates_str, "%s %s:%s%.2fx",
+              first ? "" : ",", track_type, reverse ? "-" : "", *rate);
           first = FALSE;
         }
       }

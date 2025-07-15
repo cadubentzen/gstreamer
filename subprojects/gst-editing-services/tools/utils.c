@@ -25,6 +25,14 @@
 #include "../ges/ges-internal.h"
 #include "ges/ges-timeline-element.h"
 
+#ifdef G_OS_WIN32
+#include <windows.h>
+#include <io.h>
+#else
+#include <sys/ioctl.h>
+#include <unistd.h>
+#endif
+
 #undef GST_CAT_DEFAULT
 
 /* Copy of GST_ASCII_IS_STRING */
@@ -292,13 +300,13 @@ static const gchar *
 get_type_icon (gpointer obj)
 {
   if (GST_IS_ENCODING_AUDIO_PROFILE (obj) || GST_IS_DISCOVERER_AUDIO_INFO (obj))
-    return "♫";
+    return "🔊 ";
   else if (GST_IS_ENCODING_VIDEO_PROFILE (obj)
       || GST_IS_DISCOVERER_VIDEO_INFO (obj))
-    return "▶";
+    return "🎞 ";
   else if (GST_IS_ENCODING_CONTAINER_PROFILE (obj)
       || GST_IS_DISCOVERER_CONTAINER_INFO (obj))
-    return "∋";
+    return "📽 ";
   else
     return "";
 }
@@ -526,55 +534,425 @@ ges_clip_get_time_effects_rates (GESClip * clip)
   return g_string_free (rates_str, FALSE);
 }
 
+static gchar *
+create_clip_bar (GESClip * clip, GstClockTime layer_end, gint width)
+{
+  GString *result = g_string_sized_new (width + 1);
+  gboolean *filled = g_malloc0 (width * sizeof (gboolean));
+
+  if (layer_end == 0) {
+    g_string_append_printf (result, "%*s", width, "");
+    g_free (filled);
+    return g_string_free (result, FALSE);
+  }
+
+  GstClockTime start = GES_TIMELINE_ELEMENT_START (clip);
+  GstClockTime end = GES_TIMELINE_ELEMENT_END (clip);
+
+  gint start_pos = (gint) ((start * width) / layer_end);
+  gint end_pos = (gint) ((end * width) / layer_end);
+
+  start_pos = CLAMP (start_pos, 0, width - 1);
+  end_pos = CLAMP (end_pos, 0, width - 1);
+
+  for (gint i = start_pos; i <= end_pos && i < width; i++) {
+    filled[i] = TRUE;
+  }
+
+  /* Build result string with colors */
+  GESTrackType supported_types = ges_clip_get_supported_formats (clip);
+  const gchar *color_start = "";
+  const gchar *color_end = "";
+
+  /* Choose color based on track type */
+  if (gst_debug_get_color_mode () != GST_DEBUG_COLOR_MODE_OFF) {
+    if (supported_types & GES_TRACK_TYPE_VIDEO
+        && supported_types & GES_TRACK_TYPE_AUDIO) {
+      color_start = "\033[1;32m";       /* Bright green for mixed */
+    } else if (supported_types & GES_TRACK_TYPE_VIDEO) {
+      color_start = "\033[0;32m";       /* Regular green for video */
+    } else if (supported_types & GES_TRACK_TYPE_AUDIO) {
+      color_start = "\033[0;36m";       /* Cyan for audio */
+    }
+    color_end = "\033[0m";
+  }
+
+  gboolean in_block = FALSE;
+  for (gint i = 0; i < width; i++) {
+    if (filled[i] && !in_block) {
+      /* Start of a block */
+      g_string_append (result, color_start);
+      g_string_append (result, "█");
+      in_block = TRUE;
+    } else if (filled[i] && in_block) {
+      /* Continue block */
+      g_string_append (result, "█");
+    } else if (!filled[i] && in_block) {
+      /* End of block */
+      g_string_append (result, color_end);
+      g_string_append_c (result, ' ');
+      in_block = FALSE;
+    } else {
+      /* Empty space */
+      g_string_append_c (result, ' ');
+    }
+  }
+
+  /* Close color if we ended in a block */
+  if (in_block) {
+    g_string_append (result, color_end);
+  }
+
+  g_free (filled);
+  return g_string_free (result, FALSE);
+}
+
+static gchar *
+repeat_utf8_char (const gchar * utf8_char, gint count)
+{
+  if (count <= 0 || !utf8_char)
+    return g_strdup ("");
+
+  GString *result = g_string_sized_new (count * strlen (utf8_char));
+  for (gint i = 0; i < count; i++) {
+    g_string_append (result, utf8_char);
+  }
+  return g_string_free (result, FALSE);
+}
+
+static gchar *
+format_timeline_description (const gchar * description)
+{
+  gchar *formatted = g_strdup (description);
+
+  /* Replace " +" with "\n  +" to put each command on a new line */
+  gchar **parts = g_strsplit (formatted, " +", -1);
+  g_free (formatted);
+
+  GString *result = g_string_new ("");
+
+  for (gint i = 0; parts[i]; i++) {
+    gchar *part = parts[i];
+
+    if (i == 0) {
+      /* First part - handle initial command */
+      g_string_append (result, part);
+    } else {
+      /* Split command from parameters */
+      gchar **cmd_parts = g_strsplit (part, " ", -1);
+      if (cmd_parts[0]) {
+        gchar *cmd = cmd_parts[0];
+        gint base_indent = g_str_equal (cmd, "effect") ? 4 : 2;
+
+        /* Add colored command */
+        g_string_append_printf (result, " \\\n%*s\033[1;32m+%s\033[0m",
+            base_indent, "", cmd);
+
+        /* Add parameters on separate lines with proper indentation */
+        for (gint j = 1; cmd_parts[j]; j++) {
+          gchar *param = cmd_parts[j];
+
+          if (strchr (param, '=')) {
+            /* Parameter with value - put on new line with extra indent */
+            g_string_append_printf (result, " \\\n%*s%s",
+                base_indent + 2, "", param);
+          } else {
+            /* Simple parameter - add to same line */
+            g_string_append_printf (result, " %s", param);
+          }
+        }
+      }
+      g_strfreev (cmd_parts);
+    }
+  }
+
+  g_strfreev (parts);
+  return g_string_free (result, FALSE);
+}
+
+static gint
+get_terminal_width (void)
+{
+#ifdef G_OS_WIN32
+  HANDLE console = GetStdHandle (STD_OUTPUT_HANDLE);
+  if (console != INVALID_HANDLE_VALUE) {
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    if (GetConsoleScreenBufferInfo (console, &csbi)) {
+      return csbi.srWindow.Right - csbi.srWindow.Left + 1;
+    }
+  }
+#else
+  struct winsize ws;
+  if (ioctl (STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0) {
+    return ws.ws_col;
+  }
+#endif
+
+  /* Fallback to COLUMNS environment variable */
+  const gchar *columns_env = g_getenv ("COLUMNS");
+  if (columns_env) {
+    gint width = g_ascii_strtoll (columns_env, NULL, 10);
+    if (width > 0)
+      return width;
+  }
+
+  /* Final fallback */
+  return 80;
+}
+
+static gchar *
+truncate_clip_name (const gchar * name, gint max_width)
+{
+  if (!name)
+    return g_strdup ("");
+
+  gint name_len = g_utf8_strlen (name, -1);
+  if (name_len <= max_width)
+    return g_strdup (name);
+
+  /* For filenames, try to keep the extension and truncate from the middle */
+  gchar *dot = g_strrstr (name, ".");
+  if (dot && (dot - name) > 3) {
+    gchar *extension = g_strdup (dot);
+    gint ext_len = g_utf8_strlen (extension, -1);
+    gint available_for_name = max_width - ext_len - 3;  /* -3 for "..." */
+
+    if (available_for_name > 3) {
+      gchar *truncated = g_malloc0 (max_width + 1);
+      gchar *end_ptr = g_utf8_offset_to_pointer (name, available_for_name);
+      g_strlcpy (truncated, name, end_ptr - name + 1);
+      g_strlcat (truncated, "…", max_width + 1);
+      g_strlcat (truncated, extension, max_width + 1);
+      g_free (extension);
+      return truncated;
+    }
+    g_free (extension);
+  }
+
+  /* Fallback: simple truncation from end */
+  gchar *truncated = g_malloc0 (max_width + 1);
+  gchar *end_ptr = g_utf8_offset_to_pointer (name, max_width - 1);
+  g_strlcpy (truncated, name, end_ptr - name + 1);
+  g_strlcat (truncated, "…", max_width + 1);
+  return truncated;
+}
+
 void
 print_timeline (GESTimeline * timeline)
 {
   gchar *uri;
   GList *layer, *clip, *clips;
+  GstClockTime timeline_duration = 0;
+  gint terminal_width = get_terminal_width ();
+  gint timeline_width = 70;
+  gint max_content_width = 0;
 
   if (!timeline->layers)
     return;
 
+  /* Calculate timeline duration and find the longest content line */
+  for (layer = timeline->layers; layer; layer = layer->next) {
+    clips = ges_layer_get_clips (layer->data);
+    for (clip = clips; clip; clip = clip->next) {
+      GstClockTime clip_end = GES_TIMELINE_ELEMENT_END (clip->data);
+      timeline_duration = MAX (timeline_duration, clip_end);
+
+      /* Calculate content width needed for this clip */
+      gchar *clip_name = NULL;
+      if (GES_IS_URI_CLIP (clip->data)) {
+        GESUriClipAsset *asset =
+            GES_URI_CLIP_ASSET (ges_extractable_get_asset (clip->data));
+        const gchar *full_path = ges_asset_get_id (GES_ASSET (asset));
+        gchar *filename = g_path_get_basename (full_path);
+        gchar *asset_desc =
+            describe_discoverer (ges_uri_clip_asset_get_info (asset));
+
+        clip_name = g_strdup (filename);
+        g_free (filename);
+        g_free (asset_desc);
+      } else {
+        clip_name = g_strdup (GES_TIMELINE_ELEMENT_NAME (clip->data));
+      }
+
+      if (clip_name) {
+        gint content_width = g_utf8_strlen (clip_name, -1) + 30;
+        max_content_width = MAX (max_content_width, content_width);
+        g_free (clip_name);
+      }
+    }
+    g_list_free_full (clips, gst_object_unref);
+  }
+
+  /* Set timeline width based on content but respect terminal width */
+  timeline_width = MAX (timeline_width, max_content_width);
+  timeline_width = MIN (timeline_width, terminal_width - 4);    /* -4 for borders and padding */
+
+
   uri = ges_command_line_formatter_get_timeline_uri (timeline);
-  gst_print ("\nTimeline description: `%s`\n", &uri[5]);
+
+  gint title_len = g_utf8_strlen ("🎬 TIMELINE OVERVIEW", -1);
+  gint left_padding = (timeline_width - title_len - 2) / 2;
+  gint right_padding = timeline_width - title_len - 2 - left_padding;
+
+  gchar *left_border = repeat_utf8_char ("═", left_padding);
+  gchar *right_border = repeat_utf8_char ("═", right_padding);
+  gst_print ("%s 🎬 TIMELINE OVERVIEW %s\n", left_border, right_border);
+  g_free (left_border);
+  g_free (right_border);
+
+  gchar *formatted_desc = format_timeline_description (&uri[5]);
+  gst_print ("Command: %s\n\n", formatted_desc);
+  g_free (formatted_desc);
   g_free (uri);
-  gst_print ("====================\n\n");
+
   for (layer = timeline->layers; layer; layer = layer->next) {
     clips = ges_layer_get_clips (layer->data);
 
     if (!clips)
       continue;
 
-    gst_printerr ("  layer %d: \n", ges_layer_get_priority (layer->data));
-    gst_printerr ("  --------\n");
+    GstClockTime layer_end = 0;
+
+    for (clip = clips; clip; clip = clip->next) {
+      GstClockTime clip_end = GES_TIMELINE_ELEMENT_END (clip->data);
+      layer_end = MAX (layer_end, clip_end);
+    }
+
+    /* Print layer header with duration */
+    gchar *left_border = repeat_utf8_char ("─", 8);
+    gchar *middle_border = repeat_utf8_char ("─", 13);
+    gchar *right_border = repeat_utf8_char ("─", timeline_width - 51);
+
+    /* Use appropriate junction character based on position */
+    const gchar *junction = layer->prev ? "┼" : (layer->next ? "┬" : "─");
+
+    gst_print ("%s%s%s Duration: %" GST_TIME_FORMAT " %s\n",
+        left_border, junction, middle_border, GST_TIME_ARGS (layer_end),
+        right_border);
+    g_free (left_border);
+    g_free (middle_border);
+    g_free (right_border);
+
+
+    gboolean first_clip = TRUE;
     for (clip = clips; clip; clip = clip->next) {
       gchar *name;
 
+      gchar *asset_desc = NULL;
       if (GES_IS_URI_CLIP (clip->data)) {
         GESUriClipAsset *asset =
             GES_URI_CLIP_ASSET (ges_extractable_get_asset (clip->data));
-        gchar *asset_desc =
-            describe_discoverer (ges_uri_clip_asset_get_info (asset));
+        const gchar *full_path = ges_asset_get_id (GES_ASSET (asset));
+        gchar *filename = g_path_get_basename (full_path);
+        asset_desc = describe_discoverer (ges_uri_clip_asset_get_info (asset));
 
-        name = g_strdup_printf ("Clip from: '%s' [%s]",
-            ges_asset_get_id (GES_ASSET (asset)), asset_desc);
-        g_free (asset_desc);
+        /* Truncate filename to fit in timeline width */
+        gint max_name_width = timeline_width - 20;
+        name = truncate_clip_name (filename, max_name_width);
+        g_free (filename);
       } else {
-        name = g_strdup (GES_TIMELINE_ELEMENT_NAME (clip->data));
+        gchar *clip_name = GES_TIMELINE_ELEMENT_NAME (clip->data);
+        gint max_name_width = timeline_width - 20;
+        name = truncate_clip_name (clip_name, max_name_width);
       }
-      gst_print ("    - %s\n        start=%" GST_TIME_FORMAT,
-          name, GST_TIME_ARGS (GES_TIMELINE_ELEMENT_START (clip->data)));
-      g_free (name);
-      if (GES_TIMELINE_ELEMENT_INPOINT (clip->data))
-        gst_print (" inpoint=%" GST_TIME_FORMAT,
-            GST_TIME_ARGS (GES_TIMELINE_ELEMENT_INPOINT (clip->data)));
       gchar *rates = ges_clip_get_time_effects_rates (clip->data);
-      gst_print (" end=%" GST_TIME_FORMAT "%s\n",
-          GST_TIME_ARGS (GES_TIMELINE_ELEMENT_END (clip->data)), rates);
+
+      GESTrackType supported_types =
+          ges_clip_get_supported_formats (clip->data);
+      GString *track_types = g_string_new ("");
+      if (supported_types & GES_TRACK_TYPE_VIDEO)
+        g_string_append (track_types, "📹");
+      if (supported_types & GES_TRACK_TYPE_AUDIO)
+        g_string_append (track_types, "🔊");
+
+      /* Add clip timeline bar as header */
+      gchar *clip_bar =
+          create_clip_bar (clip->data, layer_end, timeline_width - 10);
+
+      if (first_clip) {
+        gst_print ("Layer %d │\n", ges_layer_get_priority (layer->data));
+        gst_print ("        │ %s\n", clip_bar);
+        first_clip = FALSE;
+      } else {
+        gst_print ("        │\n");
+        gst_print ("        │ %s\n", clip_bar);
+      }
+      g_free (clip_bar);
+
+      gst_print ("        │ %s  %s\n", name, rates);
+
+      if (asset_desc) {
+        gst_print ("        │         %s\n", asset_desc);
+        g_free (asset_desc);
+      }
+
+      /* Format time components */
+      gchar *start_time = g_strdup_printf ("%" GST_TIME_FORMAT,
+          GST_TIME_ARGS (GES_TIMELINE_ELEMENT_START (clip->data)));
+      gchar *end_time = g_strdup_printf ("%" GST_TIME_FORMAT,
+          GST_TIME_ARGS (GES_TIMELINE_ELEMENT_END (clip->data)));
+      gchar *inpoint_str = NULL;
+
+      if (GES_TIMELINE_ELEMENT_INPOINT (clip->data)) {
+        inpoint_str = g_strdup_printf ("(inpoint: %" GST_TIME_FORMAT ")",
+            GST_TIME_ARGS (GES_TIMELINE_ELEMENT_INPOINT (clip->data)));
+      }
+
+      /* Calculate available width and spacing */
+      gint available_width = timeline_width - 13;       /* Account for "        │     " prefix */
+      gint start_len = g_utf8_strlen (start_time, -1);
+      gint end_len = g_utf8_strlen (end_time, -1);
+      gint inpoint_len = inpoint_str ? g_utf8_strlen (inpoint_str, -1) : 0;
+
+      if (inpoint_str) {
+        /* Three components: start, inpoint (center), end */
+        gint remaining_width =
+            available_width - start_len - end_len - inpoint_len;
+        if (remaining_width > 0) {
+          gint left_padding = remaining_width / 2;
+          gint right_padding = remaining_width - left_padding;
+          gchar *left_spaces = g_strnfill (left_padding, ' ');
+          gchar *right_spaces = g_strnfill (right_padding, ' ');
+          gst_print ("        │%s %s%s%s%s\n", start_time, left_spaces,
+              inpoint_str, right_spaces, end_time);
+          g_free (left_spaces);
+          g_free (right_spaces);
+        } else {
+          /* Fallback if not enough space */
+          gst_print ("        │%s %s %s\n", start_time, inpoint_str,
+              end_time);
+        }
+      } else {
+        gint remaining_width = available_width - start_len - end_len;
+
+        if (remaining_width > 0) {
+          gchar *spaces = g_strnfill (remaining_width, ' ');
+          gst_print ("        │%s%s%s\n", start_time, spaces, end_time);
+          g_free (spaces);
+        } else {
+          gst_print ("        │%s %s\n", start_time, end_time);
+        }
+      }
+
+      g_free (start_time);
+      g_free (end_time);
+      g_free (inpoint_str);
+
+      g_free (name);
       g_free (rates);
+      g_string_free (track_types, TRUE);
     }
-    if (layer->next)
-      gst_printerr ("\n");
+
+    /* Only print bottom border if it is the last layer */
+    if (!layer->next) {
+      gchar *bottom_left = repeat_utf8_char ("─", 8);
+      gchar *bottom_right = repeat_utf8_char ("─", timeline_width - 9);
+      gst_print ("%s┴%s\n", bottom_left, bottom_right);
+      g_free (bottom_left);
+      g_free (bottom_right);
+    } else {
+      gst_print ("        │\n");
+    }
 
     g_list_free_full (clips, gst_object_unref);
   }

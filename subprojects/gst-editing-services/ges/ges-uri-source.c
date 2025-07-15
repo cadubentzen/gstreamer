@@ -449,13 +449,13 @@ ges_uri_source_can_seek_in_ready_cb (GstElement * nleobject,
     GESUriSource * self)
 {
   if (self->disable_seek_in_ready) {
-    GST_ERROR_OBJECT (self->element, "Seeking in READY is DISABLED for %s",
+    GST_DEBUG_OBJECT (self->element, "Seeking in READY is DISABLED for %s",
         GES_TIMELINE_ELEMENT_NAME (self->element));
     return FALSE;
   }
 
   if (self->controls_nested_timeline) {
-    GST_ERROR_OBJECT (self->element,
+    GST_DEBUG_OBJECT (self->element,
         "Controls a nested timeline, not seeking in READY");
     return FALSE;
   }

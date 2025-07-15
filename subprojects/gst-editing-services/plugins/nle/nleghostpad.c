@@ -94,7 +94,8 @@ nle_object_translate_incoming_seek (NleObject * object, GstEvent * event)
 
     GstClockTime inpoint =
         GST_CLOCK_TIME_IS_VALID (object->inpoint) ? object->inpoint : 0;
-    ncur = inpoint + MAX (0, GST_CLOCK_DIFF (stop, object->stop));
+    nle_object_to_media_time (object, object->stop, &nstop);
+    ncur = inpoint + MAX (0, GST_CLOCK_DIFF (stop, nstop));
     nstop = ncur + stop - cur;
   } else {
 

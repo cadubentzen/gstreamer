@@ -488,8 +488,6 @@ nle_object_to_media_time (NleObject * object, GstClockTime otime,
   gboolean ret = TRUE;
 
   g_return_val_if_fail (mtime, FALSE);
-  g_assert (G_UNLIKELY (!(NLE_IS_SOURCE (object)
-              && NLE_SOURCE (object)->reverse)));
 
   GST_DEBUG_OBJECT (object, "ObjectTime : %" GST_TIME_FORMAT,
       GST_TIME_ARGS (otime));

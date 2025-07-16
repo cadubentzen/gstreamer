@@ -137,6 +137,9 @@ static gboolean nle_object_prepare_func (NleObject * object);
 static gboolean nle_object_cleanup_func (NleObject * object);
 static gboolean nle_object_commit_func (NleObject * object, gboolean recurse);
 static gboolean nle_object_can_seek_in_ready_func (NleObject * object);
+static gboolean nle_object_can_seek_in_ready_accumulator (GSignalInvocationHint
+    * ihint, GValue * return_accu, const GValue * handler_return,
+    gpointer data);
 
 static GstStateChangeReturn nle_object_prepare (NleObject * object);
 
@@ -394,8 +397,8 @@ nle_object_class_init (NleObjectClass * klass)
    */
   _signals[CAN_SEEK_IN_READY_SIGNAL] = g_signal_new ("can-seek-in-ready",
       G_TYPE_FROM_CLASS (klass), G_SIGNAL_RUN_FIRST,
-      G_STRUCT_OFFSET (NleObjectClass, can_seek_in_ready), NULL, NULL, NULL,
-      G_TYPE_BOOLEAN, 0);
+      G_STRUCT_OFFSET (NleObjectClass, can_seek_in_ready),
+      nle_object_can_seek_in_ready_accumulator, NULL, NULL, G_TYPE_BOOLEAN, 0);
 
   gst_type_mark_as_plugin_api (NLE_TYPE_OBJECT, 0);
 
@@ -688,9 +691,21 @@ nle_object_cleanup_func (NleObject * object)
 static gboolean
 nle_object_can_seek_in_ready_func (NleObject * object)
 {
-  GST_DEBUG_OBJECT (object,
-      "default can_seek_in_ready function, returning TRUE");
+  return TRUE;
+}
 
+static gboolean
+nle_object_can_seek_in_ready_accumulator (GSignalInvocationHint * ihint,
+    GValue * return_accu, const GValue * handler_return, gpointer data)
+{
+  gboolean current_result = g_value_get_boolean (handler_return);
+  gboolean accumulated_result =
+      ihint->run_type & G_SIGNAL_ACCUMULATOR_FIRST_RUN ? TRUE :
+      g_value_get_boolean (return_accu);
+
+  g_value_set_boolean (return_accu, accumulated_result && current_result);
+
+  /* Continue invoking handlers (return TRUE to continue) */
   return TRUE;
 }
 
@@ -974,7 +989,7 @@ nle_object_seek_all_children (NleObject * object, GstEvent * seek_event)
 gboolean
 nle_object_can_seek_in_ready (NleObject * object)
 {
-  gboolean can_seek = FALSE;
+  gboolean can_seek = TRUE;
 
   g_return_val_if_fail (NLE_IS_OBJECT (object), FALSE);
 

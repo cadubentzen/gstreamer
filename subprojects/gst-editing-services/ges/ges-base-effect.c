@@ -134,6 +134,33 @@ ges_base_effect_set_child_property_full (GESTimelineElement * element,
       pspec, value, error);
 }
 
+static gboolean
+ges_base_effect_can_seek_in_ready_cb (GstElement * nleobject,
+    GESTrackElement * self)
+{
+  GESBaseEffect *effect = GES_BASE_EFFECT (self);
+
+  if (!ges_base_effect_is_time_effect (effect)) {
+    GST_LOG_OBJECT (effect, "Not a time effect, can seek in ready");
+    return TRUE;
+  }
+
+  GHashTable *values = ges_base_effect_get_time_property_values (effect);
+  GstClockTime scaled_duration =
+      ges_base_effect_translate_source_to_sink_time (effect,
+      GES_TIMELINE_ELEMENT_DURATION (self),
+      values);
+  g_hash_table_unref (values);
+
+  if (scaled_duration != GES_TIMELINE_ELEMENT_DURATION (self)) {
+    GST_DEBUG_OBJECT (effect, "Time is remapped, can't seek in ready");
+    return FALSE;
+  }
+
+  GST_DEBUG_OBJECT (effect, "Time is not remapped, can seek in ready");
+  return TRUE;
+}
+
 static GstElement *
 ges_base_effect_create_nle_object (GESTrackElement * self)
 {
@@ -144,6 +171,9 @@ ges_base_effect_create_nle_object (GESTrackElement * self)
   if (GES_BASE_EFFECT (self)->priv->time_properties) {
     g_object_set (nleobject, "time-effect", TRUE, NULL);
   }
+
+  g_signal_connect (nleobject, "can-seek-in-ready",
+      G_CALLBACK (ges_base_effect_can_seek_in_ready_cb), self);
 
   return nleobject;
 }

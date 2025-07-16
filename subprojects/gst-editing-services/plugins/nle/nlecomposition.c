@@ -2687,9 +2687,6 @@ get_stack_list (NleComposition * comp, GstClockTime timestamp,
               GST_OBJECT_NAME (object));
 
           *can_seek_in_ready &= nle_object_can_seek_in_ready (object);
-          if (NLE_IS_OPERATION (object) && NLE_OPERATION (object)->time_effect) {
-            *can_seek_in_ready = FALSE;
-          }
           stack = g_list_insert_sorted (stack, object,
               (GCompareFunc) priority_comp);
         }
@@ -2716,9 +2713,6 @@ get_stack_list (NleComposition * comp, GstClockTime timestamp,
           GST_LOG_OBJECT (comp, "adding %s: sorted to the stack",
               GST_OBJECT_NAME (object));
           *can_seek_in_ready &= nle_object_can_seek_in_ready (object);
-          if (NLE_IS_OPERATION (object) && NLE_OPERATION (object)->time_effect) {
-            *can_seek_in_ready = FALSE;
-          }
           stack =
               g_list_insert_sorted (stack, object,
               (GCompareFunc) priority_comp);
@@ -2739,10 +2733,6 @@ get_stack_list (NleComposition * comp, GstClockTime timestamp,
       *can_seek_in_ready &=
           nle_object_can_seek_in_ready (NLE_OBJECT (tmp->data));
 
-      if (NLE_IS_OPERATION (tmp->data)
-          && NLE_OPERATION (tmp->data)->time_effect) {
-        *can_seek_in_ready = FALSE;
-      }
       stack = g_list_insert_sorted (stack, tmp->data,
           (GCompareFunc) priority_comp);
     }

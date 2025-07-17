@@ -5351,11 +5351,6 @@ gst_qtdemux_seek_to_previous_keyframe (GstQTDemux * qtdemux)
     for (i = 0; i < QTDEMUX_N_STREAMS (qtdemux); i++) {
       QtDemuxStream *str = QTDEMUX_NTH_STREAM (qtdemux, i);
 
-      if (str->subtype == FOURCC_vide) {
-        GST_ERROR_ID (str->debug_id, "Last return flow %s",
-            gst_flow_get_name (GST_PAD_LAST_FLOW_RETURN (str->pad)));
-      }
-
       /* Skip video streams that have reached the beginning as we might need
        * to finish playing some other audio streams */
       if ((str->subtype == FOURCC_vide && G_UNLIKELY (!str->from_sample))) {

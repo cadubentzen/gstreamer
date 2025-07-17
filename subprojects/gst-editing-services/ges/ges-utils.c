@@ -39,6 +39,9 @@
 static GESConverterType __converter_type = GES_CONVERTER_SOFTWARE;
 static GstElement *compositor_pad_creator = NULL;
 static GstElementFactory *compositor_factory = NULL;
+static gboolean compositor_signals_connected = FALSE;
+
+G_LOCK_DEFINE_STATIC (compositor_factory);
 
 /**
  * ges_timeline_new_audio_video:
@@ -179,6 +182,19 @@ done:
   gst_clear_object (&elem);
 
   return mixer;
+}
+
+static void
+compositor_rank_changed_cb (GstPluginFeature * feature, GParamSpec * pspec,
+    gpointer user_data)
+{
+  GST_DEBUG ("Compositor rank changed for %s, resetting cached factory",
+      gst_plugin_feature_get_name (feature));
+
+  G_LOCK (compositor_factory);
+  gst_clear_object (&compositor_pad_creator);
+  compositor_factory = NULL;
+  G_UNLOCK (compositor_factory);
 }
 
 static gboolean
@@ -391,30 +407,26 @@ ges_util_object_properties_to_structure (GObject * object,
   return structure;
 }
 
-GstPad *
-ges_compositor_pad_new (void)
+static GstElementFactory *
+ges_get_compositor_factory_unlocked (void)
 {
-  ges_get_compositor_factory ();
-
-  if (!compositor_pad_creator)
-    return NULL;
-
-  GstPad *res =
-      gst_element_request_pad_simple (compositor_pad_creator, "sink_%u");
-
-  return res;
-}
-
-GstElementFactory *
-ges_get_compositor_factory (void)
-{
-  GList *result;
+  GList *result, *l;
 
   if (compositor_factory)
     return compositor_factory;
 
   result = gst_registry_feature_filter (gst_registry_get (),
       (GstPluginFeatureFilter) find_compositor, FALSE, NULL);
+
+  /* Connect to rank change signals for all compositor factories */
+  if (!compositor_signals_connected) {
+    for (l = result; l; l = l->next) {
+      GstPluginFeature *feature = GST_PLUGIN_FEATURE (l->data);
+      g_signal_connect (feature, "notify::rank",
+          G_CALLBACK (compositor_rank_changed_cb), NULL);
+    }
+    compositor_signals_connected = TRUE;
+  }
 
   /* sort on rank and name */
   result = g_list_sort (result, gst_plugin_feature_rank_compare_func);
@@ -431,6 +443,36 @@ ges_get_compositor_factory (void)
   gst_plugin_feature_list_free (result);
 
   return compositor_factory;
+}
+
+GstPad *
+ges_compositor_pad_new (void)
+{
+  GstPad *res = NULL;
+
+  G_LOCK (compositor_factory);
+
+  // Ensure compositor factory is initialized
+  ges_get_compositor_factory_unlocked ();
+  if (compositor_pad_creator) {
+    res = gst_element_request_pad_simple (compositor_pad_creator, "sink_%u");
+  }
+
+  G_UNLOCK (compositor_factory);
+
+  return res;
+}
+
+GstElementFactory *
+ges_get_compositor_factory (void)
+{
+  GstElementFactory *factory;
+
+  G_LOCK (compositor_factory);
+  factory = ges_get_compositor_factory_unlocked ();
+  G_UNLOCK (compositor_factory);
+
+  return factory;
 }
 
 void

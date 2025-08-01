@@ -83,6 +83,7 @@ struct _GESPipelinePrivate
   GstElement *encodebin;
   /* Note : urisink is only created when a URI has been provided */
   GstElement *urisink;
+  GstElement *encodebin_output_filter;
 
   GESPipelineFlags mode;
 
@@ -114,6 +115,7 @@ enum
   PROP_MODE,
   PROP_AUDIO_FILTER,
   PROP_VIDEO_FILTER,
+  PROP_ENCODEBIN_OUTPUT_FILTER,
   PROP_LAST
 };
 
@@ -236,6 +238,9 @@ ges_pipeline_get_property (GObject * object, guint property_id,
       g_object_get_property (G_OBJECT (self->priv->playsink), "video-filter",
           value);
       break;
+    case PROP_ENCODEBIN_OUTPUT_FILTER:
+      g_value_set_object (value, self->priv->encodebin_output_filter);
+      break;
     case PROP_VIDEO_QUEUE_MAX_SIZE_BYTES:
       GST_OBJECT_LOCK (self);
       g_value_set_uint (value, self->priv->max_video_queue_bytes);
@@ -290,6 +295,15 @@ ges_pipeline_set_property (GObject * object, guint property_id,
       g_object_set (self->priv->playsink, "video-filter",
           GST_ELEMENT (g_value_get_object (value)), NULL);
       break;
+    case PROP_ENCODEBIN_OUTPUT_FILTER:
+    {
+      GstElement *filter = g_value_get_object (value);
+      if (filter)
+        gst_object_ref_sink (filter);
+      gst_clear_object ((GstObject **) & self->priv->encodebin_output_filter);
+      self->priv->encodebin_output_filter = filter;
+      break;
+    }
     case PROP_VIDEO_QUEUE_MAX_SIZE_BYTES:
       GST_OBJECT_LOCK (self);
       self->priv->max_video_queue_bytes = g_value_get_uint (value);
@@ -434,6 +448,7 @@ ges_pipeline_dispose (GObject * object)
   }
   gst_clear_object ((GstObject **) & self->priv->video_sink);
   gst_clear_object ((GstObject **) & self->priv->audio_sink);
+  gst_clear_object ((GstObject **) & self->priv->encodebin_output_filter);
 
   if (self->priv->encodebin) {
     if (self->priv->mode & (GES_PIPELINE_MODE_RENDER |
@@ -552,6 +567,20 @@ ges_pipeline_class_init (GESPipelineClass * klass)
       G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
 
   /**
+   * GESPipeline:encodebin-output-filter:
+   *
+   * The filter element to apply between encodebin and the output sink during
+   * rendering. This could be used for example to plug a progressreport element
+   * to get progress feedback during rendering.
+   *
+   * Since: 1.28
+   */
+  properties[PROP_ENCODEBIN_OUTPUT_FILTER] =
+      g_param_spec_object ("encodebin-output-filter", "Encodebin output filter",
+      "the filter element to apply between encodebin and sink",
+      GST_TYPE_ELEMENT, G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
+
+  /**
    * GESPipeline:video-queue-max-size-bytes:
    *
    * The size in bytes of the queue to be used after video tracks in preview,
@@ -609,10 +638,13 @@ ges_pipeline_init (GESPipeline * self)
   self->priv->max_video_queue_buffers = DEFAULT_VIDEO_TRACK_MAX_SIZE_BUFFERS;
   self->priv->max_video_queue_time = DEFAULT_VIDEO_TRACK_MAX_SIZE_TIME;
 
+
   self->priv->playsink =
       gst_element_factory_make ("playsink", "internal-sinks");
   self->priv->encodebin =
       gst_element_factory_make ("encodebin2", "internal-encodebin");
+  g_object_set (self->priv->encodebin_output_filter, "update-freq", 1, "silent",
+      FALSE, NULL);
 
   g_object_set (self->priv->encodebin, "avoid-reencoding", TRUE, NULL);
 
@@ -1454,6 +1486,10 @@ ges_pipeline_set_mode (GESPipeline * pipeline, GESPipelineFlags mode)
     ges_timeline_thaw_commit (pipeline->priv->timeline);
     gst_object_ref (pipeline->priv->encodebin);
     gst_object_ref (pipeline->priv->urisink);
+    if (pipeline->priv->encodebin_output_filter) {
+      gst_bin_remove (GST_BIN_CAST (pipeline),
+          pipeline->priv->encodebin_output_filter);
+    }
     gst_bin_remove_many (GST_BIN_CAST (pipeline),
         pipeline->priv->encodebin, pipeline->priv->urisink, NULL);
   }
@@ -1500,8 +1536,34 @@ ges_pipeline_set_mode (GESPipeline * pipeline, GESPipelineFlags mode)
         return FALSE;
       }
 
-      gst_element_link_pads_full (pipeline->priv->encodebin, "src_0",
-          pipeline->priv->urisink, "sink", GST_PAD_LINK_CHECK_NOTHING);
+      if (pipeline->priv->encodebin_output_filter) {
+        GST_DEBUG_OBJECT (pipeline, "Adding encodebin output filter: %s",
+            GST_ELEMENT_NAME (pipeline->priv->encodebin_output_filter));
+
+        if (!gst_bin_add (GST_BIN_CAST (pipeline),
+                gst_object_ref (pipeline->priv->encodebin_output_filter))) {
+          GST_ERROR_OBJECT (pipeline, "Couldn't add encodebin output filter");
+          return FALSE;
+        }
+
+        if (!gst_element_link_pads_full (pipeline->priv->encodebin, "src_0",
+                pipeline->priv->encodebin_output_filter, "sink",
+                GST_PAD_LINK_CHECK_NOTHING)) {
+          GST_ERROR_OBJECT (pipeline,
+              "Couldn't link encodebin to output filter");
+          return FALSE;
+        }
+
+        if (!gst_element_link_pads_full (pipeline->
+                priv->encodebin_output_filter, "src", pipeline->priv->urisink,
+                "sink", GST_PAD_LINK_CHECK_NOTHING)) {
+          GST_ERROR_OBJECT (pipeline, "Couldn't link output filter to urisink");
+          return FALSE;
+        }
+      } else {
+        gst_element_link_pads_full (pipeline->priv->encodebin, "src_0",
+            pipeline->priv->urisink, "sink", GST_PAD_LINK_CHECK_NOTHING);
+      }
     } else {
       GST_INFO_OBJECT (pipeline,
           "Using an muxing sink, not adding any sink element");

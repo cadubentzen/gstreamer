@@ -603,7 +603,7 @@ _dot_pipeline (GstValidateReport * report, GstStructure * config)
   GstPipeline *pipeline = gst_validate_reporter_get_pipeline (report->reporter);
 
   if (pipeline) {
-    gint details = GST_DEBUG_GRAPH_SHOW_ALL;
+    gint details = GST_DEBUG_GRAPH_SHOW_VERBOSE;
     gchar *reporter_basename =
         g_path_get_basename (gst_validate_reporter_get_name (report->reporter));
     report->dotfile_name =
@@ -619,7 +619,7 @@ _dot_pipeline (GstValidateReport * report, GstStructure * config)
       gst_structure_get_int (config, "details", &details);
 
     GST_DEBUG_BIN_TO_DOT_FILE (GST_BIN (pipeline),
-        GST_DEBUG_GRAPH_SHOW_ALL, report->dotfile_name);
+        GST_DEBUG_GRAPH_SHOW_VERBOSE, report->dotfile_name);
 
     gst_object_unref (pipeline);
   }

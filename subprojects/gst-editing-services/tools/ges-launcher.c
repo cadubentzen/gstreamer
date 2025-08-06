@@ -1119,7 +1119,7 @@ bus_message_cb (GstBus * bus, GstMessage * message, GESLauncher * self)
   switch (GST_MESSAGE_TYPE (message)) {
     case GST_MESSAGE_WARNING:{
       GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS (GST_BIN (self->priv->pipeline),
-          GST_DEBUG_GRAPH_SHOW_ALL, "ges-launch.warning");
+          GST_DEBUG_GRAPH_SHOW_VERBOSE, "ges-launch.warning");
       break;
     }
     case GST_MESSAGE_ERROR:{
@@ -1128,7 +1128,7 @@ bus_message_cb (GstBus * bus, GstMessage * message, GESLauncher * self)
 
       gst_message_parse_error (message, &err, &dbg_info);
       GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS (GST_BIN (self->priv->pipeline),
-          GST_DEBUG_GRAPH_SHOW_ALL, "ges-launch-error");
+          GST_DEBUG_GRAPH_SHOW_VERBOSE, "ges-launch-error");
       ges_printerr ("ERROR from element %s: %s\n",
           GST_OBJECT_NAME (message->src), err->message);
       ges_printerr ("Debugging info: %s\n", (dbg_info) ? dbg_info : "none");
@@ -1140,7 +1140,7 @@ bus_message_cb (GstBus * bus, GstMessage * message, GESLauncher * self)
     }
     case GST_MESSAGE_EOS:
       GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS (GST_BIN (self->priv->pipeline),
-          GST_DEBUG_GRAPH_SHOW_ALL, "ges-launch.eos");
+          GST_DEBUG_GRAPH_SHOW_VERBOSE, "ges-launch.eos");
       if (!self->priv->parsed_options.ignore_eos) {
         ges_ok ("\nDone\n");
         g_application_quit (G_APPLICATION (self));
@@ -1179,7 +1179,7 @@ bus_message_cb (GstBus * bus, GstMessage * message, GESLauncher * self)
         }
 
         GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS (GST_BIN (self->priv->pipeline),
-            GST_DEBUG_GRAPH_SHOW_ALL, dump_name);
+            GST_DEBUG_GRAPH_SHOW_VERBOSE, dump_name);
 
         g_free (dump_name);
         g_free (state_transition_name);
@@ -1200,7 +1200,7 @@ intr_handler (GESLauncher * self)
   gst_print ("interrupt received.\n");
 
   GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS (GST_BIN (self->priv->pipeline),
-      GST_DEBUG_GRAPH_SHOW_ALL, "ges-launch.interrupted");
+      GST_DEBUG_GRAPH_SHOW_VERBOSE, "ges-launch.interrupted");
 
   g_application_quit (G_APPLICATION (self));
 

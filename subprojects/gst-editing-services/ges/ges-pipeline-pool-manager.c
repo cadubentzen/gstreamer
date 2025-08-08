@@ -178,7 +178,7 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
       continue;
 
     gboolean in_window = (source->start >= window_start)
-        || (source->start > window_stop);
+        && (source->start <= window_stop);
     if (!in_window) {
       GST_DEBUG_OBJECT (self->timeline,
           "Unpreparing pipeline for %s [%" GST_TIMEP_FORMAT "- %"

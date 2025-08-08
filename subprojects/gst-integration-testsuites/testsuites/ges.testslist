@@ -765,10 +765,16 @@ ges.test.check_set_inpoint_on_nested_timeline
 ges.test.check_simple_seek
 ges.test.commit_with_new_stack
 ges.test.edit_deeply_nested_timeline_too_short
+ges.test.four_clips_timeline
 ges.test.input_audio_channels_reorder
 ges.test.play_deeply_nested_back_to_back
 ges.test.play_two_nested_back_to_back
+ges.test.reverse_source.complex_av
+ges.test.reverse_source.complex_video_only
+ges.test.reverse_source.seek
+ges.test.reverse_source.simple
 ges.test.seek_on_stack_change_on_internal_subtimeline
 ges.test.timelineelement.set_child_prop_on_all_instances
 ges.test.uridecodepoolsrc_nested_no_extra_seek
+ges.test.uridecodepoolsrc_pipeline_leaks
 ges.test.videoscale_effect

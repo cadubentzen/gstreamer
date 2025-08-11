@@ -4,11 +4,13 @@ run-ges-tests:
   tags: ["gstreamer"]
 
   variables:
-    RUSTUP_HOME: usr/local/rustup"
-    CARGO_HOME: usr/local/cargo"
+    RUSTUP_HOME: "/usr/local/rustup"
+    CARGO_HOME: "/usr/local/cargo"
     GI_SCANNER_DISABLE_CACHE: "1"
     TIMEOUT_FACTOR: "2"
     PYTHONFAULTHANDLER: "enabled"
+    GST_PLUGIN_FEATURE_RANK: "glvideomixer:500"
+    GES_ENABLE_URIDECODEPOOLSRC: "true"
 
   script:
     - mkdir -p ~/.config/gdb
@@ -18,7 +20,7 @@ run-ges-tests:
     - meson setup --native-file ci/docker/tella/native.ini -Dpackage-origin="Sequence $(git rev-parse --short HEAD)" builddir
     - ninja -C builddir
     - git config --global --add safe.directory $PWD
-    - GES_ENABLE_URIDECODEPOOLSRC=true ./gst-env.py gst-validate-launcher ges --dump-on-failure -j 5 --sync -b "ges.test.*" -b ".*title.*"
+    - ./gst-env.py gst-validate-launcher ges --dump-on-failure --sync -b "ges.test.*" -b ".*title.*"
 
   artifacts:
     expire_in: "14 days"

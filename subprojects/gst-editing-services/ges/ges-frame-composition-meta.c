@@ -34,6 +34,7 @@
 
 #include "ges-frame-composition-meta.h"
 #include "gstframepositioner.h"
+#include "ges-utils.h"
 
 static gboolean ges_frame_composition_meta_init (GstMeta * meta,
     gpointer params, GstBuffer * buffer);
@@ -61,6 +62,7 @@ ges_frame_composition_meta_free (GstMeta * meta, GstBuffer * _buffer)
 
   gst_structure_set_parent_refcount (cmeta->extra_properties, NULL);
   gst_structure_free (cmeta->extra_properties);
+  gst_clear_object (&cmeta->framepositioner);
 }
 
 static const GstMetaInfo *
@@ -124,6 +126,11 @@ ges_frame_composition_meta_transform (GstBuffer * dest, GstMeta * meta,
     dmeta->height = smeta->height;
     dmeta->zorder = smeta->zorder;
     dmeta->operator = smeta->operator;
+    if (smeta->framepositioner) {
+      dmeta->framepositioner = gst_object_ref (smeta->framepositioner);
+    } else {
+      dmeta->framepositioner = NULL;
+    }
   }
 
   return TRUE;
@@ -148,4 +155,51 @@ ges_buffer_add_frame_composition_meta (GstBuffer * buffer)
       (GESFrameCompositionMeta *) gst_buffer_add_meta (buffer,
       ges_frame_composition_meta_get_info (), NULL);
   return meta;
+}
+
+/**
+ * ges_frame_composition_get_synced_meta:
+ * @sinkpad: The sinkpad that received the buffer
+ * @segment: #GstSegment containing timing information
+ * @buf: #GstBuffer containing the meta
+ *
+ * Gets and synchronizes the frame composition meta with right framepositioner values for the
+ * given sinkpad, segment and buffer PTS.
+ *
+ * This method ensures that the synchronization can happen on any element inside an
+ * nlecomposition while running. This is necessary to handle time effects (rate changes,
+ * time remapping) and clips with non-zero start times, ensuring keyframes are evaluated
+ * at the correct media time scale.
+ *
+ * Returns: (transfer none) (nullable): The synchronized #GESFrameCompositionMeta, or %NULL if no meta found.
+ *
+ * Since: 1.28
+ */
+GESFrameCompositionMeta *
+ges_frame_composition_get_synced_meta (GstPad * sinkpad,
+    const GstSegment * segment, GstBuffer * buf)
+{
+  GstClockTime stream_time;
+
+  g_return_val_if_fail (GST_IS_PAD (sinkpad), NULL);
+  g_return_val_if_fail (segment != NULL, NULL);
+  g_return_val_if_fail (buf != NULL, NULL);
+
+  /* Convert segment time from object time scale to media time scale */
+  if (!ges_nle_source_stream_time (sinkpad, segment, GST_BUFFER_PTS (buf),
+          &stream_time)) {
+    /* Fallback to original calculation if query fails */
+    stream_time =
+        gst_segment_to_stream_time (segment, GST_FORMAT_TIME,
+        GST_BUFFER_PTS (buf));
+    GST_DEBUG_OBJECT (sinkpad,
+        "Time conversion query failed, using object time scale stream time %"
+        GST_TIME_FORMAT, GST_TIME_ARGS (stream_time));
+  } else {
+    GST_DEBUG_OBJECT (sinkpad,
+        "Using media time scale stream time %" GST_TIME_FORMAT,
+        GST_TIME_ARGS (stream_time));
+  }
+
+  return gst_frame_positioner_sync_meta_internal (stream_time, buf);
 }

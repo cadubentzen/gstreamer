@@ -32,5 +32,8 @@ gboolean ges_pspec_equal (gconstpointer key_spec_1, gconstpointer key_spec_2);
 GES_API
 guint ges_pspec_hash (gconstpointer key_spec);
 
+G_GNUC_INTERNAL gboolean ges_nle_source_stream_time (GstPad * pad, 
+    const GstSegment * segment, GstClockTime pts, GstClockTime * stream_time);
+
 
 G_END_DECLS

@@ -26,6 +26,15 @@
 
 G_BEGIN_DECLS
 
+/**
+ * NLE_QUERY_SOURCE_SEGMENT:
+ *
+ * Internal query name for converting segments to source time scale.
+ * Takes a "segment" field (GstSegment) and NLE objects update it as it travels
+ * upstream to the source, handling segment adaptation logic.
+ */
+#define NLE_QUERY_SOURCE_SEGMENT "nle-query-source-segment"
+
 #ifndef GST_CAT_DEFAULT
 #define GST_CAT_DEFAULT (_ges_debug ())
 #endif

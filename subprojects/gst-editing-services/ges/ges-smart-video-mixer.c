@@ -230,12 +230,12 @@ set_pad_properties_from_composition_meta (GstPad * mixer_pad,
   GstBuffer *buf = gst_sample_get_buffer (sample);
   GESSmartMixer *self = GES_SMART_MIXER (GST_OBJECT_PARENT (ghost));
 
-  meta =
-      (GESFrameCompositionMeta *) gst_buffer_get_meta (buf,
-      GES_TYPE_META_FRAME_COMPOSITION);
+  meta = ges_frame_composition_get_synced_meta (GST_PAD (ghost),
+      gst_sample_get_segment (sample), buf);
 
   if (!meta) {
-    GST_WARNING ("The current source should use a framecomposition");
+    GST_WARNING_OBJECT (mixer_pad,
+        "The current source should use a framecomposition");
     return;
   }
 

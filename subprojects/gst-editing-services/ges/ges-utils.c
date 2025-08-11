@@ -667,3 +667,63 @@ ges_video_flip_make (void)
 
   return element;
 }
+
+G_GNUC_INTERNAL gboolean
+ges_nle_source_stream_time (GstPad * pad, const GstSegment * segment,
+    GstClockTime pts, GstClockTime * stream_time)
+{
+  GstSegment corrected_segment;
+  GstStructure *s;
+  GstQuery *query;
+  gboolean ret = FALSE;
+
+  g_return_val_if_fail (GST_IS_PAD (pad), FALSE);
+  g_return_val_if_fail (segment != NULL, FALSE);
+  g_return_val_if_fail (stream_time != NULL, FALSE);
+
+  GST_DEBUG_OBJECT (pad,
+      "Getting NLE source stream time for segment time %" GST_TIME_FORMAT,
+      GST_TIME_ARGS (segment->time));
+  /* Copy the segment */
+  gst_segment_copy_into (segment, &corrected_segment);
+
+  /* Create query to convert segment to source segment */
+  s = gst_structure_new (NLE_QUERY_SOURCE_SEGMENT,
+      "segment", GST_TYPE_SEGMENT, &corrected_segment, NULL);
+  query = gst_query_new_custom (GST_QUERY_CUSTOM, s);
+
+  ret = gst_pad_peer_query (pad, query);
+
+  if (ret) {
+    const GstStructure *result_s = gst_query_get_structure (query);
+    GstSegment *source_segment;
+    if (gst_structure_get (result_s, "segment", GST_TYPE_SEGMENT,
+            &source_segment, NULL)) {
+
+      /* Compute stream time using corrected segment */
+      *stream_time =
+          gst_segment_to_stream_time (source_segment, GST_FORMAT_TIME, pts);
+      gst_segment_free (source_segment);
+
+      GST_DEBUG_OBJECT (pad,
+          "NLE converted segment time %" GST_TIME_FORMAT " -> %" GST_TIME_FORMAT
+          ", " "source stream time %" GST_TIME_FORMAT,
+          GST_TIME_ARGS (segment->time), GST_TIME_ARGS (corrected_segment.time),
+          GST_TIME_ARGS (*stream_time));
+    } else {
+      g_critical ("Failed to get source segment from query result");
+      ret = FALSE;
+    }
+  }
+
+  if (!ret) {
+    /* Fallback to original calculation */
+    *stream_time = gst_segment_to_stream_time (segment, GST_FORMAT_TIME, pts);
+    GST_WARNING_OBJECT (pad,
+        "NLE source time query failed, using original stream time %"
+        GST_TIME_FORMAT, GST_TIME_ARGS (*stream_time));
+  }
+
+  gst_query_unref (query);
+  return ret;
+}

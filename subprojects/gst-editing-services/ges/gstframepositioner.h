@@ -23,6 +23,7 @@
 #include <gst/base/gstbasetransform.h>
 #include <ges/ges-track-element.h>
 #include <ges/ges-track.h>
+#include <ges/ges-frame-composition-meta.h>
 
 G_BEGIN_DECLS
 
@@ -86,6 +87,8 @@ struct _GstFramePositioner
 
   gboolean user_positioned;
 
+  GRecMutex values_lock;
+
   /*  This should never be made public, no padding needed */
 };
 
@@ -99,6 +102,9 @@ G_GNUC_INTERNAL GType gst_compositor_operator_get_type_and_default_value (int *d
 G_GNUC_INTERNAL void ges_frame_positioner_set_source_and_filter (GstFramePositioner *pos,
 						  GESTrackElement *trksrc,
 						  GstElement *capsfilter);
+G_GNUC_INTERNAL GESFrameCompositionMeta *
+gst_frame_positioner_sync_meta_internal (GstClockTime stream_time,
+                                          GstBuffer *buf);
 G_GNUC_INTERNAL GType gst_frame_positioner_get_type (void);
 
 G_END_DECLS

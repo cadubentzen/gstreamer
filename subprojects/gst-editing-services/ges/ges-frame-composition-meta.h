@@ -73,9 +73,15 @@ struct _GESFrameCompositionMeta {
 #endif
 
   GstStructure *extra_properties;
+  GstElement *framepositioner;
 };
 
 GES_API
 GESFrameCompositionMeta * ges_buffer_add_frame_composition_meta (GstBuffer * buffer);
+
+GES_API
+GESFrameCompositionMeta * ges_frame_composition_get_synced_meta (GstPad * sinkpad,
+                                                                 const GstSegment * segment,
+                                                                 GstBuffer * buf);
 
 G_END_DECLS

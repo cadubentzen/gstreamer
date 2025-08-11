@@ -533,6 +533,8 @@ gst_frame_positioner_dispose (GObject * object)
     pos->current_track = NULL;
   }
 
+  g_rec_mutex_clear (&pos->values_lock);
+
   G_OBJECT_CLASS (gst_frame_positioner_parent_class)->dispose (object);
 }
 
@@ -749,6 +751,8 @@ gst_frame_positioner_init (GstFramePositioner * framepositioner)
 
   framepositioner->par_n = -1;
   framepositioner->par_d = 1;
+
+  g_rec_mutex_init (&framepositioner->values_lock);
 }
 
 void
@@ -762,40 +766,40 @@ gst_frame_positioner_set_property (GObject * object, guint property_id,
     track_mixing = ges_track_get_mixing (framepositioner->current_track);
 
 
-  GST_OBJECT_LOCK (framepositioner);
+  g_rec_mutex_lock (&framepositioner->values_lock);
   switch (property_id) {
     case PROP_ALPHA:
       framepositioner->alpha = g_value_get_double (value);
-      GST_OBJECT_UNLOCK (framepositioner);
+      g_rec_mutex_unlock (&framepositioner->values_lock);
       break;
     case PROP_POSX:
       framepositioner->posx = g_value_get_int (value);
       framepositioner->user_positioned = TRUE;
-      GST_OBJECT_UNLOCK (framepositioner);
+      g_rec_mutex_unlock (&framepositioner->values_lock);
       break;
     case PROP_FPOSX:
       framepositioner->posx = g_value_get_float (value);
       framepositioner->user_positioned = TRUE;
-      GST_OBJECT_UNLOCK (framepositioner);
+      g_rec_mutex_unlock (&framepositioner->values_lock);
       break;
     case PROP_POSY:
       framepositioner->posy = g_value_get_int (value);
       framepositioner->user_positioned = TRUE;
-      GST_OBJECT_UNLOCK (framepositioner);
+      g_rec_mutex_unlock (&framepositioner->values_lock);
       break;
     case PROP_FPOSY:
       framepositioner->posy = g_value_get_float (value);
       framepositioner->user_positioned = TRUE;
-      GST_OBJECT_UNLOCK (framepositioner);
+      g_rec_mutex_unlock (&framepositioner->values_lock);
       break;
     case PROP_ZORDER:
       framepositioner->zorder = g_value_get_uint (value);
-      GST_OBJECT_UNLOCK (framepositioner);
+      g_rec_mutex_unlock (&framepositioner->values_lock);
       break;
     case PROP_WIDTH:
       framepositioner->user_positioned = TRUE;
       framepositioner->width = g_value_get_int (value);
-      GST_OBJECT_UNLOCK (framepositioner);
+      g_rec_mutex_unlock (&framepositioner->values_lock);
 
       gst_frame_positioner_update_properties (framepositioner, track_mixing,
           0, 0);
@@ -803,7 +807,7 @@ gst_frame_positioner_set_property (GObject * object, guint property_id,
     case PROP_FWIDTH:
       framepositioner->user_positioned = TRUE;
       framepositioner->width = g_value_get_float (value);
-      GST_OBJECT_UNLOCK (framepositioner);
+      g_rec_mutex_unlock (&framepositioner->values_lock);
 
       gst_frame_positioner_update_properties (framepositioner, track_mixing,
           0, 0);
@@ -811,7 +815,7 @@ gst_frame_positioner_set_property (GObject * object, guint property_id,
     case PROP_HEIGHT:
       framepositioner->user_positioned = TRUE;
       framepositioner->height = g_value_get_int (value);
-      GST_OBJECT_UNLOCK (framepositioner);
+      g_rec_mutex_unlock (&framepositioner->values_lock);
 
       gst_frame_positioner_update_properties (framepositioner, track_mixing,
           0, 0);
@@ -819,19 +823,20 @@ gst_frame_positioner_set_property (GObject * object, guint property_id,
     case PROP_FHEIGHT:
       framepositioner->user_positioned = TRUE;
       framepositioner->height = g_value_get_float (value);
-      GST_OBJECT_UNLOCK (framepositioner);
+      g_rec_mutex_unlock (&framepositioner->values_lock);
 
       gst_frame_positioner_update_properties (framepositioner, track_mixing,
           0, 0);
       break;
     case PROP_OPERATOR:
       framepositioner->operator = g_value_get_enum (value);
-      GST_OBJECT_UNLOCK (framepositioner);
+      g_rec_mutex_unlock (&framepositioner->values_lock);
 
       gst_frame_positioner_update_properties (framepositioner, track_mixing,
           0, 0);
       break;
     default:
+      g_rec_mutex_unlock (&framepositioner->values_lock);
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
   }
@@ -844,6 +849,7 @@ gst_frame_positioner_get_property (GObject * object, guint property_id,
   GstFramePositioner *pos = GST_FRAME_POSITIONNER (object);
   gdouble real_width, real_height;
 
+  g_rec_mutex_lock (&pos->values_lock);
   switch (property_id) {
     case PROP_ALPHA:
       g_value_set_double (value, pos->alpha);
@@ -902,31 +908,43 @@ gst_frame_positioner_get_property (GObject * object, guint property_id,
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
       break;
   }
+  g_rec_mutex_unlock (&pos->values_lock);
 }
 
-static GstFlowReturn
-gst_frame_positioner_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
+GESFrameCompositionMeta *
+gst_frame_positioner_sync_meta_internal (GstClockTime stream_time,
+    GstBuffer * buf)
 {
-  GESFrameCompositionMeta *meta;
-  GstFramePositioner *framepositioner = GST_FRAME_POSITIONNER (trans);
-  GstClockTime stream_time =
-      gst_segment_to_stream_time (&trans->segment, GST_FORMAT_TIME,
-      GST_BUFFER_PTS (buf));
+  GESFrameCompositionMeta *meta =
+      (GESFrameCompositionMeta *) gst_buffer_get_meta (buf,
+      ges_frame_composition_meta_api_get_type ());
+
+  if (!meta) {
+    return NULL;
+  }
+
+  GstFramePositioner *framepositioner =
+      (GstFramePositioner *) meta->framepositioner;
+  if (!framepositioner) {
+    GST_WARNING_OBJECT (framepositioner,
+        "No frame positioner associated with the meta, can't sync");
+    return meta;
+  }
+
+  if (meta->extra_properties) {
+    gst_structure_set_parent_refcount (meta->extra_properties, NULL);
+    gst_structure_free (meta->extra_properties);
+  }
+
+  g_rec_mutex_lock (&framepositioner->values_lock);
 
   if (GST_CLOCK_TIME_IS_VALID (stream_time)) {
-    gst_object_sync_values (GST_OBJECT (trans), stream_time);
+    gst_object_sync_values (GST_OBJECT (framepositioner), stream_time);
     gst_object_sync_values (GST_OBJECT (framepositioner->proxied_pad),
         stream_time);
   } else {
     GST_WARNING_OBJECT (framepositioner,
-        "Got invalid timestamp on buffer %" GST_PTR_FORMAT, buf);
-  }
-
-  meta =
-      (GESFrameCompositionMeta *) gst_buffer_get_meta (buf,
-      ges_frame_composition_meta_api_get_type ());
-  if (!meta) {
-    meta = ges_buffer_add_frame_composition_meta (buf);
+        "Got invalid stream time %" GST_TIMEP_FORMAT, &stream_time);
   }
 
   meta->extra_properties =
@@ -936,7 +954,6 @@ gst_frame_positioner_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
   gst_structure_set_parent_refcount (meta->extra_properties,
       &GST_MINI_OBJECT_REFCOUNT (buf));
 
-  GST_OBJECT_LOCK (framepositioner);
   meta->alpha = framepositioner->alpha;
   meta->posx = framepositioner->posx;
   meta->posy = framepositioner->posy;
@@ -944,7 +961,33 @@ gst_frame_positioner_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
   meta->height = framepositioner->height;
   meta->zorder = framepositioner->zorder;
   meta->operator = framepositioner->operator;
-  GST_OBJECT_UNLOCK (framepositioner);
+
+  g_rec_mutex_unlock (&framepositioner->values_lock);
+
+  return meta;
+}
+
+static GstFlowReturn
+gst_frame_positioner_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
+{
+  GstFramePositioner *framepositioner = GST_FRAME_POSITIONNER (trans);
+  GstClockTime stream_time;
+
+  GstMeta *old_meta = gst_buffer_get_meta (buf,
+      ges_frame_composition_meta_api_get_type ());
+
+  if (old_meta) {
+    GST_INFO_OBJECT (framepositioner,
+        "Buffer already has a frame composition meta, replacing it");
+    gst_buffer_remove_meta (buf, old_meta);
+  }
+
+  GESFrameCompositionMeta *meta = ges_buffer_add_frame_composition_meta (buf);
+  meta->framepositioner = gst_object_ref (framepositioner);
+
+  stream_time = gst_segment_to_stream_time (&trans->segment, GST_FORMAT_TIME,
+      GST_BUFFER_PTS (buf));
+  gst_frame_positioner_sync_meta_internal (stream_time, buf);
 
   return GST_FLOW_OK;
 }

@@ -277,6 +277,9 @@ translate_outgoing_segment (NleObject * object, NlePadPrivate * priv,
   gst_segment_copy_into (orig, &segment);
 
   nle_media_to_object_time (object, orig->time, &segment.time);
+  GST_ERROR_OBJECT (object,
+      "Adjusting segment time from %" GST_TIME_FORMAT " to %" GST_TIME_FORMAT,
+      GST_TIME_ARGS (orig->time), GST_TIME_ARGS (segment.time));
 
   if (G_UNLIKELY (segment.time > G_MAXINT64))
     GST_WARNING_OBJECT (object, "Return value too big...");
@@ -591,6 +594,49 @@ ghostpad_query_function (GstPad * ghostpad, GstObject * parent,
     case GST_QUERY_DURATION:
       /* skip duration upstream query, we'll fill it in ourselves */
       break;
+      /* Handle custom queries before forwarding */
+    case GST_QUERY_CUSTOM:{
+      const GstStructure *structure = gst_query_get_structure (query);
+      if (structure
+          && gst_structure_has_name (structure, "nle-query-source-segment")) {
+        GstSegment *input_segment;
+        GstSegment converted_segment;
+
+        /* The segment field must be present */
+        if (!gst_structure_get (structure, "segment", GST_TYPE_SEGMENT,
+                &input_segment, NULL)) {
+          g_critical ("nle-query-source-segment query missing 'segment' field");
+          return FALSE;
+        }
+
+        /* Convert the segment using this object's conversion */
+        gst_segment_copy_into (input_segment, &converted_segment);
+
+        /* Convert the segment time using this object's conversion */
+        GstClockTime converted_time;
+        if (nle_object_to_media_time (object, converted_segment.time,
+                &converted_time)) {
+          converted_segment.time = converted_time;
+          GST_DEBUG_OBJECT (ghostpad,
+              "Converted segment time %" GST_TIME_FORMAT " -> %"
+              GST_TIME_FORMAT, GST_TIME_ARGS (input_segment->time),
+              GST_TIME_ARGS (converted_time));
+        }
+
+        /* Update the query with the converted segment */
+        gst_structure_set ((GstStructure *) structure, "segment",
+            GST_TYPE_SEGMENT, &converted_segment, NULL);
+        gst_segment_free (input_segment);
+
+        /* Forward the query upstream with the updated segment */
+        pret = priv->queryfunc (ghostpad, parent, query);
+
+        GST_DEBUG_OBJECT (ghostpad,
+            "Returning from nle-query-source-segment query with result %d",
+            pret);
+        return TRUE;
+      }
+    }
     default:
       pret = priv->queryfunc (ghostpad, parent, query);
   }

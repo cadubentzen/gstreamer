@@ -95,7 +95,7 @@ ges_frame_composition_meta_init (GstMeta * meta, gpointer params,
   smeta->posx = smeta->posy = smeta->height = smeta->width = 0;
   smeta->zorder = 0;
   smeta->operator = default_operator_value;
-  smeta->extra_properties = gst_structure_new_empty ("properties");
+  smeta->extra_properties = NULL;
 
   return TRUE;
 }

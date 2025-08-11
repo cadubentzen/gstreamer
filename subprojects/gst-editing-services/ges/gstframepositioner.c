@@ -934,7 +934,7 @@ gst_frame_positioner_transform_ip (GstBaseTransform * trans, GstBuffer * buf)
       (framepositioner->proxied_pad),
       gst_frame_positioner_ignore_proxied_properties_names);
   gst_structure_set_parent_refcount (meta->extra_properties,
-      &GST_MINI_OBJECT_REFCOUNT (meta));
+      &GST_MINI_OBJECT_REFCOUNT (buf));
 
   GST_OBJECT_LOCK (framepositioner);
   meta->alpha = framepositioner->alpha;

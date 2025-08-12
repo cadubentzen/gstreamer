@@ -313,8 +313,20 @@ struct _GESTimelineElementClass
                                             GParamSpec *pspec,
                                             const GValue *value,
                                             GError ** error);
+
+  /**
+   * GESTimelineElementClass::set_timeline:
+   *
+   * Method called when the #GESTimelineElement:timeline is set.
+   * Subclasses can override this to perform additional setup
+   * after the timeline is assigned.
+   *
+   * Since: 1.28
+   */
+  gboolean     (*set_timeline)            (GESTimelineElement * self,
+                                            GESTimeline *timeline);
   /* Padding for API extension */
-  gpointer _ges_reserved[GES_PADDING_LARGE - 6];
+  gpointer _ges_reserved[GES_PADDING_LARGE - 7];
 };
 
 GES_API

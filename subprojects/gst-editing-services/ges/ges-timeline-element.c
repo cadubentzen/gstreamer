@@ -431,6 +431,37 @@ _get_natural_framerate (GESTimelineElement * self, gint * framerate_n,
   return FALSE;
 }
 
+static gboolean
+_set_timeline_default (GESTimelineElement * self, GESTimeline * timeline)
+{
+  if (timeline == NULL) {
+    if (self->timeline) {
+      if (!timeline_remove_element (self->timeline, self)) {
+        GST_INFO_OBJECT (self, "Could not remove from"
+            " currently set timeline %" GST_PTR_FORMAT, self->timeline);
+        return FALSE;
+      }
+    }
+  } else {
+    if (!timeline_add_element (timeline, self)) {
+      GST_INFO_OBJECT (self, "Could not add to timeline %" GST_PTR_FORMAT,
+          self);
+      return FALSE;
+    }
+  }
+
+  self->timeline = timeline;
+
+  if (timeline && ges_timeline_get_edit_apis_disabled (self->timeline)) {
+    GST_INFO_OBJECT (self,
+        "Timeline %p is in edit mode, disabling max-duration", self->timeline);
+    self->maxduration = GST_CLOCK_TIME_NONE;
+  }
+
+  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_TIMELINE]);
+  return TRUE;
+}
+
 static void
 ges_timeline_element_init (GESTimelineElement * self)
 {
@@ -650,6 +681,7 @@ ges_timeline_element_class_init (GESTimelineElementClass * klass)
   klass->set_child_property = _set_child_property;
   klass->set_child_property_full = _set_child_property_full;
   klass->get_natural_framerate = _get_natural_framerate;
+  klass->set_timeline = _set_timeline_default;
 }
 
 static void
@@ -1060,6 +1092,8 @@ gboolean
 ges_timeline_element_set_timeline (GESTimelineElement * self,
     GESTimeline * timeline)
 {
+  GESTimelineElementClass *klass;
+
   g_return_val_if_fail (GES_IS_TIMELINE_ELEMENT (self), FALSE);
   g_return_val_if_fail (timeline == NULL || GES_IS_TIMELINE (timeline), FALSE);
 
@@ -1071,32 +1105,14 @@ ges_timeline_element_set_timeline (GESTimelineElement * self,
   if (timeline != NULL && G_UNLIKELY (self->timeline != NULL))
     goto had_timeline;
 
-  if (timeline == NULL) {
-    if (self->timeline) {
-      if (!timeline_remove_element (self->timeline, self)) {
-        GST_INFO_OBJECT (self, "Could not remove from"
-            " currently set timeline %" GST_PTR_FORMAT, self->timeline);
-        return FALSE;
-      }
-    }
-  } else {
-    if (!timeline_add_element (timeline, self)) {
-      GST_INFO_OBJECT (self, "Could not add to timeline %" GST_PTR_FORMAT,
-          self);
-      return FALSE;
-    }
+  klass = GES_TIMELINE_ELEMENT_GET_CLASS (self);
+  if (klass->set_timeline) {
+    return klass->set_timeline (self, timeline);
   }
 
-  self->timeline = timeline;
-
-  if (timeline && ges_timeline_get_edit_apis_disabled (self->timeline)) {
-    GST_INFO_OBJECT (self,
-        "Timeline %p is in edit mode, disabling max-duration", self->timeline);
-    self->maxduration = GST_CLOCK_TIME_NONE;
-  }
-
-  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_TIMELINE]);
-  return TRUE;
+  g_warning ("No set_timeline virtual method implementation"
+      " on class %s.", G_OBJECT_CLASS_NAME (klass));
+  return FALSE;
 
   /* ERROR handling */
 had_timeline:

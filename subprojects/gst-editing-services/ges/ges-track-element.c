@@ -51,6 +51,7 @@
  * and out-point of the element. This can be switched off by setting
  * #GESTrackElement:auto-clamp-control-sources to %FALSE.
  */
+#include "ges-timeline.h"
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -132,6 +133,8 @@ static gboolean _set_duration (GESTimelineElement * element,
 static gboolean _set_max_duration (GESTimelineElement * element,
     GstClockTime max_duration);
 static gboolean _set_priority (GESTimelineElement * element, guint32 priority);
+static gboolean _set_timeline (GESTimelineElement * element,
+    GESTimeline * timeline);
 GESTrackType _get_track_types (GESTimelineElement * object);
 
 static gboolean
@@ -488,6 +491,7 @@ ges_track_element_class_init (GESTrackElementClass * klass)
   element_class->set_inpoint = _set_inpoint;
   element_class->set_max_duration = _set_max_duration;
   element_class->set_priority = _set_priority;
+  element_class->set_timeline = _set_timeline;
   element_class->get_track_types = _get_track_types;
   element_class->deep_copy = ges_track_element_copy_properties;
   element_class->get_layer_priority = _get_layer_priority;
@@ -660,6 +664,19 @@ _update_control_bindings (GESTrackElement * self, GstClockTime inpoint,
 
   if (self->priv->freeze_control_sources)
     return;
+
+  GESTimeline *timeline = GES_TIMELINE_ELEMENT_TIMELINE (self);
+  if (!timeline) {
+    GST_DEBUG_OBJECT (self, "Not updating control sources because the "
+        "timeline is NULL");
+    return;
+  }
+
+  if (timeline && ges_timeline_get_edit_apis_disabled (timeline)) {
+    GST_DEBUG_OBJECT (self, "Not updating control sources because the "
+        "edit APIs are disabled on the timeline");
+    return;
+  }
 
   g_hash_table_iter_init (&iter, self->priv->bindings_hashtable);
   while (g_hash_table_iter_next (&iter, &key, &value)) {
@@ -842,6 +859,22 @@ _set_priority (GESTimelineElement * element, guint32 priority)
   g_object_set (object->priv->nleobject, "priority", priority, NULL);
 
   return TRUE;
+}
+
+static gboolean
+_set_timeline (GESTimelineElement * element, GESTimeline * timeline)
+{
+  GESTrackElement *self = GES_TRACK_ELEMENT (element);
+  gboolean ret = TRUE;
+
+  ret =
+      GES_TIMELINE_ELEMENT_CLASS (ges_track_element_parent_class)->set_timeline
+      (element, timeline);
+
+  if (ret && self->priv->auto_clamp_control_sources)
+    _update_control_bindings (self, _INPOINT (self), self->priv->outpoint);
+
+  return ret;
 }
 
 GESTrackType
@@ -1958,8 +1991,10 @@ ges_track_element_set_control_source (GESTrackElement * object,
   g_hash_table_insert (priv->bindings_hashtable, g_strdup (property_name),
       binding);
 
+  GESTimeline *timeline = GES_TIMELINE_ELEMENT_TIMELINE (object);
   if (GST_IS_TIMED_VALUE_CONTROL_SOURCE (source)
-      && priv->auto_clamp_control_sources) {
+      && priv->auto_clamp_control_sources && timeline
+      && !ges_timeline_get_edit_apis_disabled (timeline)) {
     /* Make sure we have the control source used by the binding */
     g_object_get (binding, "control-source", &source, NULL);
 

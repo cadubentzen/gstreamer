@@ -11,13 +11,14 @@ run-ges-tests:
     PYTHONFAULTHANDLER: "enabled"
     GST_PLUGIN_FEATURE_RANK: "glvideomixer:500"
     GES_ENABLE_URIDECODEPOOLSRC: "true"
+    GES_CONVERTER_TYPE: "gl"
 
   script:
     - mkdir -p ~/.config/gdb
     - echo "set auto-load safe-path /" >> ~/.config/gdb/gdbinit
     - export PATH="/usr/local/cargo/bin:$PATH"
     - meson subprojects update --reset
-    - meson setup --native-file ci/docker/tella/native.ini -Dpackage-origin="Sequence $(git rev-parse --short HEAD)" builddir
+    - meson setup --native-file ci/sequence/native.ini -Dpackage-origin="Sequence $(git rev-parse --short HEAD)" -Dgst-devtools:dots_viewer=disabled builddir
     - ninja -C builddir
     - git config --global --add safe.directory $PWD
     - ./gst-env.py gst-validate-launcher ges --dump-on-failure --sync -b "ges.test.*" -b ".*title.*"

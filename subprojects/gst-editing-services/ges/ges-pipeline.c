@@ -643,8 +643,6 @@ ges_pipeline_init (GESPipeline * self)
       gst_element_factory_make ("playsink", "internal-sinks");
   self->priv->encodebin =
       gst_element_factory_make ("encodebin2", "internal-encodebin");
-  g_object_set (self->priv->encodebin_output_filter, "update-freq", 1, "silent",
-      FALSE, NULL);
 
   g_object_set (self->priv->encodebin, "avoid-reencoding", TRUE, NULL);
 

@@ -682,7 +682,12 @@ uridecodebin_pad_added_cb (GstElement * uridecodebin, GstPad * pad,
   ps->pad = pad;
   padname = gst_pad_get_name (pad);
   tmpname = g_strdup_printf ("discoverer-queue-%s", padname);
-  ps->queue = gst_element_factory_make ("queue", tmpname);
+  ps->queue = gst_element_factory_make_full ("queue", "name", tmpname,
+      "silent", TRUE, "max-size-buffers", 1, NULL);
+  if (!ps->queue) {
+    ps->queue = gst_element_factory_make_full ("queue2", "name", tmpname,
+        "max-size-buffers", 1, NULL);
+  }
   g_free (tmpname);
   tmpname = g_strdup_printf ("discoverer-sink-%s", padname);
   ps->sink = gst_element_factory_make ("fakesink", tmpname);
@@ -693,7 +698,6 @@ uridecodebin_pad_added_cb (GstElement * uridecodebin, GstPad * pad,
     goto error;
 
   g_object_set (ps->sink, "silent", TRUE, NULL);
-  g_object_set (ps->queue, "max-size-buffers", 1, "silent", TRUE, NULL);
 
   sinkpad = gst_element_get_static_pad (ps->queue, "sink");
   if (sinkpad == NULL)

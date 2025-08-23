@@ -240,6 +240,8 @@ struct _NleCompositionPrivate
   /* Both protected with object lock */
   gchar *id;
   gboolean drop_tags;
+
+  GstClockTime setup_new_stack_start_ts;
 };
 
 #define ACTION_CALLBACK(__action) (((GCClosure*) (__action))->callback)
@@ -1741,6 +1743,14 @@ ghost_event_probe_handler (GstPad * ghostpad G_GNUC_UNUSED,
 
     if (is_buffer) {
       priv->got_buffer_for_stack = TRUE;
+      if (GST_CLOCK_TIME_IS_VALID (priv->setup_new_stack_start_ts)) {
+        GST_ERROR_OBJECT (comp,
+            "First buffer after setting up a new stack took: %"
+            GST_TIME_FORMAT,
+            GST_TIME_ARGS (gst_util_get_timestamp () -
+                priv->setup_new_stack_start_ts));
+        priv->setup_new_stack_start_ts = GST_CLOCK_TIME_NONE;
+      }
     }
 
     return GST_PAD_PROBE_OK;
@@ -3904,6 +3914,7 @@ update_pipeline (NleComposition * comp, GstClockTime currenttime, gint32 seqnum,
   /* If stacks are different, unlink/relink objects */
   if (tear_down) {
     _deactivate_stack (comp, update_reason);
+    comp->priv->setup_new_stack_start_ts = gst_util_get_timestamp ();
     _dump_stack (comp, update_reason, stack);
     _relink_new_stack (comp, stack,
         can_seek_in_ready ? gst_event_ref (toplevel_seek) : NULL);

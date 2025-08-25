@@ -21,7 +21,7 @@ run-ges-tests:
     - meson setup --native-file ci/sequence/native.ini -Dpackage-origin="Sequence $(git rev-parse --short HEAD)" -Dgst-devtools:dots_viewer=disabled builddir
     - ninja -C builddir
     - git config --global --add safe.directory $PWD
-    - ./gst-env.py gst-validate-launcher ges --dump-on-failure --sync -b "ges.test.*" -b ".*title.*"
+    - ./gst-env.py gst-validate-launcher ges --dump-on-failure --no-display --sync -b ".*title.*" -b ".*ges.test.*"
 
   artifacts:
     expire_in: "14 days"

@@ -2,4 +2,4 @@
 directory=gst-plugins-rs
 url=https://gitlab.freedesktop.org/thiblahute/gst-plugins-rs.git
 push-url=git@gitlab.freedesktop.org:thiblahute/gst-plugins-rs.git
-revision=sequence
+revision=db8f8946d3261036c3b4d6599800abb9dab03bda

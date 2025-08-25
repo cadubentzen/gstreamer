@@ -12,6 +12,8 @@ run-ges-tests:
     GST_PLUGIN_FEATURE_RANK: "glvideomixer:500"
     GES_ENABLE_URIDECODEPOOLSRC: "true"
     GES_CONVERTER_TYPE: "gl"
+    LIBGL_ALWAYS_SOFTWARE: "true"
+    RUST_BACKTRACE: "1"
 
   script:
     - mkdir -p ~/.config/gdb
@@ -21,6 +23,7 @@ run-ges-tests:
     - meson setup --native-file ci/sequence/native.ini -Dpackage-origin="Sequence $(git rev-parse --short HEAD)" -Dgst-devtools:dots_viewer=disabled builddir
     - ninja -C builddir
     - git config --global --add safe.directory $PWD
+    - export XDG_RUNTIME_DIR="$(mktemp -p "${CI_PROJECT_DIR:-/tmp}" -d xdg-runtime-XXXXXX)"
     - ./gst-env.py gst-validate-launcher ges --dump-on-failure --no-display --sync -b ".*title.*" -b ".*ges.test.*"
 
   artifacts:

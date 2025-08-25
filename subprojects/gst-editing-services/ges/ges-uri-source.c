@@ -588,6 +588,8 @@ ges_uri_source_create_source (GESUriSource * self)
 
   GstElement *nle_source = ges_track_element_get_nleobject (self->element);
   self->disable_seek_in_ready = TRUE;
+  GST_ERROR_OBJECT (self->element,
+      "can_seek_in_ready will be FALSE - using traditional uridecodebin, not uridecodepoolsrc");
   g_signal_connect (nle_source, "can-seek-in-ready",
       G_CALLBACK (ges_uri_source_can_seek_in_ready_cb), self);
 

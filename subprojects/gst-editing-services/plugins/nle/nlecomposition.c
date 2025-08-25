@@ -3901,8 +3901,8 @@ update_pipeline (NleComposition * comp, GstClockTime currenttime, gint32 seqnum,
 
   /* If stacks are different, unlink/relink objects */
   if (tear_down) {
-    _dump_stack (comp, update_reason, stack);
     _deactivate_stack (comp, update_reason);
+    _dump_stack (comp, update_reason, stack);
     _relink_new_stack (comp, stack,
         can_seek_in_ready ? gst_event_ref (toplevel_seek) : NULL);
 

@@ -10,8 +10,7 @@ meta, handles-states=true,
     args = {
         --track-types, audio,
         --audio-caps, "audio/x-raw,format=F32LE,layout=interleaved,rate=(int)48000,channels=(int)2",
-        --audiosink, "$(audiosink) name=audiosink",
-        -o, "$(test_dir)/lower_muted_x0_1.wav",
+        --audiosink, "$(audiosink) name=audiosink qos=false sync=false",
     },
     configs = {
         "$(validateflow), pad=pitch-effect:src, record-buffers=true, buffers-checksum=as-id, ignored-fields=\"stream-start={stream-id,group-id,stream}\", ignored-event-types={tag,stream-group-done,flush-start,flush-stop}, logged-upstream-event-types={seek}",

@@ -950,6 +950,8 @@ validate.test.playbin3.ignore_raw_audio_from_demuxer
 validate.test.playbin3.intensive_state_change_selecting_stream
 validate.test.playbin3.ogv_vp8
 validate.test.playbin3.sourcebin_check_mixed_static_and_dyanmic_pads
+validate.test.qtdemux.reverse_playback_audio_start
+validate.test.qtdemux.reverse_playback_audio_start_raw
 validate.test.rtp.h264.payloader_fail_nego_force_profile
 validate.test.rtp.h264.payloader_nego_profile
 validate.test.rtp.rtpsession_recv_simple

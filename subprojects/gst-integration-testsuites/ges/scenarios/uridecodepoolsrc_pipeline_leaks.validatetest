@@ -2,6 +2,7 @@ set-globals, media_dir="$(test_dir)/../../medias/defaults"
 
 meta,
     tool = "ges-launch-$(gst_api_version)",
+    ges = "uridecodepoolsrc=enabled",
     args = {
         --track-types, video,
         --video-caps, "video/x-raw,width=320,height=240,framerate=25/1,format=I420",
@@ -25,19 +26,30 @@ add-clip, name=c5, asset-id="file://$(media_dir)/webm/vorbis_vp8.0.webm", layer-
 commit
 pause
 
+check-uridecodepool-pipelines, expected-prepared=5
+
 seek, start=0.0, stop=30.0, flags=accurate+flush, rate=1.0
+
+# Need to wait at least 1 second to ensure async unpreparing pipeline happens
+# (where we currently have a 1s wait, to handle reusing pipeline after EOS)
+wait, duration=1.5
+check-uridecodepool-pipelines, expected-prepared=5
+
 seek, start=5.0, stop=15.0, flags=accurate+flush, rate=1.0
+wait, duration=1.5
+check-uridecodepool-pipelines, expected-prepared=5
+
 seek, start=15.0, stop=25.0, flags=accurate+flush, rate=1.0
+wait, duration=1.5
+check-uridecodepool-pipelines, expected-prepared=5
+
 seek, start=2.0, stop=8.0, flags=accurate+flush, rate=1.0
+wait, duration=1.5
+check-uridecodepool-pipelines, expected-prepared=5
+
 seek, start=20.0, stop=28.0, flags=accurate+flush, rate=1.0
-
-# Jump around to really exercise the pipeline pool
-seek, start=12.0, stop=18.0, flags=accurate+flush, rate=1.0
-seek, start=1.0, stop=6.0, flags=accurate+flush, rate=1.0
-seek, start=22.0, stop=29.0, flags=accurate+flush, rate=1.0
-
-# Check pipeline counts to verify no leaks
-check-uridecodepool-pipelines
+wait, duration=1.5
+check-uridecodepool-pipelines, expected-prepared=5
 
 play
 
@@ -45,7 +57,6 @@ set-state, state=ready, playback_time=23.0
 
 wait, duration=1.5
 
-# Final pipeline count check - should be clean after setting to null
 check-uridecodepool-pipelines, expected-prepared=0
 
 stop

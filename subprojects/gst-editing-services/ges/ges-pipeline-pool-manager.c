@@ -63,10 +63,8 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
     return;
   }
 
-  if (!GST_CLOCK_TIME_IS_VALID (stack_start)
-      || !GST_CLOCK_TIME_IS_VALID (stack_end)) {
-    GST_INFO_OBJECT (track,
-        "Got invalid stack start/end, not preparing anything.");
+  if (!GST_CLOCK_TIME_IS_VALID (stack_start)) {
+    GST_INFO_OBJECT (track, "Got invalid stack start, not preparing anything.");
     return;
   }
 
@@ -122,7 +120,8 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
       }
     }
 
-    if (source->start >= stack_start && source->end <= stack_end) {
+    if (source->start >= stack_start && GST_CLOCK_TIME_IS_VALID (stack_end)
+        && source->end <= stack_end) {
       /* Do not reload sources that are currently running */
       continue;
     }

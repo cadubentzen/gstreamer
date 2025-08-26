@@ -613,7 +613,9 @@ _post_start_composition_update_done (NleComposition * comp,
   GstMessage *msg = gst_message_new_element (GST_OBJECT (comp),
       gst_structure_new ("NleCompositionUpdateDone",
           "reason", G_TYPE_STRING, UPDATE_PIPELINE_REASONS[reason],
-          "stack-start", GST_TYPE_CLOCK_TIME, comp->priv->stack_start,
+          "stack-start", GST_TYPE_CLOCK_TIME,
+          GST_CLOCK_TIME_IS_VALID (comp->priv->stack_start) ? comp->
+          priv->stack_start : 0,
           "stack-end", GST_TYPE_CLOCK_TIME, comp->priv->stack_stop,
           NULL));
 

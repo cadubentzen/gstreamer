@@ -683,6 +683,7 @@ ges_timeline_change_state (GstElement * element, GstStateChange transition)
       g_mutex_unlock (&timeline->priv->flushing_seek_info_lock);
       break;
     case GST_STATE_CHANGE_READY_TO_PAUSED:
+      ges_pipeline_pool_manager_commit (&timeline->priv->pool_manager);
       ges_timeline_post_query_is_rendering (timeline);
       break;
     default:

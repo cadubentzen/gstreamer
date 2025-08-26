@@ -277,7 +277,7 @@ translate_outgoing_segment (NleObject * object, NlePadPrivate * priv,
   gst_segment_copy_into (orig, &segment);
 
   nle_media_to_object_time (object, orig->time, &segment.time);
-  GST_ERROR_OBJECT (object,
+  GST_DEBUG_OBJECT (object,
       "Adjusting segment time from %" GST_TIME_FORMAT " to %" GST_TIME_FORMAT,
       GST_TIME_ARGS (orig->time), GST_TIME_ARGS (segment.time));
 

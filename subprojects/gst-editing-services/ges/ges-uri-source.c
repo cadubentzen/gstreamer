@@ -551,11 +551,11 @@ ges_uri_source_create_uridecodepoolsrc (GESUriSource * self)
   g_object_set (decodebin, "uri", self->uri, "stream-id", wanted_id, "caps",
       caps, NULL);
 
-  if (!is_image && !GES_IS_AUDIO_SOURCE (self->element)) {
+  if (!GES_IS_AUDIO_SOURCE (self->element)) {
     g_signal_connect_data (decodebin, "get-initial-seek",
         G_CALLBACK (uridecodepoolsrc_get_initial_seek_cb), self, NULL, 0);
   } else {
-    self->disable_seek_in_ready = TRUE;
+    self->disable_seek_in_ready = !is_image;
   }
 
   GstElement *nle_source = ges_track_element_get_nleobject (self->element);

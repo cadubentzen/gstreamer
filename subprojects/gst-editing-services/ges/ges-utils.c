@@ -558,7 +558,7 @@ ges_videoconvert_bin_desc (void)
     case GES_CONVERTER_AUTO:
       return "autovideoconvert";
     case GES_CONVERTER_GL:
-      return "glfilterbin filter=identity";
+      return "glupload ! glcolorconvert ! gldownload";
     default:
       g_assert_not_reached ();
   }
@@ -596,7 +596,7 @@ ges_videoconvert_scale_make (void)
       bin_desc = "autovideoconvertscale";
       break;
     case GES_CONVERTER_GL:
-      bin_desc = "glfilterbin filter=glcolorscale";
+      bin_desc = "glcolorscale";
       break;
   }
 
@@ -625,7 +625,7 @@ ges_deinterlace_make (void)
       bin_desc = "autodeinterlace";
       break;
     case GES_CONVERTER_GL:
-      bin_desc = "glfilterbin filter=gldeinterlace";
+      bin_desc = "gldeinterlace";
       break;
   }
 
@@ -654,7 +654,7 @@ ges_video_flip_make (void)
       bin_desc = "autovideoflip video-direction=auto";
       break;
     case GES_CONVERTER_GL:
-      bin_desc = "glfilterbin filter=\"glvideoflip video-direction=auto\"";
+      bin_desc = "glvideoflip video-direction=auto";
       break;
   }
 

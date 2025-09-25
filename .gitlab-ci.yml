@@ -24,7 +24,7 @@ run-ges-tests:
     - ninja -C builddir
     - git config --global --add safe.directory $PWD
     - export XDG_RUNTIME_DIR="$(mktemp -p "${CI_PROJECT_DIR:-/tmp}" -d xdg-runtime-XXXXXX)"
-    - ./gst-env.py gst-validate-launcher ges --dump-on-failure --no-display --sync -b ".*title.*" -b ".*ges.test.*"
+    - ./gst-env.py gst-validate-launcher ges --dump-on-failure --no-display --sync -b ".*title.*" -b ".*ges.test.*" -j 2
 
   artifacts:
     expire_in: "14 days"

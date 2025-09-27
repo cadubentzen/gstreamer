@@ -359,6 +359,13 @@ ges_video_uri_source_set_property (GObject * object, guint property_id,
 }
 
 static void
+ges_video_uri_source_dispose (GObject * object)
+{
+  ges_uri_source_dispose (GES_VIDEO_URI_SOURCE (object)->priv);
+  G_OBJECT_CLASS (ges_video_uri_source_parent_class)->dispose (object);
+}
+
+static void
 ges_video_uri_source_finalize (GObject * object)
 {
   GESVideoUriSource *urisource = GES_VIDEO_URI_SOURCE (object);
@@ -378,6 +385,7 @@ ges_video_uri_source_class_init (GESVideoUriSourceClass * klass)
   object_class->get_property = ges_video_uri_source_get_property;
   object_class->set_property = ges_video_uri_source_set_property;
   object_class->finalize = ges_video_uri_source_finalize;
+  object_class->dispose = ges_video_uri_source_dispose;
 
   /**
    * GESVideoUriSource:uri:

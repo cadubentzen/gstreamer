@@ -425,7 +425,7 @@ uridecodepoolsrc_pipeline_notify_cb (GstElement * decodebin,
 
   g_object_get (decodebin, "pipeline", &pipeline, NULL);
 
-  prev_pipeline = g_weak_ref_get (&self->uridecodepool_pipeline);
+  prev_pipeline = self->uridecodepool_pipeline;
   if (prev_pipeline) {
     g_signal_handlers_disconnect_by_func (prev_pipeline,
         uridecodepoolsrc_pipeline_notify_cb, self);
@@ -435,10 +435,11 @@ uridecodepoolsrc_pipeline_notify_cb (GstElement * decodebin,
     g_signal_connect_data (pipeline, "deep-element-added",
         G_CALLBACK (uridecodepoolsrc_deep_element_added_cb), self, NULL, 0);
   }
-  g_weak_ref_set (&self->uridecodepool_pipeline, pipeline);
 
   GST_DEBUG_OBJECT (self->element, "Pipeline changed: %" GST_PTR_FORMAT,
       pipeline);
+  self->uridecodepool_pipeline = pipeline;
+  gst_clear_object (&prev_pipeline);
 }
 
 static GstElement *
@@ -697,6 +698,13 @@ ges_uri_source_select_pad (GESSource * self, GstPad * pad)
   g_free (stream_id);
 
   return res;
+}
+
+
+void
+ges_uri_source_dispose (GESUriSource * self)
+{
+  gst_clear_object (&self->uridecodepool_pipeline);
 }
 
 

@@ -380,7 +380,9 @@ gst_discoverer_init (GstDiscoverer * dc)
   dc->priv->global_tags = NULL;
 
   GST_LOG ("Creating pipeline");
-  dc->priv->pipeline = (GstBin *) gst_pipeline_new ("Discoverer");
+  gchar *pipeline_name = g_strdup_printf ("discoverer-pipeline-%p", dc);
+  dc->priv->pipeline = (GstBin *) gst_pipeline_new (pipeline_name);
+  g_free (pipeline_name);
   GST_LOG_OBJECT (dc, "Creating uridecodebin");
   dc->priv->uridecodebin =
       gst_element_factory_make ("uridecodebin", "discoverer-uri");

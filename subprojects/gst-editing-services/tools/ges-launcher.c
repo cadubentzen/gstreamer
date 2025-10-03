@@ -64,6 +64,8 @@ struct _GESLauncherPrivate
 
   GstState desired_state;       /* as per user interaction, PAUSED or PLAYING */
   gulong videosink_probe_id;
+
+  gboolean jkl_mode;
 };
 
 G_DEFINE_TYPE_WITH_PRIVATE (GESLauncher, ges_launcher, G_TYPE_APPLICATION);
@@ -161,18 +163,6 @@ restore_terminal (void)
 }
 
 static void
-toggle_paused (GESLauncher * self)
-{
-  if (self->priv->desired_state == GST_STATE_PLAYING)
-    self->priv->desired_state = GST_STATE_PAUSED;
-  else
-    self->priv->desired_state = GST_STATE_PLAYING;
-
-  gst_element_set_state (GST_ELEMENT (self->priv->pipeline),
-      self->priv->desired_state);
-}
-
-static void
 relative_seek (GESLauncher * self, gdouble percent, GESFrameNumber nframes)
 {
   gint64 pos = -1, step, dur;
@@ -201,6 +191,9 @@ relative_seek (GESLauncher * self, gdouble percent, GESFrameNumber nframes)
     play_do_seek (self, new_pos, self->priv->rate, self->priv->trick_mode);
 
     return;
+  } else {
+    gst_print ("Setting rate to %.1fx", self->priv->rate);
+    gst_print ("                               \n");
   }
 
   step = dur * percent;
@@ -259,6 +252,18 @@ play_set_playback_rate (GESLauncher * self, gdouble rate)
     gst_print ("Could not change playback rate to %.2f", rate);
     gst_print (".\n");
   }
+}
+
+static void
+toggle_paused (GESLauncher * self)
+{
+  if (self->priv->desired_state == GST_STATE_PLAYING)
+    self->priv->desired_state = GST_STATE_PAUSED;
+  else
+    self->priv->desired_state = GST_STATE_PLAYING;
+
+  gst_element_set_state (GST_ELEMENT (self->priv->pipeline),
+      self->priv->desired_state);
 }
 
 static void
@@ -328,8 +333,13 @@ print_keyboard_help (void)
         "s", "change subtitle track"}, {
         "0", "seek to beginning"}, {
         "?", "show keyboard shortcuts"}, {
-        "j", "Step one frame backward (pauses the pipeline if required)"}, {
-        "k", "Step one frame forward (pauses the pipeline if required)"}
+        "y", "toggle JKL shuttle mode"}, {
+          "j",
+        "JKL mode: reverse play (multi-press for faster), or step frame backward"},
+    {
+        "k", "JKL mode: pause/continue"}, {
+          "l",
+        "JKL mode: forward play (multi-press for faster), or step frame forward"}
   };
   guint i, chars_to_pad, desc_len, max_desc_len = 0;
 
@@ -1159,7 +1169,8 @@ bus_message_cb (GstBus * bus, GstMessage * message, GESLauncher * self)
 
         // Wait for PAUSED state to be reached so we are sure that the video
         // sink has been instantiated
-        if (self->priv->videosink_probe_id == 0 && old == GST_STATE_READY && new == GST_STATE_PAUSED) {
+        if (self->priv->videosink_probe_id == 0 && old == GST_STATE_READY
+            && new == GST_STATE_PAUSED) {
           GstElement *videosink =
               ges_pipeline_preview_get_video_sink (self->priv->pipeline);
 
@@ -1171,7 +1182,8 @@ bus_message_cb (GstBus * bus, GstMessage * message, GESLauncher * self)
             GST_OBJECT_UNLOCK (videosink);
 
             if (pad) {
-              self->priv->videosink_probe_id = gst_pad_add_probe (pad, GST_PAD_PROBE_TYPE_EVENT_UPSTREAM,
+              self->priv->videosink_probe_id =
+                  gst_pad_add_probe (pad, GST_PAD_PROBE_TYPE_EVENT_UPSTREAM,
                   (GstPadProbeCallback) sinkpad_probe_cb, self, NULL);
               gst_object_unref (pad);
             }
@@ -1753,8 +1765,9 @@ static void
 handle_key_press (GESLauncher * self, const gchar * key_input)
 {
   gchar key = '\0';
-
+  gchar orig_key = key_input[0];
   /* only want to switch/case on single char, not first char of string */
+
   if (key_input[0] != '\0' && key_input[1] == '\0')
     key = g_ascii_tolower (key_input[0]);
 
@@ -1765,27 +1778,73 @@ handle_key_press (GESLauncher * self, const gchar * key_input)
     case ' ':
       toggle_paused (self);
       break;
-    case 'j':
-      if (self->priv->desired_state != GST_STATE_PAUSED) {
-        gst_println ("Pausing pipeline to step frame");
-        toggle_paused (self);
-        if (gst_element_get_state (GST_ELEMENT (self->priv->pipeline), NULL,
-                NULL, GST_SECOND * 10) != GST_STATE_CHANGE_SUCCESS) {
-          GST_ERROR_OBJECT (self, "Could not get state after pausing?");
+    case 'y':
+      self->priv->jkl_mode = !self->priv->jkl_mode;
+      if (self->priv->jkl_mode) {
+        gst_println ("JKL shuttle mode enabled");
+        self->priv->trick_mode = GST_PLAY_TRICK_MODE_DEFAULT;
+      } else {
+        gst_println ("JKL shuttle mode disabled");
+        self->priv->trick_mode = GST_PLAY_TRICK_MODE_NONE;
+        if (self->priv->rate != 1.0) {
+          play_set_playback_rate (self, 1.0);
         }
       }
-      relative_seek (self, 0, -1);
+      break;
+    case 'j':
+      if (self->priv->jkl_mode) {
+        gdouble new_rate;
+        if (self->priv->rate > 0) {
+          new_rate = -self->priv->rate;
+        } else if (orig_key == 'j') {
+          new_rate = 2 * self->priv->rate;
+        } else {
+          new_rate = self->priv->rate / 2;
+        }
+        self->priv->rate = new_rate;
+        toggle_paused (self);
+        relative_seek (self, 0, 0);
+        toggle_paused (self);
+      } else {
+        if (self->priv->desired_state != GST_STATE_PAUSED) {
+          gst_println ("Pausing pipeline to step frame");
+          toggle_paused (self);
+          if (gst_element_get_state (GST_ELEMENT (self->priv->pipeline), NULL,
+                  NULL, GST_SECOND * 10) != GST_STATE_CHANGE_SUCCESS) {
+            GST_ERROR_OBJECT (self, "Could not get state after pausing?");
+          }
+        }
+        relative_seek (self, 0, -1);
+      }
+      break;
+    case 'k':
+      if (self->priv->jkl_mode)
+        toggle_paused (self);
       break;
     case 'l':
-      if (self->priv->desired_state != GST_STATE_PAUSED) {
+    case 'L':
+      if (self->priv->jkl_mode) {
+        gdouble new_rate;
+        if (self->priv->rate < 0) {
+          new_rate = -self->priv->rate;
+        } else if (orig_key == 'l') {
+          new_rate = 2 * self->priv->rate;
+        } else {
+          new_rate = self->priv->rate / 2;
+        }
+        self->priv->rate = new_rate;
+        toggle_paused (self);
+        relative_seek (self, 0, 0);
+        toggle_paused (self);
+      } else if (self->priv->desired_state != GST_STATE_PAUSED) {
         gst_println ("Pausing pipeline to step frame");
         toggle_paused (self);
         if (gst_element_get_state (GST_ELEMENT (self->priv->pipeline), NULL,
                 NULL, GST_SECOND * 10) != GST_STATE_CHANGE_SUCCESS) {
           GST_ERROR_OBJECT (self, "Could not get state after pausing?");
         }
+        relative_seek (self, 0, -1);
       }
-      relative_seek (self, 0, 1);
       break;
     case 'q':
     case 'Q':
@@ -1970,7 +2029,8 @@ ges_launcher_init (GESLauncher * self)
   self->priv->parsed_options.interactive = TRUE;
   self->priv->desired_state = GST_STATE_PLAYING;
   self->priv->rate = 1.0;
-  self->priv->trick_mode = GST_PLAY_TRICK_MODE_NONE;
+  self->priv->trick_mode = GST_PLAY_TRICK_MODE_DEFAULT;
+  self->priv->jkl_mode = TRUE;
 }
 
 gint

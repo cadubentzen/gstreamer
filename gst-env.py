@@ -621,7 +621,7 @@ if __name__ == "__main__":
                 echo -n '[{}] '(original_fish_prompt)
             end'''.format(gst_version)
             args.append(prompt_cmd)
-        elif args[0].endswith('zsh'):
+        elif args[0].endswith('zsh') and not str_to_bool(os.environ.get("GST_BUILD_DISABLE_PS1_OVERRIDE", r"FALSE")):
             prompt_export = f'export PROMPT="[{gst_version}] $PROMPT"'
             tmpdir = tempfile.TemporaryDirectory()
             # Let the GC remove the tmp file

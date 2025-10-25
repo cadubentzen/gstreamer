@@ -1405,26 +1405,29 @@ gst_audio_aggregator_sink_event (GstAggregator * agg,
       }
 
       GST_OBJECT_LOCK (agg);
-      if (segment->rate != GST_AGGREGATOR_PAD (agg->srcpad)->segment.rate) {
-        GST_ERROR_OBJECT (aggpad,
-            "Got segment event with wrong rate %lf, expected %lf",
-            segment->rate, GST_AGGREGATOR_PAD (agg->srcpad)->segment.rate);
-        res = FALSE;
-        gst_event_unref (event);
-        event = NULL;
-      } else if (segment->rate < 0.0) {
-        GST_ERROR_OBJECT (aggpad, "Negative rates not supported yet");
-        res = FALSE;
-        gst_event_unref (event);
-        event = NULL;
-      } else {
-        GstAudioAggregatorPad *pad = GST_AUDIO_AGGREGATOR_PAD (aggpad);
+      if (segment->rate != GST_AGGREGATOR_PAD (agg->srcpad)->segment.rate ||
+          segment->applied_rate !=
+          GST_AGGREGATOR_PAD (agg->srcpad)->segment.applied_rate) {
 
-        GST_OBJECT_LOCK (pad);
-        pad->priv->new_segment = TRUE;
-        gst_audio_aggregator_pad_reset_qos (pad);
-        GST_OBJECT_UNLOCK (pad);
+        GST_INFO_OBJECT (aggpad,
+            "Updating srcpad segment to match incoming segment: rate %lf->%lf, applied_rate %lf->%lf",
+            GST_AGGREGATOR_PAD (agg->srcpad)->segment.rate, segment->rate,
+            GST_AGGREGATOR_PAD (agg->srcpad)->segment.applied_rate,
+            segment->applied_rate);
+        GST_AGGREGATOR_PAD (agg->srcpad)->segment = *segment;
+
+        if (segment->applied_rate < 0.0) {
+          GST_WARNING_OBJECT (aggpad,
+              "Outputting silence from the aggregator due to negative rate");
+        }
       }
+
+      GstAudioAggregatorPad *pad = GST_AUDIO_AGGREGATOR_PAD (aggpad);
+
+      GST_OBJECT_LOCK (pad);
+      pad->priv->new_segment = TRUE;
+      gst_audio_aggregator_pad_reset_qos (pad);
+      GST_OBJECT_UNLOCK (pad);
       GST_OBJECT_UNLOCK (agg);
 
       break;
@@ -1591,6 +1594,18 @@ gst_audio_aggregator_src_query (GstAggregator * agg, GstQuery * query)
   gboolean res = FALSE;
 
   switch (GST_QUERY_TYPE (query)) {
+    case GST_QUERY_SEEKING:
+    {
+      GstFormat format;
+
+      /* We know that at least the audio aggregator is seekable. The aggregator base class currently sets seekable to FALSE.
+         So, we override seekable to TRUE here. */
+      gst_query_parse_seeking (query, &format, NULL, NULL, NULL);
+      gst_query_set_seeking (query, format, TRUE, 0, -1);
+      res = TRUE;
+
+      break;
+    }
     case GST_QUERY_DURATION:
       res = gst_audio_aggregator_query_duration (aagg, query);
       break;
@@ -2070,6 +2085,10 @@ gst_audio_aggregator_mix_buffer (GstAudioAggregator * aagg,
   gboolean filled;
   guint in_offset;
   gboolean pad_changed = FALSE;
+  GstSegment *agg_segment =
+      &GST_AGGREGATOR_PAD (GST_AGGREGATOR (aagg)->srcpad)->segment;
+  gboolean is_reverse = agg_segment->applied_rate < 0.0
+      || agg_segment->rate < 0.0;
 
   /* Overlap => mix */
   if (aagg->priv->offset < pad->priv->output_offset)
@@ -2096,8 +2115,9 @@ gst_audio_aggregator_mix_buffer (GstAudioAggregator * aagg,
   GST_OBJECT_UNLOCK (pad);
   GST_OBJECT_UNLOCK (aagg);
 
-  filled = GST_AUDIO_AGGREGATOR_GET_CLASS (aagg)->aggregate_one_buffer (aagg,
-      pad, inbuf, in_offset, outbuf, out_start, overlap);
+  filled = is_reverse
+      || GST_AUDIO_AGGREGATOR_GET_CLASS (aagg)->aggregate_one_buffer (aagg, pad,
+      inbuf, in_offset, outbuf, out_start, overlap);
 
   GST_OBJECT_LOCK (aagg);
   GST_OBJECT_LOCK (pad);

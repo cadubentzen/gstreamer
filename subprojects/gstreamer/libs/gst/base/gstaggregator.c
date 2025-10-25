@@ -2494,7 +2494,7 @@ gst_aggregator_default_src_query (GstAggregator * self, GstQuery * query)
       /* don't pass it along as some (file)sink might claim it does
        * whereas with a collectpads in between that will not likely work */
       gst_query_parse_seeking (query, &format, NULL, NULL, NULL);
-      gst_query_set_seeking (query, format, FALSE, 0, -1);
+      gst_query_set_seeking (query, format, TRUE, 0, -1);
       res = TRUE;
 
       break;

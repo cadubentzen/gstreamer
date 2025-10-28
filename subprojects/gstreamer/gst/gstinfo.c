@@ -766,7 +766,7 @@ gst_debug_log_full_valist (GstDebugCategory * category, GstLogContext * ctx,
 
   if (ctx) {
     va_list arguments;
-
+    g_return_if_fail (level < GST_LEVEL_MEMDUMP);
     G_VA_COPY (arguments, args);
     if (!_gst_log_ctx_check_id_valist (ctx, file, line, object, object_id,
             format, arguments)) {
@@ -876,6 +876,7 @@ gst_debug_log_literal_full (GstDebugCategory * category, GstLogContext * ctx,
     return;
 
   if (ctx) {
+    g_return_if_fail (level < GST_LEVEL_MEMDUMP);
     if (!_gst_log_ctx_check_id_literal (ctx, file, line, object, id,
             message_string))
       return;
@@ -2956,6 +2957,8 @@ gst_log_context_free (GstLogContext * ctx)
  * Logs a message with the specified context. If the context has already seen this
  * message based on its flags configuration, the message will not be logged.
  *
+ * @level >= %GST_LEVEL_MEMDUMP is not supported.
+ *
  * Since: 1.28
  */
 void
@@ -2989,6 +2992,8 @@ gst_debug_log_with_context (GstLogContext * ctx,
  * already seen this message based on its flags configuration, the message will
  * not be logged.
  *
+ * @level >= %GST_LEVEL_MEMDUMP is not supported.
+ *
  * Since: 1.28
  */
 void
@@ -3016,6 +3021,8 @@ gst_debug_log_with_context_valist (GstLogContext * ctx,
  * Logs a literal message with the specified context. Depending on the context
  * state, the message may not be logged at all.
  *
+ * @level >= %GST_LEVEL_MEMDUMP is not supported.
+ *
  * Since: 1.28
  */
 void
@@ -3042,6 +3049,8 @@ gst_debug_log_literal_with_context (GstLogContext * ctx,
  * Logs a message with the specified context and ID. If the context has already
  * seen this message based on its flags configuration, the message will not be
  * logged.
+ *
+ * @level >= %GST_LEVEL_MEMDUMP is not supported.
  *
  * Since: 1.28
  */
@@ -3074,6 +3083,8 @@ gst_debug_log_id_with_context (GstLogContext * ctx,
  * seen this message based on its flags configuration, the message will not be
  * logged.
  *
+ * @level >= %GST_LEVEL_MEMDUMP is not supported.
+ *
  * Since: 1.28
  */
 void
@@ -3100,6 +3111,8 @@ gst_debug_log_id_with_context_valist (GstLogContext * ctx,
  * Logs a message with the specified context and ID. If the context has already
  * seen this message based on its flags configuration, the message will not be
  * logged.
+ *
+ * @level >= %GST_LEVEL_MEMDUMP is not supported.
  *
  * Since: 1.28
  */

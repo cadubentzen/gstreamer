@@ -6809,48 +6809,6 @@ for (i = 0; i &lt; 1000; i++) {
         </parameter>
       </parameters>
     </function-macro>
-    <function-macro name="CTX_MEMDUMP" c:identifier="GST_CTX_MEMDUMP" version="1.28" introspectable="0">
-      <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.h">Logs a memory dump message in the specified context.</doc>
-      <source-position filename="../subprojects/gstreamer/gst/gstinfo.h"/>
-      <parameters>
-        <parameter name="ctx">
-          <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.h">#GstLogContext to use</doc>
-        </parameter>
-        <parameter name="...">
-          <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.h">format string and optional arguments, followed by optional context</doc>
-        </parameter>
-      </parameters>
-    </function-macro>
-    <function-macro name="CTX_MEMDUMP_ID" c:identifier="GST_CTX_MEMDUMP_ID" version="1.28" introspectable="0">
-      <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.h">Logs a memory dump message in the specified context.</doc>
-      <source-position filename="../subprojects/gstreamer/gst/gstinfo.h"/>
-      <parameters>
-        <parameter name="ctx">
-          <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.h">#GstLogContext to use</doc>
-        </parameter>
-        <parameter name="id">
-          <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.h">an object ID or %NULL</doc>
-        </parameter>
-        <parameter name="...">
-          <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.h">format string and optional arguments, followed by optional context</doc>
-        </parameter>
-      </parameters>
-    </function-macro>
-    <function-macro name="CTX_MEMDUMP_OBJECT" c:identifier="GST_CTX_MEMDUMP_OBJECT" version="1.28" introspectable="0">
-      <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.h">Logs a memory dump message in the specified context.</doc>
-      <source-position filename="../subprojects/gstreamer/gst/gstinfo.h"/>
-      <parameters>
-        <parameter name="ctx">
-          <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.h">#GstLogContext to use</doc>
-        </parameter>
-        <parameter name="object">
-          <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.h">a #GObject or %NULL</doc>
-        </parameter>
-        <parameter name="...">
-          <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.h">format string and optional arguments, followed by optional context</doc>
-        </parameter>
-      </parameters>
-    </function-macro>
     <function-macro name="CTX_TRACE" c:identifier="GST_CTX_TRACE" version="1.28" introspectable="0">
       <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.h">Logs a trace message in the specified context.</doc>
       <source-position filename="../subprojects/gstreamer/gst/gstinfo.h"/>
@@ -54797,7 +54755,9 @@ would write out.</doc>
     <function name="debug_log_id_literal_with_context" c:identifier="gst_debug_log_id_literal_with_context" version="1.28">
       <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.c">Logs a message with the specified context and ID. If the context has already
 seen this message based on its flags configuration, the message will not be
-logged.</doc>
+logged.
+
+@level &gt;= %GST_LEVEL_MEMDUMP is not supported.</doc>
       <source-position filename="../subprojects/gstreamer/gst/gstinfo.h"/>
       <return-value transfer-ownership="none">
         <type name="none" c:type="void"/>
@@ -54878,7 +54838,9 @@ logged.</doc>
     <function name="debug_log_id_with_context" c:identifier="gst_debug_log_id_with_context" version="1.28" introspectable="0">
       <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.c">Logs a message with the specified context and ID. If the context has already
 seen this message based on its flags configuration, the message will not be
-logged.</doc>
+logged.
+
+@level &gt;= %GST_LEVEL_MEMDUMP is not supported.</doc>
       <source-position filename="../subprojects/gstreamer/gst/gstinfo.h"/>
       <return-value transfer-ownership="none">
         <type name="none" c:type="void"/>
@@ -54921,7 +54883,9 @@ logged.</doc>
     <function name="debug_log_id_with_context_valist" c:identifier="gst_debug_log_id_with_context_valist" version="1.28" introspectable="0">
       <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.c">Logs a message with the specified context and ID. If the context has already
 seen this message based on its flags configuration, the message will not be
-logged.</doc>
+logged.
+
+@level &gt;= %GST_LEVEL_MEMDUMP is not supported.</doc>
       <source-position filename="../subprojects/gstreamer/gst/gstinfo.h"/>
       <return-value transfer-ownership="none">
         <type name="none" c:type="void"/>
@@ -55001,7 +54965,9 @@ logged.</doc>
     </function>
     <function name="debug_log_literal_with_context" c:identifier="gst_debug_log_literal_with_context" version="1.28">
       <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.c">Logs a literal message with the specified context. Depending on the context
-state, the message may not be logged at all.</doc>
+state, the message may not be logged at all.
+
+@level &gt;= %GST_LEVEL_MEMDUMP is not supported.</doc>
       <source-position filename="../subprojects/gstreamer/gst/gstinfo.h"/>
       <return-value transfer-ownership="none">
         <type name="none" c:type="void"/>
@@ -55082,7 +55048,9 @@ state, the message may not be logged at all.</doc>
     </function>
     <function name="debug_log_with_context" c:identifier="gst_debug_log_with_context" version="1.28" introspectable="0">
       <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.c">Logs a message with the specified context. If the context has already seen this
-message based on its flags configuration, the message will not be logged.</doc>
+message based on its flags configuration, the message will not be logged.
+
+@level &gt;= %GST_LEVEL_MEMDUMP is not supported.</doc>
       <source-position filename="../subprojects/gstreamer/gst/gstinfo.h"/>
       <return-value transfer-ownership="none">
         <type name="none" c:type="void"/>
@@ -55126,7 +55094,9 @@ message based on its flags configuration, the message will not be logged.</doc>
     <function name="debug_log_with_context_valist" c:identifier="gst_debug_log_with_context_valist" version="1.28" introspectable="0">
       <doc xml:space="preserve" filename="../subprojects/gstreamer/gst/gstinfo.c">Logs a message with the specified context using a va_list. If the context has
 already seen this message based on its flags configuration, the message will
-not be logged.</doc>
+not be logged.
+
+@level &gt;= %GST_LEVEL_MEMDUMP is not supported.</doc>
       <source-position filename="../subprojects/gstreamer/gst/gstinfo.h"/>
       <return-value transfer-ownership="none">
         <type name="none" c:type="void"/>

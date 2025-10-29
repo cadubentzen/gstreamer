@@ -61,6 +61,11 @@ gboolean      gst_cuda_memory_is_stream_ordered (GstMemory * mem);
 
 gpointer      gst_cuda_get_win32_handle_metadata (void);
 
+#ifdef G_OS_WIN32
+gint64
+gst_cuda_context_find_dxgi_adapter_luid (CUdevice cuda_device);
+#endif
+
 G_END_DECLS
 
 #ifdef __cplusplus

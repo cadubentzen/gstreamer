@@ -24,7 +24,7 @@
 G_BEGIN_DECLS
 
 void gst_nv_jpeg_enc_register (GstPlugin * plugin,
-                               GstCudaContext * context,
+                               guint cuda_device_id,
                                guint rank,
                                gboolean have_nvrtc);
 

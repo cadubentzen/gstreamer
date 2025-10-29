@@ -2368,6 +2368,7 @@ gst_nv_h264_encoder_create_class_data (GstObject * device, gpointer session,
   cdata->src_caps = gst_caps_from_string (src_caps_str.c_str ());
   cdata->device_caps = dev_caps;
   cdata->device_mode = device_mode;
+  cdata->codec = cudaVideoCodec_H264;
 
   /* *INDENT-OFF* */
   for (const auto &iter: formats)
@@ -2397,8 +2398,7 @@ gst_nv_h264_encoder_create_class_data (GstObject * device, gpointer session,
 }
 
 GstNvEncoderClassData *
-gst_nv_h264_encoder_register_cuda (GstPlugin * plugin, GstCudaContext * context,
-    guint rank)
+gst_nv_h264_encoder_inspect (GstPlugin * plugin, GstCudaContext * context)
 {
   NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS session_params = { 0, };
   gpointer session;
@@ -2424,10 +2424,13 @@ gst_nv_h264_encoder_register_cuda (GstPlugin * plugin, GstCudaContext * context,
       GST_NV_ENCODER_DEVICE_CUDA);
   NvEncDestroyEncoder (session);
 
-  if (!cdata)
-    return nullptr;
+  return cdata;
+}
 
-  gst_nv_encoder_class_data_ref (cdata);
+GstNvEncoderClassData *
+gst_nv_h264_encoder_register (GstPlugin * plugin,
+    GstNvEncoderClassData * cdata, guint rank)
+{
 
   GType type;
   gchar *type_name;
@@ -2709,6 +2712,7 @@ gst_nv_h264_encoder_register_auto_select (GstPlugin * plugin,
   cdata->src_caps = gst_caps_from_string (src_caps_str.c_str ());
   cdata->device_caps = dev_caps;
   cdata->device_mode = GST_NV_ENCODER_DEVICE_AUTO_SELECT;
+  cdata->codec = cudaVideoCodec_H264;
   cdata->adapter_luid = adapter_luid_list[0];
   cdata->adapter_luid_size = adapter_luid_size;
   memcpy (&cdata->adapter_luid_list,

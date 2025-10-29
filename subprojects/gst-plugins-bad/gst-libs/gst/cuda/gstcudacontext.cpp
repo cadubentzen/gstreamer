@@ -297,7 +297,7 @@ gst_cuda_context_get_property (GObject * object, guint prop_id,
 }
 
 #ifdef G_OS_WIN32
-static gint64
+gint64
 gst_cuda_context_find_dxgi_adapter_luid (CUdevice cuda_device)
 {
   gint64 ret = 0;

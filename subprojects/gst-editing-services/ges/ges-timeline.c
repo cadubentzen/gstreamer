@@ -338,6 +338,7 @@ enum
   SNAPING_STARTED,
   SNAPING_ENDED,
   SELECT_TRACKS_FOR_OBJECT,
+  COMMIT,
   COMMITED,
   SELECT_ELEMENT_TRACK,
   LAST_SIGNAL
@@ -1080,6 +1081,18 @@ ges_timeline_class_init (GESTimelineClass * klass)
       g_signal_new ("select-element-track", G_TYPE_FROM_CLASS (klass),
       G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL,
       GES_TYPE_TRACK, 2, GES_TYPE_CLIP, GES_TYPE_TRACK_ELEMENT);
+
+  /**
+   * GESTimeline::commit:
+   * @timeline: The #GESTimeline
+   *
+   * This signal will be emitted when ges_timeline_commit() is called,
+   *
+   * Since: 1.28
+   */
+  ges_timeline_signals[COMMIT] =
+      g_signal_new ("commit", G_TYPE_FROM_CLASS (klass),
+      G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL, G_TYPE_NONE, 0);
 
   /**
    * GESTimeline::commited:
@@ -3314,6 +3327,8 @@ ges_timeline_commit (GESTimeline * timeline)
   GstStreamCollection *pcollection = timeline->priv->stream_collection;
 
   g_return_val_if_fail (GES_IS_TIMELINE (timeline), FALSE);
+
+  g_signal_emit (timeline, ges_timeline_signals[COMMIT], 0);
 
   LOCK_DYN (timeline);
   ret = ges_timeline_commit_unlocked (timeline);

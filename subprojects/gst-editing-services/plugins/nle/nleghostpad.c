@@ -17,6 +17,8 @@
  * Boston, MA 02110-1301, USA.
  */
 
+#include "gst/gstevent.h"
+#include "gst/gstsegment.h"
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -39,6 +41,25 @@ struct _NlePadPrivate
   GstEvent *pending_seek;
 };
 
+static GstEvent *
+_update_seek_event (GstEvent * event, gdouble rate, GstFormat format,
+    GstSeekFlags flags, GstSeekType start_type, gint64 start,
+    GstSeekType stop_type, gint64 stop)
+{
+  event = gst_event_make_writable (event);
+  gst_structure_set (gst_event_writable_structure (event),
+      "rate", G_TYPE_DOUBLE, rate,
+      "format", GST_TYPE_FORMAT, GST_FORMAT_TIME,
+      "flags", GST_TYPE_SEEK_FLAGS, flags,
+      "cur-type", GST_TYPE_SEEK_TYPE, start_type,
+      "cur", G_TYPE_INT64, start,
+      "stop-type", GST_TYPE_SEEK_TYPE, GST_SEEK_TYPE_SET,
+      "stop", G_TYPE_INT64, stop,
+      "trickmode-interval", GST_TYPE_CLOCK_TIME, (GstClockTime) 0, NULL);
+
+  return event;
+}
+
 /**
  * nle_object_translate_incoming_seek:
  * @object: A #NleObject.
@@ -49,7 +70,6 @@ struct _NlePadPrivate
 GstEvent *
 nle_object_translate_incoming_seek (NleObject * object, GstEvent * event)
 {
-  GstEvent *event2;
   GstFormat format;
   gdouble rate;
   GstSeekFlags flags;
@@ -154,12 +174,8 @@ nle_object_translate_incoming_seek (NleObject * object, GstEvent * event)
       GST_TIME_FORMAT " -- %" GST_TIME_FORMAT, rate, flags, ncurtype,
       GST_TIME_ARGS (ncur), GST_TIME_ARGS (nstop));
 
-  event2 = gst_event_new_seek (rate, GST_FORMAT_TIME, flags,
+  return _update_seek_event (event, rate, GST_FORMAT_TIME, flags,
       ncurtype, (gint64) ncur, GST_SEEK_TYPE_SET, (gint64) nstop);
-  GST_EVENT_SEQNUM (event2) = seqnum;
-  gst_event_unref (event);
-
-  return event2;
 
   /* ERRORS */
 invalid_format:
@@ -172,7 +188,6 @@ invalid_format:
 static GstEvent *
 translate_outgoing_seek (NleObject * object, GstEvent * event)
 {
-  GstEvent *event2;
   GstFormat format;
   gdouble rate;
   GstSeekFlags flags;
@@ -237,13 +252,8 @@ translate_outgoing_seek (NleObject * object, GstEvent * event)
       GST_TIME_FORMAT " -- %" GST_TIME_FORMAT, rate, flags, ncurtype,
       GST_TIME_ARGS (ncur), GST_TIME_ARGS (nstop));
 
-  event2 = gst_event_new_seek (rate, GST_FORMAT_TIME, flags,
+  return _update_seek_event (event, rate, GST_FORMAT_TIME, flags,
       ncurtype, (gint64) ncur, GST_SEEK_TYPE_SET, (gint64) nstop);
-  GST_EVENT_SEQNUM (event2) = seqnum;
-
-  gst_event_unref (event);
-
-  return event2;
 
   /* ERRORS */
 invalid_format:

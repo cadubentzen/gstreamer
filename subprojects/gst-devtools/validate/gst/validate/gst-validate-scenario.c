@@ -7889,14 +7889,18 @@ gst_validate_print_action_types (const gchar ** wanted_types,
     if (print && num_wanted_types) {
       gst_validate_printf (atype, "\n");
     } else if (print) {
-      gchar *desc =
-          g_regex_replace (newline_regex, atype->description, -1, 0, "\n      ",
-          0,
-          NULL);
 
-      gst_validate_printf (NULL, "\n%s: %s:\n      %s\n",
-          atype->implementer_namespace, atype->name, desc);
-      g_free (desc);
+      if (atype->description) {
+        gchar *desc = g_regex_replace (newline_regex, atype->description, -1, 0,
+            "\n      ",
+            0, NULL);
+        gst_validate_printf (NULL, "\n%s: %s:\n      %s\n",
+            atype->implementer_namespace, atype->name, desc);
+        g_free (desc);
+      } else {
+        gst_validate_printf (NULL, "\n%s: %s:\n",
+            atype->implementer_namespace, atype->name);
+      }
     }
   }
 

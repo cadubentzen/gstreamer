@@ -486,22 +486,26 @@ _state_changed_cb (GstBus * bus, GstMessage * message,
 
 GES_START_VALIDATE_ACTION (_commit)
 {
-  GstBus *bus;
-  GstState state;
-
-  bus = gst_pipeline_get_bus (GST_PIPELINE (pipeline));
+  GstBus *bus = NULL;
+  GstState state = GST_STATE_NULL;
 
   gst_validate_printf (action, "Committing timeline %s\n",
       GST_OBJECT_NAME (timeline));
 
-  g_signal_connect (bus, "message::state-changed",
-      G_CALLBACK (_state_changed_cb), action);
+  if (pipeline) {
+    bus = gst_pipeline_get_bus (GST_PIPELINE (pipeline));
+    g_signal_connect (bus, "message::state-changed",
+        G_CALLBACK (_state_changed_cb), action);
 
-  gst_element_get_state (pipeline, &state, NULL, 0);
+    gst_element_get_state (pipeline, &state, NULL, 0);
+  }
+
   if (!ges_timeline_commit (timeline) || state < GST_STATE_PAUSED) {
-    g_signal_handlers_disconnect_by_func (bus, G_CALLBACK (_state_changed_cb),
-        action);
-    gst_object_unref (bus);
+    if (bus) {
+      g_signal_handlers_disconnect_by_func (bus, G_CALLBACK (_state_changed_cb),
+          action);
+      gst_object_unref (bus);
+    }
     goto done;
   }
 

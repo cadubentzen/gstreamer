@@ -1300,7 +1300,6 @@ gst_video_rate_src_event (GstBaseTransform * trans, GstEvent * event)
       GstSeekFlags flags;
       GstSeekType start_type, stop_type;
       gint64 start, stop;
-      gint seqnum = gst_event_get_seqnum (event);
 
       gst_event_parse_seek (event, &srate, NULL, &flags, &start_type, &start,
           &stop_type, &stop);
@@ -1317,10 +1316,9 @@ gst_video_rate_src_event (GstBaseTransform * trans, GstEvent * event)
         }
       }
 
-      gst_event_unref (event);
-      event = gst_event_new_seek (srate, GST_FORMAT_TIME,
-          flags, start_type, start, stop_type, stop);
-      gst_event_set_seqnum (event, seqnum);
+      event = gst_event_make_writable (event);
+      gst_structure_set (gst_event_writable_structure (event),
+          "start", G_TYPE_INT64, start, "stop", G_TYPE_INT64, stop, NULL);
 
       res = gst_pad_push_event (sinkpad, event);
       break;

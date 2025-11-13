@@ -1336,30 +1336,31 @@ gst_video_rate_src_event (GstBaseTransform * trans, GstEvent * event)
           GstClockTime stop_rtime =
               gst_segment_to_running_time (&videorate->segment, GST_FORMAT_TIME,
               videorate->segment.stop);
-          timestamp =
-              (stop_rtime - base_rtime) - ((stop_rtime - base_rtime -
-                  orig_timestamp) * videorate->rate);
+
+          /* Use signed arithmetic to prevent unsigned underflow
+           * This fix prevents bogus QoS timestamps in reverse playback with rate != 1.0 */
+          GstClockTimeDiff diff_rtime =
+              (GstClockTimeDiff) (stop_rtime - base_rtime);
+          GstClockTimeDiff adjusted_ts;
+
+          /* Calculate intermediate value using signed arithmetic */
+          adjusted_ts = diff_rtime - (GstClockTimeDiff) orig_timestamp;
+          adjusted_ts = (GstClockTimeDiff) (adjusted_ts * videorate->rate);
+
+          /* Only apply transformation if result would be valid (non-negative) */
+          if (diff_rtime >= adjusted_ts && adjusted_ts >= 0) {
+            timestamp = diff_rtime - adjusted_ts;
+          } else {
+            /* Underflow would occur - use safe fallback */
+            timestamp = orig_timestamp;
+          }
 
           if (diff < 0 && -diff > timestamp)
             diff = 0;
 
-          GST_LOG_OBJECT (trans,
-              "(stop_rtime - base_rtime) - ((stop_rtime - base_rtime - orig_timestamp) * videorate->rate) = (%"
-              GST_TIMEP_FORMAT " - %" GST_TIMEP_FORMAT ")" " - ((%"
-              GST_TIMEP_FORMAT " - %" GST_TIMEP_FORMAT " - %" GST_TIMEP_FORMAT
-              ") * %f) = %" GST_TIMEP_FORMAT, &stop_rtime, &base_rtime,
-              &stop_rtime, &base_rtime, &orig_timestamp, videorate->rate,
-              &timestamp);
-
         } else {
           timestamp =
               base_rtime + ((orig_timestamp - base_rtime) * videorate->rate);
-
-          GST_LOG_OBJECT (trans,
-              "timestamp = %" GST_TIMEP_FORMAT " + (%" GST_TIMEP_FORMAT
-              " - %" GST_TIMEP_FORMAT ") * %f = %" GST_TIMEP_FORMAT,
-              &videorate->base_output_ts, &orig_timestamp,
-              &videorate->base_output_ts, videorate->rate, &timestamp);
         }
         GST_OBJECT_UNLOCK (trans);
 

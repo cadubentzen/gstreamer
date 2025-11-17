@@ -443,6 +443,11 @@ struct _GstVideoDecoderPrivate
   guint dropped;
   guint processed;
 
+  /* I-frame rate skip optimization */
+  gboolean caps_intra_only;
+  guint iframe_skip_counter;
+  gdouble original_input_rate;
+
   /* Outgoing byte size ? */
   gint64 bytes_out;
   gint64 time;
@@ -827,6 +832,11 @@ gst_video_decoder_init (GstVideoDecoder * decoder, GstVideoDecoderClass * klass)
   decoder->priv->output_out_of_segment = DEFAULT_OUTPUT_OUT_OF_SEGMENT;
   decoder->priv->error_no_valid_frames = DEFAULT_ERROR_NO_VALID_FRAMES;
 
+  /* I-frame rate skip optimization */
+  decoder->priv->caps_intra_only = FALSE;
+  decoder->priv->iframe_skip_counter = 0;
+  decoder->priv->original_input_rate = 0.0;
+
   gst_video_decoder_reset (decoder, TRUE, TRUE);
 }
 
@@ -940,6 +950,20 @@ gst_video_decoder_setcaps (GstVideoDecoder * decoder, GstCaps * caps)
 
   if (G_UNLIKELY (state == NULL))
     goto parse_fail;
+
+  /* Check for intra-only stream for I-frame rate skip optimization */
+  {
+    GstStructure *structure = gst_caps_get_structure (caps, 0);
+    gboolean intra_only = FALSE;
+    if (gst_structure_get_boolean (structure, "intra-only", &intra_only)) {
+      decoder->priv->caps_intra_only = intra_only;
+      GST_DEBUG_OBJECT (decoder,
+          "I-frame rate skip: caps indicate intra-only stream = %d",
+          intra_only);
+    } else {
+      decoder->priv->caps_intra_only = FALSE;
+    }
+  }
 
   if (decoder_class->set_format)
     ret = decoder_class->set_format (decoder, state);
@@ -1161,6 +1185,7 @@ gst_video_decoder_push_event (GstVideoDecoder * decoder, GstEvent * event)
       }
 
       GST_VIDEO_DECODER_STREAM_LOCK (decoder);
+
       decoder->output_segment = segment;
       decoder->priv->in_out_segment_sync =
           gst_segment_is_equal (&decoder->input_segment, &segment);
@@ -1641,6 +1666,15 @@ gst_video_decoder_sink_event_default (GstVideoDecoder * decoder,
 
       decoder->input_segment = segment;
       decoder->priv->in_out_segment_sync = FALSE;
+
+      /* Store original rate for I-frame skip optimization */
+      if (priv->caps_intra_only && (segment.flags & GST_SEEK_FLAG_TRICKMODE)) {
+        priv->original_input_rate = segment.rate;
+        priv->iframe_skip_counter = 0;
+        GST_DEBUG_OBJECT (decoder,
+            "I-frame rate skip: stored original rate %f for new segment (intra-only + trickmode)",
+            segment.rate);
+      }
 
       GST_OBJECT_UNLOCK (decoder);
       GST_VIDEO_DECODER_STREAM_UNLOCK (decoder);
@@ -4077,6 +4111,44 @@ gst_video_decoder_decode_frame (GstVideoDecoder * decoder,
         "possible internal leaking?", priv->frames.length);
   }
 
+  /* I-frame rate skip optimization: skip frames based on rate */
+  if (priv->caps_intra_only &&
+      (decoder->input_segment.flags & GST_SEEK_FLAG_TRICKMODE) &&
+      ABS (priv->original_input_rate) > 1.0) {
+    gdouble abs_rate = ABS (priv->original_input_rate);
+    gint rate_int = (gint) abs_rate;
+    gint pattern_size;
+    gint keep_count = 1;
+    gboolean should_skip = FALSE;
+
+    /* Determine skip pattern based on rate - integer rates only */
+    if (rate_int >= 2) {
+      pattern_size = rate_int;
+      /* Keep 1 out of N frames */
+    } else {
+      /* Rate < 2.0 - skip optimization */
+      goto no_skip;
+    }
+
+    should_skip = (priv->iframe_skip_counter % pattern_size) >= keep_count;
+    priv->iframe_skip_counter++;
+
+    if (should_skip) {
+      GST_TRACE_OBJECT (decoder,
+          "I-frame rate skip: dropping frame %d (pattern %d/%d, rate %f)",
+          priv->iframe_skip_counter - 1,
+          priv->iframe_skip_counter % pattern_size, pattern_size, abs_rate);
+      gst_video_decoder_release_frame (decoder, frame);
+      return GST_FLOW_OK;
+    }
+
+    GST_TRACE_OBJECT (decoder,
+        "I-frame rate skip: keeping frame %d (pattern %d/%d, rate %f)",
+        priv->iframe_skip_counter - 1,
+        (priv->iframe_skip_counter - 1) % pattern_size, pattern_size, abs_rate);
+  }
+
+no_skip:
   /* do something with frame */
   ret = decoder_class->handle_frame (decoder, frame);
   if (ret != GST_FLOW_OK)

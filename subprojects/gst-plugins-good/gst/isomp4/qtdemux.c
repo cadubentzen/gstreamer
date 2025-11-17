@@ -9822,6 +9822,12 @@ gst_qtdemux_configure_stream (GstQTDemux * qtdemux, QtDemuxStream * stream)
             CUR_STREAM (stream)->fps_d, NULL);
       }
 
+      /* set intra-only if all samples are keyframes */
+      if (stream->all_keyframe) {
+        gst_caps_set_simple (CUR_STREAM (stream)->caps,
+            "intra-only", G_TYPE_BOOLEAN, TRUE, NULL);
+      }
+
       /* calculate pixel-aspect-ratio using display width and height */
       GST_DEBUG_OBJECT (qtdemux,
           "video size %dx%d, target display size %dx%d",

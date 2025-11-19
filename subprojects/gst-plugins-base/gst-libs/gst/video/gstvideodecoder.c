@@ -447,6 +447,7 @@ struct _GstVideoDecoderPrivate
   gboolean caps_intra_only;
   guint iframe_skip_counter;
   gdouble original_input_rate;
+  GstSeekFlags seek_flags;
 
   /* Outgoing byte size ? */
   gint64 bytes_out;
@@ -836,6 +837,7 @@ gst_video_decoder_init (GstVideoDecoder * decoder, GstVideoDecoderClass * klass)
   decoder->priv->caps_intra_only = FALSE;
   decoder->priv->iframe_skip_counter = 0;
   decoder->priv->original_input_rate = 0.0;
+  decoder->priv->seek_flags = GST_SEEK_FLAG_NONE;
 
   gst_video_decoder_reset (decoder, TRUE, TRUE);
 }
@@ -1676,15 +1678,6 @@ gst_video_decoder_sink_event_default (GstVideoDecoder * decoder,
       decoder->input_segment = segment;
       decoder->priv->in_out_segment_sync = FALSE;
 
-      /* Store original rate for I-frame skip optimization */
-      if (priv->caps_intra_only && (segment.flags & GST_SEEK_FLAG_TRICKMODE)) {
-        priv->original_input_rate = segment.rate;
-        priv->iframe_skip_counter = 0;
-        GST_DEBUG_OBJECT (decoder,
-            "I-frame rate skip: stored original rate %f for new segment (intra-only + trickmode)",
-            segment.rate);
-      }
-
       GST_OBJECT_UNLOCK (decoder);
       GST_VIDEO_DECODER_STREAM_UNLOCK (decoder);
 
@@ -1905,6 +1898,10 @@ gst_video_decoder_src_event_default (GstVideoDecoder * decoder,
       gst_event_parse_seek (event, &rate, &format, &flags, &start_type, &start,
           &stop_type, &stop);
       seqnum = gst_event_get_seqnum (event);
+
+      decoder->priv->original_input_rate = rate;
+      decoder->priv->seek_flags = flags;
+      GST_DEBUG_OBJECT (decoder, "orig_rate: %f, seek_flags: %d", rate, flags);
 
       /* upstream gets a chance first */
       if ((res = gst_pad_push_event (decoder->sinkpad, event)))
@@ -4121,9 +4118,7 @@ gst_video_decoder_decode_frame (GstVideoDecoder * decoder,
   }
 
   /* I-frame rate skip optimization: skip frames based on rate */
-  if (priv->caps_intra_only &&
-      (decoder->input_segment.flags & GST_SEEK_FLAG_TRICKMODE) &&
-      ABS (priv->original_input_rate) > 1.0) {
+  if (priv->caps_intra_only && ABS (priv->original_input_rate) > 1.0) {
     gdouble abs_rate = ABS (priv->original_input_rate);
     gint rate_int = (gint) abs_rate;
     gint pattern_size;

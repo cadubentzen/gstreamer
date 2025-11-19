@@ -1862,12 +1862,13 @@ ghost_event_probe_handler (GstPad * ghostpad G_GNUC_UNUSED,
           segment->start);
       rstop =
           gst_segment_to_running_time (segment, GST_FORMAT_TIME, segment->stop);
+      GstClockTime rdiff = segment->rate > 0 ? rstop - rstart : rstart - rstop;
       copy.base = comp->priv->next_base_time;
       GST_DEBUG_OBJECT (comp,
           "Updating base time to %" GST_TIME_FORMAT ", next:%" GST_TIME_FORMAT,
           GST_TIME_ARGS (comp->priv->next_base_time),
-          GST_TIME_ARGS (comp->priv->next_base_time + rstop - rstart));
-      comp->priv->next_base_time += rstop - rstart;
+          GST_TIME_ARGS (comp->priv->next_base_time + rdiff));
+      comp->priv->next_base_time += rdiff;
 
       event2 = gst_event_new_segment (&copy);
       if (comp->priv->seek_seqnum)
@@ -1994,8 +1995,20 @@ have_to_update_pipeline (NleComposition * comp,
   if (priv->segment->start < priv->stack_playback_window_start)
     return TRUE;
 
-  if (priv->segment->start >= priv->stack_playback_window_stop)
-    return TRUE;
+  if (priv->segment->rate > 0) {
+    if (priv->segment->start < priv->stack_playback_window_start)
+      return TRUE;
+
+    if (priv->segment->start >= priv->stack_playback_window_stop)
+      return TRUE;
+  } else {
+
+    if (priv->segment->stop >= priv->stack_playback_window_stop)
+      return TRUE;
+
+    if (priv->segment->stop < priv->stack_playback_window_start)
+      return TRUE;
+  }
 
   return FALSE;
 }

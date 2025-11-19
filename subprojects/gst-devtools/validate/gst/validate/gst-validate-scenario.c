@@ -6890,16 +6890,16 @@ crank_clock (GstElement * pipeline, GstValidateAction * action)
 
   if (gst_validate_action_get_clocktime (scenario, action,
           "expected-elapsed-time", &expected_diff)) {
-    GstClockTime elapsed =
-        gst_clock_get_time (GST_CLOCK (scenario->priv->clock)) - prev_time;
+    GstClockTime now = gst_clock_get_time (GST_CLOCK (scenario->priv->clock));
+    GstClockTime elapsed = now - prev_time;
 
     if (expected_diff != elapsed) {
       GST_VALIDATE_REPORT_ACTION (scenario, action,
           SCENARIO_ACTION_EXECUTION_ERROR,
           "Elapsed time during test clock cranking different than expected,"
-          " waited for %" GST_TIME_FORMAT " instead of the expected %"
-          GST_TIME_FORMAT, GST_TIME_ARGS (elapsed),
-          GST_TIME_ARGS (expected_diff));
+          " waited for %" GST_TIMEP_FORMAT " instead of the expected %"
+          GST_TIMEP_FORMAT " (prev: %" GST_TIMEP_FORMAT " now: %"
+          GST_TIMEP_FORMAT ")", &elapsed, &expected_diff, &prev_time, &now);
 
       gst_validate_action_set_done (action);
       return;

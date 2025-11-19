@@ -1,0 +1,34 @@
+event stream-start: GstEventStreamStart, flags=(GstStreamFlags)GST_STREAM_FLAG_NONE;
+event caps: video/x-raw, chroma-site=(string)jpeg, colorimetry=(string)1:4:0:0, format=(string)I420, framerate=(fraction)1/1, height=(int)720, width=(int)1240;
+event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=0:00:20.000000000, flags=0x01, time=0:00:00.000000000, base=0:00:00.000000000, position=none
+buffer: checksum=a16275ae624235e9b685ac6a4624b1a1bf6378ae, pts=0:00:00.000000000, dur=0:00:01.000000000
+event flush-start: (no structure)
+event flush-stop: GstEventFlushStop, reset-time=(boolean)true;
+event segment: format=TIME, start=0:00:20.000000000, offset=0:00:00.000000000, stop=0:00:25.000000000, rate=-1.000000, flags=0x01, time=0:00:20.000000000, base=0:00:00.000000000, position=none
+buffer: checksum=7ca5a342e45cde42e327f0be0fd8b34dc90f2e65, pts=0:00:24.000000000, dur=0:00:01.000000000
+buffer: checksum=f0e596deee6004b4bb685af46522b3ab9eaf20ca, pts=0:00:23.000000000, dur=0:00:01.000000000
+buffer: checksum=870b1435ecd94f3e95f7e96b737bdefbb6a98e71, pts=0:00:22.000000000, dur=0:00:01.000000000
+buffer: checksum=90f1c11cdb1abeefbbdb8975306e15d7850e94c3, pts=0:00:21.000000000, dur=0:00:01.000000000
+buffer: checksum=a16275ae624235e9b685ac6a4624b1a1bf6378ae, pts=0:00:20.000000000, dur=0:00:01.000000000
+event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=0:00:20.000000000, rate=-1.000000, flags=0x01, time=0:00:00.000000000, base=0:00:05.000000000, position=none
+buffer: checksum=04d35636aaf94a177ba981b93df1ee278c10f048, pts=0:00:19.000000000, dur=0:00:01.000000000
+buffer: checksum=2085cff1e14a6804a962b1e3a07af8fa51ba1610, pts=0:00:18.000000000, dur=0:00:01.000000000
+buffer: checksum=0755b30d24cf9822018600f40e25e72e238a7fe0, pts=0:00:17.000000000, dur=0:00:01.000000000
+buffer: checksum=03e11a77fa10b3075842ca8599476119856a0b25, pts=0:00:16.000000000, dur=0:00:01.000000000
+buffer: checksum=72e28b152902e9841859dfa4bf1a63e6ace1a991, pts=0:00:15.000000000, dur=0:00:01.000000000
+buffer: checksum=617727ec419ba795fb94999a25aba413e07bf082, pts=0:00:14.000000000, dur=0:00:01.000000000
+buffer: checksum=4eec8b20cf76c7fb148dfdef46679d7ca9cdc3f7, pts=0:00:13.000000000, dur=0:00:01.000000000
+buffer: checksum=d66918420c35bbd065ad55144788155789e9c8fa, pts=0:00:12.000000000, dur=0:00:01.000000000
+buffer: checksum=c85e7da8e19b633f64bdc4a86a386373273da462, pts=0:00:11.000000000, dur=0:00:01.000000000
+buffer: checksum=1820288967f52d0c45f1ddb2427f510a0f020aa1, pts=0:00:10.000000000, dur=0:00:01.000000000
+buffer: checksum=f0685170197ac4ba45e6d5e968eda7d0e2de49db, pts=0:00:09.000000000, dur=0:00:01.000000000
+buffer: checksum=faff488c16ff91e23e9c6c12415f5612fbc0ff71, pts=0:00:08.000000000, dur=0:00:01.000000000
+buffer: checksum=293ba610531e8f6f7db47af99b48023510f18538, pts=0:00:07.000000000, dur=0:00:01.000000000
+buffer: checksum=8c64464236bfa2dca1a56955a54bf3df1c995807, pts=0:00:06.000000000, dur=0:00:01.000000000
+buffer: checksum=fe53fa010c0d7624d311e68f229a4e2d5eb5302e, pts=0:00:05.000000000, dur=0:00:01.000000000
+buffer: checksum=7ca5a342e45cde42e327f0be0fd8b34dc90f2e65, pts=0:00:04.000000000, dur=0:00:01.000000000
+buffer: checksum=f0e596deee6004b4bb685af46522b3ab9eaf20ca, pts=0:00:03.000000000, dur=0:00:01.000000000
+buffer: checksum=870b1435ecd94f3e95f7e96b737bdefbb6a98e71, pts=0:00:02.000000000, dur=0:00:01.000000000
+buffer: checksum=90f1c11cdb1abeefbbdb8975306e15d7850e94c3, pts=0:00:01.000000000, dur=0:00:01.000000000
+buffer: checksum=a16275ae624235e9b685ac6a4624b1a1bf6378ae, pts=0:00:00.000000000, dur=0:00:01.000000000
+event eos: (no structure)

@@ -100,8 +100,6 @@ gst_gl_colorscale_class_init (GstGLColorscaleClass * klass)
       "Julien Isorce <julien.isorce@gmail.com>, "
       "Matthew Waters <matthew@centricular.com>");
 
-  basetransform_class->passthrough_on_same_caps = TRUE;
-
   base_filter_class->gl_start = GST_DEBUG_FUNCPTR (gst_gl_colorscale_gl_start);
   base_filter_class->gl_stop = GST_DEBUG_FUNCPTR (gst_gl_colorscale_gl_stop);
   base_filter_class->supported_gl_api =

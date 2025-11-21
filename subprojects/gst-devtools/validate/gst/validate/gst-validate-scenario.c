@@ -686,6 +686,7 @@ gst_validate_action_type_init (GstValidateActionType * type)
   gst_mini_object_init ((GstMiniObject *) type, 0,
       _gst_validate_action_type_type, NULL, NULL,
       (GstMiniObjectFreeFunction) _action_type_free);
+  GST_MINI_OBJECT_FLAG_SET (type, GST_MINI_OBJECT_FLAG_MAY_BE_LEAKED);
 }
 
 GstValidateActionType *

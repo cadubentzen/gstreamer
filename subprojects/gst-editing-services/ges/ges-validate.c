@@ -335,6 +335,73 @@ beach:
 
 GST_END_VALIDATE_ACTION;
 
+GES_START_VALIDATE_ACTION (_add_track)
+{
+  GESTrack *track;
+  GESTrackType track_type;
+  GstCaps *caps = NULL;
+  const gchar *track_type_str;
+  const gchar *caps_str;
+  const gchar *name;
+
+  track_type_str = gst_structure_get_string (action->structure, "track-type");
+  REPORT_UNLESS (track_type_str, done,
+      "'track-type' is required when adding a track");
+
+  REPORT_UNLESS ((track_type =
+          gst_validate_utils_flags_from_str (GES_TYPE_TRACK_TYPE,
+              track_type_str)), done, "Invalid track type: %s", track_type_str);
+  GST_ERROR ("track type is %d", track_type);
+
+  caps_str = gst_structure_get_string (action->structure, "caps");
+  if (caps_str) {
+    REPORT_UNLESS ((caps = gst_caps_from_string (caps_str)),
+        done, "Invalid caps: %s", caps_str);
+  }
+
+  gst_validate_printf (action, "Adding %s track to timeline\n", track_type_str);
+
+  track = ges_track_new (track_type, caps);
+  REPORT_UNLESS (track, beach, "Could not create track");
+
+  name = gst_structure_get_string (action->structure, "name");
+  if (name) {
+    gst_object_set_name (GST_OBJECT (track), name);
+  }
+
+  res = ges_timeline_add_track (timeline, track);
+  if (!res) {
+    GST_VALIDATE_REPORT_ACTION (scenario, action,
+        SCENARIO_ACTION_EXECUTION_ERROR, "Could not add track to timeline");
+    gst_object_unref (track);
+  }
+
+beach:
+  if (caps)
+    gst_caps_unref (caps);
+}
+
+GST_END_VALIDATE_ACTION;
+
+GES_START_VALIDATE_ACTION (_remove_track)
+{
+  GESTrack *track = NULL;
+  const gchar *name;
+
+  name = gst_structure_get_string (action->structure, "name");
+  REPORT_UNLESS (name, done, "'name' is required when removing a track");
+
+  track = (GESTrack *) gst_bin_get_by_name (GST_BIN (timeline), name);
+  REPORT_UNLESS (track, beach, "Could not find track with name: %s", name);
+
+  res = ges_timeline_remove_track (timeline, track);
+
+beach:
+  gst_clear_object (&track);
+}
+
+GST_END_VALIDATE_ACTION;
+
 GES_START_VALIDATE_ACTION (_remove_clip)
 {
   GESTimelineElement *clip;
@@ -1426,6 +1493,58 @@ ges_validate_register_action_types (void)
         { NULL }
       },
       "Allows to remove a layer from the current timeline", GST_VALIDATE_ACTION_TYPE_NONE);
+
+  gst_validate_register_action_type ("add-track", "ges", _add_track,
+      (GstValidateActionParameter [])  {
+        {
+          .name = "track-type",
+          .description = "The type of track to add (video, audio, text)",
+          .mandatory = TRUE,
+          .types = "string",
+          NULL
+        },
+        {
+          .name = "caps",
+          .description = "The caps for the track",
+          .mandatory = FALSE,
+          .types = "string",
+          NULL
+        },
+        {
+          .name = "name",
+          .description = "The name to set on the track for later reference",
+          .mandatory = FALSE,
+          .types = "string",
+          NULL
+        },
+        {
+          .name = "project-uri",
+          .description = "The project URI with the serialized timeline to execute the action on",
+          .types = "string",
+          .mandatory = FALSE,
+        },
+        { NULL }
+      },
+      "Allows to add a track to the current timeline", GST_VALIDATE_ACTION_TYPE_NONE);
+
+  gst_validate_register_action_type ("remove-track", "ges", _remove_track,
+      (GstValidateActionParameter [])  {
+        {
+          .name = "name",
+          .description = "The name of the track to remove",
+          .mandatory = TRUE,
+          .types = "string",
+          NULL
+        },
+        {
+          .name = "project-uri",
+          .description = "The project URI with the serialized timeline to execute the action on",
+          .types = "string",
+          .mandatory = FALSE,
+        },
+        { NULL }
+      },
+      "Allows to remove a track from the current timeline", GST_VALIDATE_ACTION_TYPE_NONE);
 
   gst_validate_register_action_type ("add-clip", "ges", _validate_action_execute,
       (GstValidateActionParameter []) {

@@ -3253,8 +3253,10 @@ ges_timeline_commit_unlocked (GESTimeline * timeline)
 
   GST_DEBUG_OBJECT (timeline, "commiting changes");
 
-  timeline_tree_create_transitions (timeline->priv->tree,
-      ges_timeline_find_auto_transition);
+  if (!timeline->priv->disable_edit_apis) {
+    timeline_tree_create_transitions (timeline->priv->tree,
+        ges_timeline_find_auto_transition);
+  }
   for (tmp = timeline->layers; tmp; tmp = tmp->next) {
     GESLayer *layer = tmp->data;
 

@@ -169,4 +169,21 @@ gboolean ges_timeline_get_edit_apis_disabled (GESTimeline * self);
 GES_API
 gdouble ges_timeline_get_rate (GESTimeline * self);
 
+GES_API
+gboolean ges_timeline_register_as_subtimeline_primary(GESTimeline *timeline,
+                                                      const gchar *primary_id,
+                                                      GError **error);
+GES_API
+gboolean ges_timeline_unregister_as_subtimeline_primary(const gchar *primary_id,
+                                                        GError **error);
+
+GES_API
+gboolean ges_timeline_is_subtimeline_primary(GESTimeline *timeline);
+
+GES_API
+gchar* ges_timeline_get_subtimeline_primary_id(GESTimeline *timeline);
+
+GES_API
+GESTimeline* ges_timeline_get_subtimeline_primary(const gchar *primary_id);
+
 G_END_DECLS

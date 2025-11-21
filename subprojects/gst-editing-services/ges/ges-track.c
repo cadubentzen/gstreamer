@@ -54,7 +54,9 @@
 #include "ges-video-track.h"
 #include "ges-audio-track.h"
 
-#define CHECK_THREAD(track) g_assert(track->priv->valid_thread == g_thread_self())
+#define CHECK_THREAD(track) g_assert( \
+  (track->priv->timeline && ges_timeline_in_current_thread (track->priv->timeline)) || \
+  (track->priv->valid_thread == g_thread_self()))
 
 static GstStaticPadTemplate ges_track_src_pad_template =
 GST_STATIC_PAD_TEMPLATE ("src",

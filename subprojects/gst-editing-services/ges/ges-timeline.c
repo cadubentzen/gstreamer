@@ -155,6 +155,7 @@ static GPtrArray *select_tracks_for_object_default (GESTimeline * timeline,
 static void ges_extractable_interface_init (GESExtractableInterface * iface);
 static void ges_meta_container_interface_init
     (GESMetaContainerInterface * iface);
+static GObject *get_cached_subtimeline_manager (GError ** error);
 
 GST_DEBUG_CATEGORY_STATIC (ges_timeline_debug);
 #undef GST_CAT_DEFAULT
@@ -178,7 +179,9 @@ GST_DEBUG_CATEGORY_STATIC (ges_timeline_debug);
         g_thread_self());         \
   } G_STMT_END
 
-#define CHECK_THREAD(timeline) g_assert(timeline->priv->valid_thread == g_thread_self())
+#define CHECK_THREAD(timeline) \
+  g_assert(timeline->priv->valid_thread == g_thread_self() || \
+           timeline->priv->primary_id != NULL)
 
 typedef struct
 {
@@ -296,6 +299,7 @@ struct _GESTimelinePrivate
   GPtrArray * /*<FlushingSeekInfo*> */ flushing_seek_infos;
 
   gdouble rate;
+  gchar *primary_id;
 };
 
 /* private structure to contain our track-related information */
@@ -533,6 +537,7 @@ ges_timeline_finalize (GObject * object)
   g_mutex_clear (&tl->priv->commited_lock);
   g_node_destroy (tl->priv->tree);
   ges_pipeline_pool_clear (&tl->priv->pool_manager);
+  g_free (tl->priv->primary_id);
 
   G_OBJECT_CLASS (ges_timeline_parent_class)->finalize (object);
 }
@@ -774,6 +779,26 @@ _gst_array_accumulator (GSignalInvocationHint * ihint,
     g_value_set_boxed (return_accu, array);
 
   return FALSE;
+}
+
+static void
+ges_subtimeline_manager_primary_registered_cb (GObject * subtimeline_manager,
+    const gchar * primary_id, GESTimeline * primary_timeline)
+{
+  GST_OBJECT_LOCK (primary_timeline);
+  g_free (primary_timeline->priv->primary_id);
+  primary_timeline->priv->primary_id = g_strdup (primary_id);
+  GST_OBJECT_UNLOCK (primary_timeline);
+}
+
+static void
+ges_subtimeline_manager_primary_unregistered_cb (GObject * subtimeline_manager,
+    const gchar * primary_id, GESTimeline * primary_timeline)
+{
+  GST_OBJECT_LOCK (primary_timeline);
+  g_clear_pointer (&primary_timeline->priv->primary_id, g_free);
+  GST_OBJECT_UNLOCK (primary_timeline);
+
 }
 
 static void
@@ -1107,6 +1132,18 @@ ges_timeline_class_init (GESTimelineClass * klass)
       g_signal_new ("commited", G_TYPE_FROM_CLASS (klass),
       G_SIGNAL_RUN_LAST, 0, NULL, NULL, NULL, G_TYPE_NONE, 0);
 
+  /* Follow primary timelines registration/unregistration */
+  GObject *subtimeline_manager = get_cached_subtimeline_manager (NULL);
+  if (subtimeline_manager) {
+    g_signal_connect (subtimeline_manager,
+        "subtimeline-primary-registered",
+        G_CALLBACK (ges_subtimeline_manager_primary_registered_cb), NULL);
+    g_signal_connect (subtimeline_manager, "subtimeline-primary-unregistered",
+        G_CALLBACK (ges_subtimeline_manager_primary_unregistered_cb), NULL);
+    gst_object_unref (subtimeline_manager);
+  } else {
+    GST_DEBUG ("No subtimeline manager");
+  }
 }
 
 static void
@@ -1236,8 +1273,8 @@ _destroy_auto_transition_cb (GESAutoTransition * auto_transition,
 
 GESAutoTransition *
 ges_timeline_create_transition (GESTimeline * timeline,
-    GESTrackElement * previous, GESTrackElement * next, GESClip * transition,
-    GESLayer * layer, guint64 start, guint64 duration)
+    GESTrackElement * previous, GESTrackElement * next,
+    GESClip * transition, GESLayer * layer, guint64 start, guint64 duration)
 {
   GESAutoTransition *auto_transition;
   GESTrackElement *child;
@@ -1594,8 +1631,8 @@ ges_timeline_edit (GESTimeline * timeline, GESTimelineElement * element,
         GST_WARNING_OBJECT (element, "Cannot roll an element to a new layer");
         return FALSE;
       }
-      return timeline_tree_roll (timeline->priv->tree, element,
-          edge_diff, edge, timeline->priv->snapping_distance, error);
+      return timeline_tree_roll (timeline->priv->tree, element, edge_diff, edge,
+          timeline->priv->snapping_distance, error);
     case GES_EDIT_MODE_SLIDE:
       GST_ERROR_OBJECT (element, "Sliding not implemented.");
       return FALSE;
@@ -3926,4 +3963,219 @@ ges_timeline_get_rate (GESTimeline * self)
   GST_OBJECT_UNLOCK (self);
 
   return res;
+}
+
+/* Global caching infrastructure for subtimeline manager */
+static GMutex manager_lock;
+static GObject *cached_subtimeline_manager = NULL;
+static GError *cached_error = NULL;
+static GObject *
+get_cached_subtimeline_manager (GError ** error)
+{
+  GstPlugin *plugin;
+  GstRegistry *registry;
+  GObject *formatter;
+  GObject *manager;
+  g_mutex_lock (&manager_lock);
+  /* If already initialized, return cached result */
+  if (cached_subtimeline_manager) {
+    g_mutex_unlock (&manager_lock);
+    return g_object_ref (cached_subtimeline_manager);
+  } else if (cached_error) {
+    /* Propagate cached error */
+    if (error)
+      *error = g_error_copy (cached_error);
+    g_mutex_unlock (&manager_lock);
+    return NULL;
+  }
+
+  /* Load rsges plugin */
+  registry = gst_registry_get ();
+  plugin = gst_registry_find_plugin (registry, "rsges");
+  if (!plugin) {
+    cached_error = g_error_new (GES_ERROR, GES_ERROR_FAILED,
+        "Required `rsges` plugin from gst-plugins-rs not found."
+        " The GES rust plugin is required for the subtimeline primary feature"
+        " to be useable.");
+    if (error)
+      *error = g_error_copy (cached_error);
+    g_mutex_unlock (&manager_lock);
+    return NULL;
+  }
+
+  /* Ensure plugin is loaded */
+  if (!gst_plugin_load (plugin)) {
+    cached_error = g_error_new (GES_ERROR, GES_ERROR_FAILED,
+        "Failed to load `rsges` plugin from `gst-plugins-rs."
+        " The GES rust plugin is required for the subtimeline primary feature"
+        " to be useable.");
+    gst_object_unref (plugin);
+    if (error)
+      *error = g_error_copy (cached_error);
+    g_mutex_unlock (&manager_lock);
+    return NULL;
+  }
+  gst_object_unref (plugin);
+  /* Create a GESSubTimelineFormatter to get access to the manager */
+  formatter = g_object_new (g_type_from_name ("GESSubTimelineFormatter"), NULL);
+  g_assert (formatter);
+  /* Get the primary manager singletone from the formatter */
+  g_object_get (formatter, "subtimeline-manager", &manager, NULL);
+  g_assert (manager);
+  g_object_unref (formatter);
+  /* Cache the manager */
+  cached_subtimeline_manager = g_object_ref (manager);
+  g_mutex_unlock (&manager_lock);
+  return manager;
+}
+
+/**
+ * ges_timeline_register_as_subtimeline_primary:
+ * @timeline: The timeline to register as a primary
+ * @primary_id: Unique identifier for this primary
+ * @error: Error location
+ *
+ * Register a timeline as a primary for subtimelines.
+ * The timeline must not have a parent and will never be used in pipelines.
+ *
+ * Returns: %TRUE on success
+ *
+ * Since: 1.28
+ */
+gboolean
+ges_timeline_register_as_subtimeline_primary (GESTimeline * timeline,
+    const gchar * primary_id, GError ** error)
+{
+  GObject *manager;
+  GError *err = NULL;
+  g_return_val_if_fail (GES_IS_TIMELINE (timeline), FALSE);
+  g_return_val_if_fail (primary_id != NULL, FALSE);
+  /* Validate timeline has no parent */
+  if (GST_OBJECT_PARENT (timeline) != NULL) {
+    g_set_error (error, GES_ERROR, GES_ERROR_ASSET_WRONG_ID,
+        "Timeline is already in use (has parent) and cannot be registered as primary");
+    return FALSE;
+  }
+
+  /* Get the subtimeline manager */
+  manager = get_cached_subtimeline_manager (error);
+  if (!manager)
+    return FALSE;
+  /* Register the primary via signal */
+  g_signal_emit_by_name (manager, "register-subtimeline-primary",
+      primary_id, timeline, &err);
+  g_object_unref (manager);
+  if (err) {
+    g_propagate_error (error, err);
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+/**
+ * ges_timeline_unregister_as_subtimeline_primary:
+ * @primary_id: Primary identifier to unregister
+ * @error: Error location
+ *
+ * Unregister a timeline primary.
+ *
+ * Returns: %TRUE on success
+ *
+ * Since: 1.28
+ */
+gboolean
+ges_timeline_unregister_as_subtimeline_primary (const gchar * primary_id,
+    GError ** error)
+{
+  GObject *manager;
+  GError *err = NULL;
+  g_return_val_if_fail (primary_id != NULL, FALSE);
+  /* Get the subtimeline manager */
+  manager = get_cached_subtimeline_manager (error);
+  if (!manager)
+    return FALSE;
+  /* Unregister the primary via signal */
+  g_signal_emit_by_name (manager, "unregister-subtimeline-primary",
+      primary_id, &err);
+  g_object_unref (manager);
+  if (err) {
+    g_propagate_error (error, err);
+    return FALSE;
+  }
+
+  return TRUE;
+}
+
+/**
+ * ges_timeline_is_subtimeline_primary:
+ * @timeline: The timeline to check
+ *
+ * Check if a timeline is registered as a subtimeline primary.
+ *
+ * Returns: %TRUE if the timeline is a subtimeline primary
+ *
+ * Since: 1.28
+ */
+gboolean
+ges_timeline_is_subtimeline_primary (GESTimeline * timeline)
+{
+  g_return_val_if_fail (GES_IS_TIMELINE (timeline), FALSE);
+
+  return timeline->priv->primary_id != NULL;
+}
+
+/**
+ * ges_timeline_get_subtimeline_primary_id:
+ * @timeline: The timeline to get the primary ID for
+ *
+ * Get the primary ID for a subtimeline primary timeline.
+ *
+ * Returns: (transfer full): The primary ID if the timeline is a primary, %NULL otherwise
+ *
+ * Since: 1.28
+ */
+gchar *
+ges_timeline_get_subtimeline_primary_id (GESTimeline * timeline)
+{
+  g_return_val_if_fail (GES_IS_TIMELINE (timeline), NULL);
+
+  return g_strdup (timeline->priv->primary_id);
+}
+
+/**
+ * ges_timeline_get_subtimeline_primary:
+ * @primary_id: The ID of the primary timeline to retrieve
+ *
+ * Get a registered subtimeline primary timeline by its ID.
+ *
+ * Returns: (transfer full) (nullable): The primary timeline if found, %NULL otherwise
+ *
+ * Since: 1.28
+ */
+GESTimeline *
+ges_timeline_get_subtimeline_primary (const gchar * primary_id)
+{
+  GObject *manager;
+  GESTimeline *timeline = NULL;
+  g_return_val_if_fail (primary_id != NULL, NULL);
+  /* Get the subtimeline manager */
+  manager = get_cached_subtimeline_manager (NULL);
+  if (!manager) {
+    return NULL;
+  }
+
+  g_signal_emit_by_name (manager, "get-primary", primary_id, &timeline);
+  g_object_unref (manager);
+  return timeline;
+}
+
+/* Internal cleanup function for subtimeline manager cache */
+void
+_ges_subtimeline_manager_cleanup (void)
+{
+  g_mutex_lock (&manager_lock);
+  gst_clear_object (&cached_subtimeline_manager);
+  g_clear_error (&cached_error);
+  g_mutex_unlock (&manager_lock);
 }

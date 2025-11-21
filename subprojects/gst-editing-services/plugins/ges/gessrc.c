@@ -73,7 +73,7 @@ ges_src_uri_get_type (GType type)
 static const gchar *const *
 ges_src_uri_get_protocols (GType type)
 {
-  static const gchar *protocols[] = { "ges", NULL };
+  static const gchar *protocols[] = { "ges", "gessubtimeline", NULL };
 
   return protocols;
 }

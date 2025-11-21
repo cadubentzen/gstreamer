@@ -93,10 +93,29 @@ static GESTimeline *
 _ges_load_timeline (GstValidateScenario * scenario, GstValidateAction * action,
     const gchar * project_uri)
 {
-  GESProject *project = ges_project_new (project_uri);
+  GESProject *project;
   GESTimeline *timeline;
   LoadTimelineData data = { 0 };
 
+  /* Check if this is a gessubtimeline:// URI */
+  if (g_str_has_prefix (project_uri, "gessubtimeline:")) {
+    const gchar *primary_id = project_uri + strlen ("gessubtimeline:");
+
+    GST_INFO_OBJECT (scenario, "Getting subtimeline primary with ID: %s",
+        primary_id);
+
+    timeline = ges_timeline_get_subtimeline_primary (primary_id);
+    if (!timeline) {
+      GST_VALIDATE_REPORT_ACTION (scenario, action,
+          SCENARIO_ACTION_EXECUTION_ERROR,
+          "Could not find subtimeline primary with ID: %s", primary_id);
+    }
+
+    return timeline;
+  }
+
+  /* Otherwise, simply load from file */
+  project = ges_project_new (project_uri);
   data.ml = g_main_loop_new (NULL, TRUE);
   timeline =
       GES_TIMELINE (ges_asset_extract (GES_ASSET (project), &data.error));

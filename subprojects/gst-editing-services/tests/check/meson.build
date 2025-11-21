@@ -18,6 +18,7 @@ ges_tests = [
     ['ges/tempochange'],
     ['ges/negative'],
     ['ges/markerlist'],
+    ['ges/subtimeline'],
     ['nle/simple'],
     ['nle/complex'],
     ['nle/nleoperation'],

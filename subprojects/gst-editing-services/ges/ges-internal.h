@@ -256,6 +256,7 @@ ges_effect_asset_id_get_type_and_bindesc (const char    *id,
                                           GError       **error);
 
 G_GNUC_INTERNAL void _ges_uri_asset_cleanup (void);
+G_GNUC_INTERNAL void _ges_subtimeline_manager_cleanup (void);
 
 G_GNUC_INTERNAL gboolean _ges_uri_asset_ensure_setup (gpointer uriasset_class);
 

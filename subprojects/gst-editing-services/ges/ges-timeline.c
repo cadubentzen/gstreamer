@@ -543,13 +543,13 @@ ges_timeline_handle_message (GstBin * bin, GstMessage * message)
   GESTimeline *timeline = GES_TIMELINE (bin);
 
   if (GST_MESSAGE_TYPE (message) == GST_MESSAGE_ASYNC_START) {
-    GST_INFO_OBJECT (timeline, "Dropping %" GST_PTR_FORMAT, message);
+    GST_LOG_OBJECT (timeline, "Dropping %" GST_PTR_FORMAT, message);
     gst_message_unref (message);
     return;
   }
 
   if (GST_MESSAGE_TYPE (message) == GST_MESSAGE_ASYNC_DONE) {
-    GST_INFO_OBJECT (timeline, "Dropping %" GST_PTR_FORMAT, message);
+    GST_LOG_OBJECT (timeline, "Dropping %" GST_PTR_FORMAT, message);
     gst_message_unref (message);
     return;
   }

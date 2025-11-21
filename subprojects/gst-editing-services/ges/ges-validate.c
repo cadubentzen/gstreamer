@@ -240,6 +240,9 @@ GES_START_VALIDATE_ACTION (_remove_asset)
 
   id = gst_structure_get_string (action->structure, "id");
   type_string = gst_structure_get_string (action->structure, "type");
+  if (!type_string) {
+    type_string = "GESUriClip";
+  }
 
   REPORT_UNLESS (type_string && id, done,
       "Missing parameters, we got type %s and id %s", type_string, id);
@@ -267,6 +270,9 @@ GES_START_VALIDATE_ACTION (_add_asset)
 
   id = gst_structure_get_string (action->structure, "id");
   type_string = gst_structure_get_string (action->structure, "type");
+  if (!type_string) {
+    type_string = "GESUriClip";
+  }
 
   gst_validate_printf (action, "Adding asset of type %s with ID %s\n",
       id, type_string);
@@ -1132,7 +1138,7 @@ static gint
 set_layer_active (GstValidateScenario * scenario, GstValidateAction * action)
 {
   gboolean active;
-  gint i, layer_prio;
+  gint i, layer_prio = 0;
   GESLayer *layer;
   GList *tracks = NULL;
   GstValidateExecuteActionReturn res = GST_VALIDATE_EXECUTE_ACTION_OK;
@@ -1157,11 +1163,8 @@ set_layer_active (GstValidateScenario * scenario, GstValidateAction * action)
   }
 
   if (!gst_structure_get_int (action->structure, "layer-priority", &layer_prio)) {
-    GST_VALIDATE_REPORT_ACTION (scenario, action,
-        SCENARIO_ACTION_EXECUTION_ERROR,
-        "Could not find layer from %" GST_PTR_FORMAT, action->structure);
-    res = GST_VALIDATE_EXECUTE_ACTION_ERROR_REPORTED;
-    goto done;
+    GST_INFO_OBJECT (scenario,
+        "No 'layer-priority' specified, defaulting to 0");
   }
   if (!(layer = g_list_nth_data (timeline->layers, layer_prio))) {
     GST_VALIDATE_REPORT_ACTION (scenario, action,
@@ -1434,9 +1437,9 @@ ges_validate_register_action_types (void)
         },
         {
           .name = "layer-priority",
-          .description = "The priority of the clip to add",
+          .description = "The priority of the clip to add (defaults to 0)",
           .types = "int",
-          .mandatory = TRUE,
+          .mandatory = FALSE,
         },
         {
           .name = "asset-id",
@@ -1446,9 +1449,9 @@ ges_validate_register_action_types (void)
         },
         {
           .name = "type",
-          .description = "The type of the clip to create",
+          .description = "The type of the clip to create (Defaults to 'GESUriClip'",
           .types = "string",
-          .mandatory = TRUE,
+          .mandatory = FALSE,
         },
         {
           .name = "start",

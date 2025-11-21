@@ -49,6 +49,8 @@ G_BEGIN_DECLS
  * desired operation. (Since: 1.18)
  * @GES_ERROR_INVALID_OVERLAP_IN_TRACK: The operation would break one of
  * the overlap conditions for the #GESTimeline. (Since: 1.18)
+ * @GES_ERROR_FAILED: a general error which doesn't fit in any other
+ * category.  Make sure you add a custom message to the error call.
  */
 typedef enum
 {
@@ -61,6 +63,7 @@ typedef enum
   GES_ERROR_NOT_ENOUGH_INTERNAL_CONTENT,
   GES_ERROR_INVALID_OVERLAP_IN_TRACK,
   GES_ERROR_INVALID_EFFECT_BIN_DESCRIPTION,
+  GES_ERROR_FAILED,
 } GESError;
 
 G_END_DECLS

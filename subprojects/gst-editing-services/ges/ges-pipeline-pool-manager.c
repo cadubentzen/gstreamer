@@ -358,6 +358,13 @@ ges_pipeline_pool_clear (GESPipelinePoolManager * self)
   g_rec_mutex_unlock (&self->lock);
 }
 
+static void
+ges_pipeline_pool_manager_deinit (GObject * _pool,
+    GESPipelinePoolManager * self)
+{
+  ges_pipeline_pool_clear (self);
+}
+
 void
 ges_pipeline_pool_manager_init (GESPipelinePoolManager * self,
     GESTimeline * timeline)
@@ -389,6 +396,8 @@ ges_pipeline_pool_manager_init (GESPipelinePoolManager * self,
       gst_child_proxy_get_child_by_name (GST_CHILD_PROXY (uridecodepoolsrc),
       "pool");
   g_object_set (self->pool, "cleanup-timeout", 0, NULL);
+  g_signal_connect (self->pool, "deinit",
+      G_CALLBACK (ges_pipeline_pool_manager_deinit), self);
   g_signal_connect (self->pool, "prepared-pipeline-removed",
       G_CALLBACK (ges_pipeline_pool_manager_prepare_pipeline_removed_cb), self);
   g_signal_connect (self->pool, "new-pipeline", G_CALLBACK (new_pipeline_cb),

@@ -1608,6 +1608,7 @@ GstSample *
 ges_pipeline_get_thumbnail (GESPipeline * self, GstCaps * caps)
 {
   GstElement *sink;
+  GstSample *sample = NULL;
 
   g_return_val_if_fail (GES_IS_PIPELINE (self), FALSE);
   CHECK_THREAD (self);
@@ -1619,7 +1620,9 @@ ges_pipeline_get_thumbnail (GESPipeline * self, GstCaps * caps)
     return NULL;
   }
 
-  return ges_play_sink_convert_frame (sink, caps);
+  g_signal_emit_by_name (sink, "convert-sample", caps, &sample);
+
+  return sample;
 }
 
 /**

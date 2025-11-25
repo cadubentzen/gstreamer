@@ -183,6 +183,8 @@ struct _GESTimelineElementPrivate
   GESTimelineElement *copied_from;
 
   GESTimelineElementFlags flags;
+
+  GMutex timeline_lock;         /* Protects timeline access */
 };
 
 typedef struct
@@ -406,6 +408,8 @@ ges_timeline_element_finalize (GObject * self)
 
   g_free (tle->name);
 
+  g_mutex_clear (&tle->priv->timeline_lock);
+
   G_OBJECT_CLASS (ges_timeline_element_parent_class)->finalize (self);
 }
 
@@ -450,7 +454,9 @@ _set_timeline_default (GESTimelineElement * self, GESTimeline * timeline)
     }
   }
 
+  g_mutex_lock (&self->priv->timeline_lock);
   self->timeline = timeline;
+  g_mutex_unlock (&self->priv->timeline_lock);
 
   if (timeline && ges_timeline_get_edit_apis_disabled (self->timeline)) {
     GST_INFO_OBJECT (self,
@@ -472,6 +478,8 @@ ges_timeline_element_init (GESTimelineElement * self)
   self->priv->children_props = g_array_new (TRUE, TRUE, sizeof (ChildPropSpec));
   g_array_set_clear_func (self->priv->children_props,
       (GDestroyNotify) _child_prop_spec_free);
+
+  g_mutex_init (&self->priv->timeline_lock);
 }
 
 static void
@@ -1099,11 +1107,17 @@ ges_timeline_element_set_timeline (GESTimelineElement * self,
 
   GST_DEBUG_OBJECT (self, "set timeline to %" GST_PTR_FORMAT, timeline);
 
-  if (self->timeline == timeline)
+  g_mutex_lock (&self->priv->timeline_lock);
+  if (self->timeline == timeline) {
+    g_mutex_unlock (&self->priv->timeline_lock);
     return TRUE;
+  }
 
-  if (timeline != NULL && G_UNLIKELY (self->timeline != NULL))
+  if (timeline != NULL && G_UNLIKELY (self->timeline != NULL)) {
+    g_mutex_unlock (&self->priv->timeline_lock);
     goto had_timeline;
+  }
+  g_mutex_unlock (&self->priv->timeline_lock);
 
   klass = GES_TIMELINE_ELEMENT_GET_CLASS (self);
   if (klass->set_timeline) {
@@ -1139,9 +1153,12 @@ ges_timeline_element_get_timeline (GESTimelineElement * self)
 
   g_return_val_if_fail (GES_IS_TIMELINE_ELEMENT (self), NULL);
 
+  /* Atomically get timeline reference under timeline_ptr_lock */
+  g_mutex_lock (&self->priv->timeline_lock);
   result = self->timeline;
   if (G_LIKELY (result))
     gst_object_ref (result);
+  g_mutex_unlock (&self->priv->timeline_lock);
 
   return result;
 }

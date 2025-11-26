@@ -20,6 +20,7 @@
  * Boston, MA 02110-1301, USA.
  */
 
+#include "glib.h"
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -97,6 +98,7 @@ typedef struct
 {
   NleComposition *comp;
   GstEvent *event;
+  NleUpdateStackReason reason;
 } SeekData;
 
 typedef struct
@@ -293,7 +295,7 @@ static inline void nle_composition_reset_target_pad (NleComposition * comp);
 
 static gboolean
 seek_handling (NleComposition * comp, gint32 seqnum,
-    NleUpdateStackReason update_stack_reason);
+    NleUpdateStackReason update_reason, gboolean force_update);
 static gint objects_start_compare (NleObject * a, NleObject * b);
 static gint objects_stop_compare (NleObject * a, NleObject * b);
 static GstClockTime get_current_position (NleComposition * comp);
@@ -337,6 +339,8 @@ nle_composition_query_topelevel_initializing_seek (NleComposition * comp);
 static void
 _update_after_eos_while_scrubbing (NleComposition * comp, UpdateAfterTimeoutData * data);
 /* *INDENT-ON* */
+static gboolean
+_commit_all_values (NleComposition * comp, NleUpdateStackReason reason);
 
 
 /* COMP_REAL_START: actual position to start current playback at. */
@@ -398,6 +402,17 @@ _assert_proper_thread (NleComposition * comp)
     g_warning ("Trying to touch children in a thread different from"
         " its dedicated thread!");
   }
+}
+
+static NleUpdateStackReason
+nle_update_stack_reason_from_string (const gchar * reason_str)
+{
+  for (gint i = 0; i < COMP_UPDATE_STACK_NONE; i++) {
+    if (g_strcmp0 (reason_str, UPDATE_PIPELINE_REASONS[i]) == 0)
+      return (NleUpdateStackReason) i;
+  }
+
+  return COMP_UPDATE_STACK_NONE;
 }
 
 /* Called with the ACTIONS_LOCK taken */
@@ -633,6 +648,16 @@ create_seek_data (NleComposition * comp, GstEvent * event)
 
   seekd->comp = comp;
   seekd->event = event;
+  seekd->reason =
+      event ==
+      comp->priv->stack_initialization_seek ? COMP_UPDATE_STACK_INITIALIZE :
+      COMP_UPDATE_STACK_ON_SEEK;
+
+  const GstStructure *structure = gst_event_get_structure (event);
+  const gchar *reason = gst_structure_get_string (structure, "nle-seek-reason");
+  if (reason) {
+    seekd->reason = nle_update_stack_reason_from_string (reason);
+  }
 
   return seekd;
 }
@@ -659,6 +684,12 @@ _seek_pipeline_func (NleComposition * comp, SeekData * seekd)
   NleUpdateStackReason reason;
   GstClockTime segment_start, segment_stop;
   gboolean reverse;
+  gboolean force_update = FALSE;
+
+  if (!initializing_stack && seekd->reason == COMP_UPDATE_STACK_ON_COMMIT) {
+    priv->seek_seqnum = gst_event_get_seqnum (seekd->event);
+    force_update = _commit_all_values (comp, seekd->reason);
+  }
 
   if (initializing_stack) {
     reason = COMP_UPDATE_STACK_NONE;
@@ -750,7 +781,8 @@ _seek_pipeline_func (NleComposition * comp, SeekData * seekd)
         gst_event_get_seqnum (seekd->event);
   }
 
-  seek_handling (seekd->comp, gst_event_get_seqnum (seekd->event), reason);
+  seek_handling (seekd->comp, gst_event_get_seqnum (seekd->event),
+      COMP_UPDATE_STACK_ON_SEEK, force_update);
 
   if (!initializing_stack && !preparing_toplevel_seek)
     _post_start_composition_update_done (seekd->comp,
@@ -2077,8 +2109,13 @@ get_new_seek_event (NleComposition * comp, gboolean updatestoponly,
       GST_TIME_FORMAT ", rate:%lf", flags, GST_TIME_ARGS (start),
       GST_TIME_ARGS (stop), priv->segment->rate);
 
-  return gst_event_new_seek (priv->segment->rate,
+  GstEvent *res = gst_event_new_seek (priv->segment->rate,
       priv->segment->format, flags, starttype, start, GST_SEEK_TYPE_SET, stop);
+
+  gst_structure_set (gst_event_writable_structure (res),
+      "nle-seek-reason", G_TYPE_STRING, UPDATE_PIPELINE_REASONS[reason], NULL);
+
+  return res;
 }
 
 static GstEvent *
@@ -2267,12 +2304,12 @@ _seek_current_stack (NleComposition * comp, GstEvent * event,
 
 static gboolean
 seek_handling (NleComposition * comp, gint32 seqnum,
-    NleUpdateStackReason update_stack_reason)
+    NleUpdateStackReason update_stack_reason, gboolean force_update)
 {
   GST_DEBUG_OBJECT (comp, "Seek handling update pipeline reason: %s",
       UPDATE_PIPELINE_REASONS[update_stack_reason]);
 
-  if (have_to_update_pipeline (comp, update_stack_reason)) {
+  if (force_update || have_to_update_pipeline (comp, update_stack_reason)) {
     if (comp->priv->segment->rate >= 0.0)
       update_pipeline (comp, comp->priv->segment->start, seqnum,
           update_stack_reason);
@@ -3081,6 +3118,7 @@ _commit_func (NleComposition * comp, UpdateCompositionData * ucompo)
           GST_TIME_ARGS (curpos));
       priv->segment->stop = curpos;
     }
+
     update_pipeline (comp, curpos, ucompo->seqnum, COMP_UPDATE_STACK_ON_COMMIT);
 
     if (!priv->current) {
@@ -3116,7 +3154,7 @@ _update_pipeline_func (NleComposition * comp, UpdateCompositionData * ucompo)
     priv->segment->stop = priv->stack_playback_window_start;
   }
 
-  seek_handling (comp, ucompo->seqnum, COMP_UPDATE_STACK_ON_EOS);
+  seek_handling (comp, ucompo->seqnum, COMP_UPDATE_STACK_ON_EOS, TRUE);
 
   /* Post segment done if last seek was a segment seek */
   if (!priv->current && (priv->segment->flags & GST_SEEK_FLAG_SEGMENT)) {
@@ -3825,8 +3863,8 @@ nle_composition_query_needs_teardown (NleComposition * comp,
  * WITH OBJECTS LOCK TAKEN
  */
 static gboolean
-update_pipeline (NleComposition * comp, GstClockTime currenttime, gint32 seqnum,
-    NleUpdateStackReason update_reason)
+update_pipeline (NleComposition * comp, GstClockTime currenttime,
+    gint32 seqnum, NleUpdateStackReason update_reason)
 {
 
   GstEvent *toplevel_seek;

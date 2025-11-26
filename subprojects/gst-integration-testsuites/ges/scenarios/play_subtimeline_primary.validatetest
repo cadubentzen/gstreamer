@@ -1,0 +1,35 @@
+meta,
+    tool = "ges-launch-$(gst_api_version)",
+    seek = true,
+    handles-states = true,
+    args = {
+        --track-types, video,
+        --video-caps, "video/x-raw, format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1",
+        --videosink, "$(videosink) name=videosink",
+    }
+
+set-vars, media_uri="file://$(test_dir)/../../medias/defaults/matroska/timed_frames_video_only_1fps_with_qrcodes.mkv"
+
+# Setup a primary timeline
+register-subtimeline-primary, primary-id="test-primary"
+add-track, project-uri="gessubtimeline:test-primary", track-type=video, caps="video/x-raw"
+add-clip, project-uri="gessubtimeline:test-primary", name="primary-clip", layer-priority=0, asset-id="$(media_uri)", type=GESUriClip, start=0, duration=3.0
+
+# Use that primary timeline as a clip in the main timeline
+add-clip, name="subtimeline-clip", layer-priority=0, asset-id="gessubtimeline:test-primary", type=GESUriClip, start=0, duration=3.0
+
+commit
+pause
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-data="{\"TIMESTAMP\":0,\"BUFFERCOUNT\":1,\"FRAMERATE\":\"1/1\",\"NAME\":\"DEBUGQROVERLAY0\"}"
+
+seek, flags=accurate+flush, start=1.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-data="{\"TIMESTAMP\":1000000000,\"BUFFERCOUNT\":2,\"FRAMERATE\":\"1/1\",\"NAME\":\"DEBUGQROVERLAY0\"}"
+
+seek, flags=accurate+flush, start=2.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-data="{\"TIMESTAMP\":2000000000,\"BUFFERCOUNT\":3,\"FRAMERATE\":\"1/1\",\"NAME\":\"DEBUGQROVERLAY0\"}"
+
+# Clean up
+unregister-subtimeline-primary, primary-id="test-primary"
+
+stop
+

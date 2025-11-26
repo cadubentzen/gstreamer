@@ -1,0 +1,16 @@
+meta,
+    tool = "ges-launch-$(gst_api_version)",
+    seek = true,
+    handles-states = true,
+    args = {
+        --track-types, video,
+        --video-caps, "video/x-raw, format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1",
+        --videosink, "$(videosink) name=videosink",
+    }
+
+register-subtimeline-primary, primary-id="test-primary"
+add-track, project-uri="gessubtimeline:test-primary", track-type=video, caps="video/x-raw"
+add-clip, project-uri="gessubtimeline:test-primary", name="primary-clip", layer-priority=0, asset-id="testbin://video", type=GESUriClip, start=0, duration=3.0, inpoint=5.0
+# add-asset, id="gessubtimeline:test-primary", type="GESUriClip"
+add-clip, name="subtimeline-clip", layer-priority=0, asset-id="gessubtimeline:test-primary", type=GESUriClip, start=0, duration=3.0
+play

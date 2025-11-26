@@ -294,6 +294,8 @@ struct _GESTimelinePrivate
 
   GMutex flushing_seek_info_lock;
   GPtrArray * /*<FlushingSeekInfo*> */ flushing_seek_infos;
+
+  gdouble rate;
 };
 
 /* private structure to contain our track-related information */
@@ -515,6 +517,8 @@ ges_timeline_dispose (GObject * object)
   g_clear_pointer (&priv->flushing_seek_infos, g_ptr_array_unref);
   priv->track_selection_error = NULL;
 
+  priv->rate = 1.0;
+
   G_OBJECT_CLASS (ges_timeline_parent_class)->dispose (object);
 }
 
@@ -578,15 +582,24 @@ ges_timeline_handle_message (GstBin * bin, GstMessage * message)
       GstClockTime stack_start, stack_end;
       GESTrack *track =
           GES_TRACK (gst_object_get_parent (GST_MESSAGE_SRC (message)));
+      gdouble rate;
+
+      GST_DEBUG_OBJECT (timeline, "Composition update reason: %s",
+          gst_structure_get_string (mstructure, "reason"));
 
       if (!gst_structure_get (mstructure,
               "stack-start", GST_TYPE_CLOCK_TIME, &stack_start,
-              "stack-end", GST_TYPE_CLOCK_TIME, &stack_end, NULL)) {
+              "stack-end", GST_TYPE_CLOCK_TIME, &stack_end, "rate",
+              G_TYPE_DOUBLE, &rate, NULL)) {
 
         g_error ("Invalid NleCompositionNewStack %s",
             gst_structure_to_string (mstructure));
       }
 
+      GST_OBJECT_LOCK (timeline);
+      GST_DEBUG_OBJECT (timeline, "Setting rate = %f", rate);
+      timeline->priv->rate = rate;
+      GST_OBJECT_UNLOCK (timeline);
       ges_pipeline_pool_manager_prepare_pipelines_around (&timeline->
           priv->pool_manager, track, stack_start, stack_end);
 
@@ -1122,6 +1135,8 @@ ges_timeline_init (GESTimeline * self)
 
   ges_pipeline_pool_manager_init (&priv->pool_manager, self);
   priv->pool_manager.max_preloaded_sources = DEFAULT_MAX_PRELOADED_SOURCES;
+
+  priv->rate = 1.0;
 }
 
 /* Private methods */
@@ -3881,6 +3896,16 @@ ges_timeline_get_edit_apis_disabled (GESTimeline * self)
 {
   GST_OBJECT_LOCK (self);
   gboolean res = self->priv->disable_edit_apis;
+  GST_OBJECT_UNLOCK (self);
+
+  return res;
+}
+
+gdouble
+ges_timeline_get_rate (GESTimeline * self)
+{
+  GST_OBJECT_LOCK (self);
+  gdouble res = self->priv->rate;
   GST_OBJECT_UNLOCK (self);
 
   return res;

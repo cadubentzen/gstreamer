@@ -619,6 +619,7 @@ _post_start_composition_update_done (NleComposition * comp,
           GST_CLOCK_TIME_IS_VALID (comp->priv->stack_start) ? comp->
           priv->stack_start : 0,
           "stack-end", GST_TYPE_CLOCK_TIME, comp->priv->stack_stop,
+          "rate", G_TYPE_DOUBLE, comp->priv->segment->rate,
           NULL));
 
   gst_message_set_seqnum (msg, seqnum);

@@ -235,8 +235,9 @@ ges_uri_source_query_seek (GESUriSource * self, GstEvent * seek)
   GstEvent *translated_seek = nle_source_query_seek (nlesrc, seek);
   gint64 start, stop, duration = GST_CLOCK_TIME_NONE;
   gdouble rate;
-  gst_event_parse_seek (translated_seek, &rate, NULL, NULL, NULL, &start, NULL,
-      &stop);
+  GstSeekFlags seek_flags;
+  gst_event_parse_seek (translated_seek, &rate, NULL, &seek_flags, NULL, &start,
+      NULL, &stop);
 
   g_assert (GST_CLOCK_TIME_IS_VALID (start));
   if (GST_CLOCK_TIME_IS_VALID (stop)) {
@@ -261,8 +262,7 @@ ges_uri_source_query_seek (GESUriSource * self, GstEvent * seek)
 
   gst_event_unref (translated_seek);
   translated_seek = gst_event_new_seek (rate, GST_FORMAT_TIME,
-      GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
-      GST_SEEK_TYPE_SET, start, GST_SEEK_TYPE_SET, stop);
+      seek_flags, GST_SEEK_TYPE_SET, start, GST_SEEK_TYPE_SET, stop);
 
   g_object_set (self->decodebin, "inpoint", start, "duration", duration,
       "reverse", rate < 0.0, NULL);
@@ -277,6 +277,9 @@ static GstEvent *
 uridecodepoolsrc_get_initial_seek_cb (GstElement * uridecodepoolsrc,
     GESUriSource * self)
 {
+  GST_DEBUG_OBJECT (uridecodepoolsrc,
+      "Getting initial seek for %" GST_PTR_FORMAT, self->element);
+
   if (self->controls_nested_timeline) {
     GST_INFO_OBJECT (uridecodepoolsrc,
         "Controls a nested timeline not sending initial seek as the deepest timeline will do it itself");
@@ -284,13 +287,25 @@ uridecodepoolsrc_get_initial_seek_cb (GstElement * uridecodepoolsrc,
     return NULL;
   }
 
+  GESTimeline *timeline = GES_TIMELINE_ELEMENT_TIMELINE (self->element);
+  gdouble rate = timeline ? ges_timeline_get_rate (timeline) : 1.0;
+
+  GST_DEBUG_OBJECT (uridecodepoolsrc,
+      "Using timeline rate %f for initial seek for timeline %" GST_PTR_FORMAT,
+      rate, timeline);
+
   GList *toplevel_src_node = g_list_last (self->parent_ges_uri_sources);
   GESTimeline *toplevel_timeline = toplevel_src_node ?
       GES_TIMELINE_ELEMENT_TIMELINE (((GESUriSource *)
           toplevel_src_node->data)->element) : NULL;
-  GstEvent *seek = gst_event_new_seek (1.0,
+
+  GstSeekFlags seek_flags = GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE;
+  if (ABS (rate) > 1.0) {
+    seek_flags |= GST_SEEK_FLAG_TRICKMODE;
+  }
+  GstEvent *seek = gst_event_new_seek (rate,
       GST_FORMAT_TIME,
-      GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
+      seek_flags,
       GST_SEEK_TYPE_SET,
       0,
       GST_SEEK_TYPE_SET,
@@ -309,7 +324,7 @@ uridecodepoolsrc_get_initial_seek_cb (GstElement * uridecodepoolsrc,
   }
 
   seek = ges_uri_source_query_seek (self, seek);
-  GST_DEBUG_OBJECT (self->element, "%s initlial seek: %" GST_PTR_FORMAT,
+  GST_DEBUG_OBJECT (self->element, "%s initial seek: %" GST_PTR_FORMAT,
       GES_TIMELINE_ELEMENT_NAME (self->element), seek);
 
   return seek;

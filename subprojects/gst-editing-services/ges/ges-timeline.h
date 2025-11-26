@@ -165,4 +165,8 @@ void ges_timeline_disable_edit_apis (GESTimeline * self, gboolean disable_edit_a
 GES_API
 gboolean ges_timeline_get_edit_apis_disabled (GESTimeline * self);
 
+// FIXME: maybe this should be in the ges timeline element instead or maybe we don't need new API at all?
+GES_API
+gdouble ges_timeline_get_rate (GESTimeline * self);
+
 G_END_DECLS

@@ -54,6 +54,8 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
   GstClockTime window_start;
   GstClockTime window_stop = stack_end + window_dur;
   gint max_preloaded_sources = self->max_preloaded_sources;
+  GArray *to_prepare;
+  GPtrArray *to_remove;
 
   if (!GES_IS_VIDEO_TRACK (track)) {
     GST_DEBUG_OBJECT (self->timeline,
@@ -107,6 +109,7 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
       GST_TIME_ARGS (stack_end), &window_start, &window_stop,
       self->pooled_sources->len);
 
+  to_prepare = g_array_new (FALSE, FALSE, sizeof (PooledSource));
   for (gint i = 0; i < self->pooled_sources->len; i++) {
     PooledSource *source =
         &g_array_index (self->pooled_sources, PooledSource, i);
@@ -133,40 +136,22 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
       continue;
     }
 
-    GObject *decoderpipeline = FALSE;
-    GST_DEBUG_OBJECT (self->timeline,
-        "Preparing %s [%" GST_TIMEP_FORMAT "- %" GST_TIMEP_FORMAT "]",
-        GST_OBJECT_NAME (source->element), &source->start, &source->end);
-    g_signal_emit_by_name (self->pool, "prepare-pipeline", source->element,
-        &decoderpipeline);
-    if (decoderpipeline) {
-      gst_object_ref (source->element);
-      g_array_append_val (self->prepared_sources, *source);
-      PooledSource *prepared =
-          &g_array_index (self->prepared_sources, PooledSource,
-          self->prepared_sources->len - 1);
-      prepared->decoderpipe = decoderpipeline;
-    }
+    PooledSource ps = {
+      .element = gst_object_ref (source->element),
+      .track = source->track,
+      .start = source->start,
+      .end = source->end,
+    };
+    g_array_append_val (to_prepare, ps);
 
-    if (self->prepared_sources->len >= max_preloaded_sources) {
-      GST_INFO_OBJECT (self->timeline, "%d sources prepared already.",
+    if (self->prepared_sources->len + to_prepare->len >= max_preloaded_sources) {
+      GST_INFO_OBJECT (self->timeline, "%d sources to prepare already.",
           max_preloaded_sources);
-#ifndef GST_DISABLE_GST_DEBUG
-      if (gst_debug_category_get_threshold (GST_CAT_DEFAULT) >= GST_LEVEL_DEBUG) {
-        for (gint i = 0; i < self->prepared_sources->len; i++) {
-          PooledSource *source =
-              &g_array_index (self->prepared_sources, PooledSource, i);
-          GST_DEBUG_OBJECT (self->timeline,
-              "Prepared: %s [%" GST_TIMEP_FORMAT "- %" GST_TIMEP_FORMAT "]",
-              GST_OBJECT_NAME (source->element), &source->start, &source->end);
-        }
-      }
-#endif
       break;
     }
   }
 
-  GPtrArray *to_remove = g_ptr_array_sized_new (self->prepared_sources->len);
+  to_remove = g_ptr_array_sized_new (self->prepared_sources->len);
   g_ptr_array_set_free_func (to_remove, (GDestroyNotify) gst_object_unref);
   for (gint i = 0; i < self->prepared_sources->len; i++) {
     PooledSource *source =
@@ -192,6 +177,42 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
       self->prepared_sources->len);
   g_rec_mutex_unlock (&self->lock);
 
+  for (guint i = 0; i < to_prepare->len; i++) {
+    PooledSource *source = &g_array_index (to_prepare, PooledSource, i);
+
+    GST_DEBUG_OBJECT (self->timeline,
+        "Preparing %s [%" GST_TIMEP_FORMAT "- %" GST_TIMEP_FORMAT "]",
+        GST_OBJECT_NAME (source->element), &source->start, &source->end);
+    g_signal_emit_by_name (self->pool, "prepare-pipeline", source->element,
+        &source->decoderpipe);
+
+    if (source->decoderpipe) {
+      g_rec_mutex_lock (&self->lock);
+      if (self->prepared_sources) {
+        g_array_append_val (self->prepared_sources, *source);
+      }
+      g_rec_mutex_unlock (&self->lock);
+    } else {
+      gst_object_unref (source->element);
+    }
+  }
+  g_array_free (to_prepare, TRUE);
+
+#ifndef GST_DISABLE_GST_DEBUG
+  g_rec_mutex_lock (&self->lock);
+  if (self->prepared_sources &&
+      gst_debug_category_get_threshold (GST_CAT_DEFAULT) >= GST_LEVEL_DEBUG) {
+    for (gint i = 0; i < self->prepared_sources->len; i++) {
+      PooledSource *source =
+          &g_array_index (self->prepared_sources, PooledSource, i);
+      GST_DEBUG_OBJECT (self->timeline,
+          "Prepared: %s [%" GST_TIMEP_FORMAT "- %" GST_TIMEP_FORMAT "]",
+          GST_OBJECT_NAME (source->element), &source->start, &source->end);
+    }
+  }
+  g_rec_mutex_unlock (&self->lock);
+#endif
+
   for (guint i = 0; i < to_remove->len; i++) {
     GstElement *element = g_ptr_array_index (to_remove, i);
     gboolean res;
@@ -206,19 +227,29 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
 void
 ges_pipeline_pool_manager_unprepare_all (GESPipelinePoolManager * self)
 {
-  g_rec_mutex_lock (&self->lock);
-  if (!self->prepared_sources)
-    goto done;
+  GPtrArray *to_unprepare;
 
+  g_rec_mutex_lock (&self->lock);
+  if (!self->prepared_sources) {
+    g_rec_mutex_unlock (&self->lock);
+    return;
+  }
+
+  to_unprepare = g_ptr_array_sized_new (self->prepared_sources->len);
+  g_ptr_array_set_free_func (to_unprepare, (GDestroyNotify) gst_object_unref);
   for (gint i = 0; i < self->prepared_sources->len; i++) {
     PooledSource *source =
         &g_array_index (self->prepared_sources, PooledSource, i);
-    gboolean res;
-    g_signal_emit_by_name (self->pool, "unprepare-pipeline", source->element,
-        &res);
+    g_ptr_array_add (to_unprepare, gst_object_ref (source->element));
   }
-done:
   g_rec_mutex_unlock (&self->lock);
+
+  for (guint i = 0; i < to_unprepare->len; i++) {
+    GstElement *element = g_ptr_array_index (to_unprepare, i);
+    gboolean res;
+    g_signal_emit_by_name (self->pool, "unprepare-pipeline", element, &res);
+  }
+  g_ptr_array_unref (to_unprepare);
 }
 
 /* With self->lock taken */

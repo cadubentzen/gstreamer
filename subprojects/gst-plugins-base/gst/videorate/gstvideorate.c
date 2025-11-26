@@ -179,6 +179,17 @@ G_DEFINE_TYPE (GstVideoRate, gst_video_rate, GST_TYPE_BASE_TRANSFORM);
 GST_ELEMENT_REGISTER_DEFINE (videorate, "videorate",
     GST_RANK_NONE, GST_TYPE_VIDEO_RATE);
 
+/* In trickmode, behave like drop-only to avoid producing unnecessary frames */
+static inline gboolean
+gst_video_rate_is_drop_only (GstVideoRate * videorate)
+{
+  gboolean res = videorate->drop_only ||
+      (videorate->segment.flags & GST_SEGMENT_FLAG_TRICKMODE);
+
+
+  return res;
+}
+
 static void
 gst_video_rate_class_init (GstVideoRateClass * klass)
 {
@@ -857,7 +868,7 @@ gst_video_rate_push_buffer (GstVideoRate * videorate, GstBuffer * outbuf,
   }
 
   /* We do not need to update time in VFR (variable frame rate) mode */
-  if (!videorate->drop_only) {
+  if (!gst_video_rate_is_drop_only (videorate)) {
     GST_BUFFER_PTS (outbuf) = push_ts;
   }
 
@@ -1003,7 +1014,7 @@ gst_video_rate_duplicate_to_close_segment (GstVideoRate * videorate)
   GstFlowReturn res;
   GstClockTime last_input_ts = videorate->prev_ts;
 
-  if (videorate->drop_only)
+  if (gst_video_rate_is_drop_only (videorate))
     return count;
 
   if (!videorate->prevbuf) {
@@ -1186,7 +1197,7 @@ gst_video_rate_sink_event (GstBaseTransform * trans, GstEvent * event)
       if (GST_CLOCK_TIME_IS_VALID (videorate->segment.stop)) {
         /* fill up to the end of current segment */
         count = gst_video_rate_duplicate_to_close_segment (videorate);
-      } else if (!videorate->drop_only && videorate->prevbuf) {
+      } else if (!gst_video_rate_is_drop_only (videorate) && videorate->prevbuf) {
         /* Output at least one frame but if the buffer duration is valid, output
          * enough frames to use the complete buffer duration */
         if (GST_BUFFER_DURATION_IS_VALID (videorate->prevbuf)) {
@@ -1399,7 +1410,7 @@ gst_video_rate_query (GstBaseTransform * trans, GstPadDirection direction,
 
       GST_OBJECT_LOCK (videorate);
       avg_period = videorate->average_period_set;
-      drop_only = videorate->drop_only;
+      drop_only = gst_video_rate_is_drop_only (videorate);
       GST_OBJECT_UNLOCK (videorate);
 
       if (avg_period == 0 && (peer = gst_pad_get_peer (otherpad))) {
@@ -1936,7 +1947,7 @@ gst_video_rate_transform_ip (GstBaseTransform * trans, GstBuffer * buffer)
       GST_TIME_ARGS (in_ts));
 
   /* we need to have two buffers to compare */
-  if (videorate->prevbuf == NULL || videorate->drop_only) {
+  if (videorate->prevbuf == NULL || gst_video_rate_is_drop_only (videorate)) {
     /* We can calculate the duration of the buffer here if not given for
      * reverse playback. We need this later */
     if (videorate->segment.rate < 0.0 && !GST_BUFFER_DURATION_IS_VALID (buffer)) {
@@ -1957,7 +1968,7 @@ gst_video_rate_transform_ip (GstBaseTransform * trans, GstBuffer * buffer)
      * current frame or drop it because it's coming earlier than our minimum
      * allowed frame period. This also keeps latency down to 0 frames
      */
-    if (videorate->drop_only) {
+    if (gst_video_rate_is_drop_only (videorate)) {
       if ((videorate->segment.rate > 0.0 && in_ts >= videorate->next_output_ts)
           || (videorate->segment.rate < 0.0
               && in_ts <= videorate->next_output_ts)) {

@@ -2325,9 +2325,12 @@ gst_video_aggregator_aggregate (GstAggregator * agg, gboolean timeout)
   if (GST_VIDEO_INFO_FPS_N (&vagg->info) == 0) {
     output_end_time = -1;
   } else {
+    gdouble rate = (agg_segment->flags & GST_SEGMENT_FLAG_TRICKMODE) ?
+        ABS (agg_segment->rate) : 1.0;
     guint64 dur = gst_util_uint64_scale (vagg->priv->nframes + 1,
-        GST_SECOND * GST_VIDEO_INFO_FPS_D (&vagg->info),
+        GST_SECOND * GST_VIDEO_INFO_FPS_D (&vagg->info) * rate,
         GST_VIDEO_INFO_FPS_N (&vagg->info));
+
 
     if (agg_segment->rate >= 0)
       output_end_time = vagg->priv->ts_offset + dur;

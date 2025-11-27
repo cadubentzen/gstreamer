@@ -1,0 +1,21 @@
+set-globals, media_file="$(test_dir)/../../medias/defaults/matroska/red_timed_frames_video_only_1fps.mkv"
+meta,
+    tool = "ges-launch-$(gst_api_version)",
+    handles-states = true,
+    ges = "uridecodepoolsrc=enabled",
+    args = {
+        --track-types, video,
+        --video-caps, "video/x-raw(ANY),width=1080,height=720,rate=1/1",
+        --videosink, "$(videosink) name=videosink",
+    }
+
+add-clip, name=clip1, asset-id="file://$(media_file)?v=back", layer-priority=2, type=GESUriClip, start=0.0, duration=20.0
+add-clip, name=clip2, asset-id="file://$(media_file)?v=middle", layer-priority=1, type=GESUriClip, start=10.0, duration=20.0
+add-clip, name=clip3, asset-id="file://$(media_file)?v=front", layer-priority=0, type=GESUriClip, start=16.0, duration=20.0
+
+
+pause
+seek, flags=accurate+flush+trickmode, start=0.0, stop=36.0, rate=2.0
+play
+
+

@@ -124,6 +124,11 @@ GES_API
 gboolean ges_add_missing_uri_relocation_uri    (const gchar * uri,
                                                 gboolean recurse);
 GES_API
-void ges_project_add_formatter (GESProject * project, GESFormatter * formatter);
+void ges_project_add_formatter  (GESProject * project, GESFormatter * formatter);
+
+GES_API
+gboolean ges_project_set_loaded (GESProject * project,
+                                 GESFormatter *formatter,
+                                 GError *error);
 
 G_END_DECLS

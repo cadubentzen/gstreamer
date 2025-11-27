@@ -808,6 +808,8 @@ new_asset_cb (GESAsset * source, GAsyncResult * res, GESProject * project)
  * the project is fully loaded.
  *
  * Returns: %TRUE if the signale could be emitted %FALSE otherwise
+ *
+ * Since: 1.30
  */
 gboolean
 ges_project_set_loaded (GESProject * project, GESFormatter * formatter,

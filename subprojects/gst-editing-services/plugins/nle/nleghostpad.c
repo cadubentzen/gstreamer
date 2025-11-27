@@ -149,7 +149,6 @@ nle_object_translate_incoming_seek (NleObject * object, GstEvent * event)
   }
 
 
-
   GST_DEBUG_OBJECT (object,
       "SENDING SEEK rate:%f, format:TIME, flags:%d, curtype:%d, stoptype:SET, %"
       GST_TIME_FORMAT " -- %" GST_TIME_FORMAT, rate, flags, ncurtype,

@@ -314,7 +314,7 @@ static void _update_pipeline_func (NleComposition * comp,
     UpdateCompositionData * ucompo);
 static void _commit_func (NleComposition * comp,
     UpdateCompositionData * ucompo);
-static GstEvent *get_new_seek_event (NleComposition * comp, gboolean initial,
+static GstEvent *get_new_seek_event (NleComposition * comp,
     gboolean updatestoponly, NleUpdateStackReason reason);
 static gboolean _nle_composition_add_object (NleComposition * comp,
     NleObject * object);
@@ -2033,18 +2033,15 @@ nle_composition_commit_func (NleObject * object, gboolean recurse)
  * before calling this function.
  */
 static GstEvent *
-get_new_seek_event (NleComposition * comp, gboolean initial,
-    gboolean updatestoponly, NleUpdateStackReason reason)
+get_new_seek_event (NleComposition * comp, gboolean updatestoponly,
+    NleUpdateStackReason reason)
 {
   GstSeekFlags flags = GST_SEEK_FLAG_ACCURATE | GST_SEEK_FLAG_FLUSH;
   gint64 start, stop;
   GstSeekType starttype = GST_SEEK_TYPE_SET;
   NleCompositionPrivate *priv = comp->priv;
 
-  GST_DEBUG_OBJECT (comp, "initial:%d", initial);
-  /* remove the seek flag */
-  if (!initial)
-    flags |= (GstSeekFlags) priv->segment->flags;
+  flags |= (GstSeekFlags) priv->segment->flags;
 
   GST_DEBUG_OBJECT (comp,
       "private->segment->start:%" GST_TIME_FORMAT
@@ -2283,8 +2280,8 @@ seek_handling (NleComposition * comp, gint32 seqnum,
       update_pipeline (comp, comp->priv->segment->stop, seqnum,
           update_stack_reason);
   } else {
-    GstEvent *toplevel_seek = get_new_seek_event (comp, FALSE, FALSE,
-        update_stack_reason);
+    GstEvent *toplevel_seek =
+        get_new_seek_event (comp, FALSE, update_stack_reason);
 
     gst_event_set_seqnum (toplevel_seek, seqnum);
     _set_real_eos_seqnum_from_seek (comp, toplevel_seek);
@@ -3918,8 +3915,7 @@ update_pipeline (NleComposition * comp, GstClockTime currenttime, gint32 seqnum,
   }
 #endif
 
-  toplevel_seek =
-      get_new_seek_event (comp, TRUE, updatestoponly, update_reason);
+  toplevel_seek = get_new_seek_event (comp, updatestoponly, update_reason);
   gst_event_set_seqnum (toplevel_seek, seqnum);
   _set_real_eos_seqnum_from_seek (comp, toplevel_seek);
 

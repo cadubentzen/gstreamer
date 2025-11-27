@@ -243,7 +243,7 @@ no_uri:
   }
 no_extension:
   {
-    GST_WARNING ("could not find uri extension in %s", uri);
+    GST_INFO ("could not find uri extension in %s", uri);
     return NULL;
   }
 }

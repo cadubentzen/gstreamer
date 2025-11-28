@@ -897,13 +897,18 @@ ges_track_element_set_active (GESTrackElement * object, gboolean active)
 {
   GESTimelineElement *parent;
   GError *error = NULL;
+  gboolean ret = FALSE;
+  GESTimeline *_locked_timeline;
+
   g_return_val_if_fail (GES_IS_TRACK_ELEMENT (object), FALSE);
   g_return_val_if_fail (object->priv->nleobject, FALSE);
+
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
 
   GST_DEBUG_OBJECT (object, "object:%p, active:%d", object, active);
 
   if (G_UNLIKELY (active == object->active))
-    return FALSE;
+    goto done;
 
   parent = GES_TIMELINE_ELEMENT_PARENT (object);
   if (GES_IS_CLIP (parent)
@@ -914,7 +919,7 @@ ges_track_element_set_active (GESTrackElement * object, gboolean active)
         " would not allow it%s%s", active, GES_ARGS (parent), error ? ": " : "",
         error ? error->message : "");
     g_clear_error (&error);
-    return FALSE;
+    goto done;
   }
 
   g_object_set (object->priv->nleobject, "active",
@@ -926,7 +931,12 @@ ges_track_element_set_active (GESTrackElement * object, gboolean active)
 
   g_object_notify_by_pspec (G_OBJECT (object), properties[PROP_ACTIVE]);
 
-  return TRUE;
+  ret = TRUE;
+
+done:
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
+  return ret;
 }
 
 /**
@@ -950,8 +960,12 @@ ges_track_element_set_has_internal_source (GESTrackElement * object,
     gboolean has_internal_source)
 {
   GESTimelineElement *element;
+  gboolean ret = FALSE;
+  GESTimeline *_locked_timeline;
 
   g_return_val_if_fail (GES_IS_TRACK_ELEMENT (object), FALSE);
+
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
 
   GST_DEBUG_OBJECT (object, "object:%p, has-internal-source: %s", object,
       has_internal_source ? "TRUE" : "FALSE");
@@ -959,11 +973,13 @@ ges_track_element_set_has_internal_source (GESTrackElement * object,
   if (has_internal_source && object->priv->has_internal_source_forbidden) {
     GST_WARNING_OBJECT (object, "Setting an internal source for this "
         "element is forbidden");
-    return FALSE;
+    goto done;
   }
 
-  if (G_UNLIKELY (has_internal_source == object->priv->has_internal_source))
-    return TRUE;
+  if (G_UNLIKELY (has_internal_source == object->priv->has_internal_source)) {
+    ret = TRUE;
+    goto done;
+  }
 
   object->priv->has_internal_source = has_internal_source;
 
@@ -976,7 +992,12 @@ ges_track_element_set_has_internal_source (GESTrackElement * object,
   g_object_notify_by_pspec (G_OBJECT (object),
       properties[PROP_HAS_INTERNAL_SOURCE]);
 
-  return TRUE;
+  ret = TRUE;
+
+done:
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
+  return ret;
 }
 
 void
@@ -996,12 +1017,19 @@ ges_track_element_set_has_internal_source_is_forbidden (GESTrackElement *
 void
 ges_track_element_set_track_type (GESTrackElement * object, GESTrackType type)
 {
+  GESTimeline *_locked_timeline;
+
   g_return_if_fail (GES_IS_TRACK_ELEMENT (object));
+
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
 
   if (object->priv->track_type != type) {
     object->priv->track_type = type;
     g_object_notify_by_pspec (G_OBJECT (object), properties[PROP_TRACK_TYPE]);
   }
+
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
 }
 
 /**
@@ -1015,9 +1043,17 @@ ges_track_element_set_track_type (GESTrackElement * object, GESTrackType type)
 GESTrackType
 ges_track_element_get_track_type (GESTrackElement * object)
 {
+  GESTrackType ret;
+  GESTimeline *_locked_timeline;
+
   g_return_val_if_fail (GES_IS_TRACK_ELEMENT (object), GES_TRACK_TYPE_UNKNOWN);
 
-  return object->priv->track_type;
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
+  ret = object->priv->track_type;
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
+
+  return ret;
 }
 
 /* default 'create_gnl_object' virtual method implementation */
@@ -1303,9 +1339,17 @@ ges_track_element_set_layer_active (GESTrackElement * element, gboolean active)
 GHashTable *
 ges_track_element_get_all_control_bindings (GESTrackElement * trackelement)
 {
+  GHashTable *ret;
+  GESTimeline *_locked_timeline;
   GESTrackElementPrivate *priv = GES_TRACK_ELEMENT (trackelement)->priv;
 
-  return priv->bindings_hashtable;
+  _locked_timeline =
+      _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (trackelement));
+  ret = priv->bindings_hashtable;
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (trackelement),
+      _locked_timeline);
+
+  return ret;
 }
 
 /**
@@ -1320,9 +1364,17 @@ ges_track_element_get_all_control_bindings (GESTrackElement * trackelement)
 GESTrack *
 ges_track_element_get_track (GESTrackElement * object)
 {
+  GESTrack *ret;
+  GESTimeline *_locked_timeline;
+
   g_return_val_if_fail (GES_IS_TRACK_ELEMENT (object), NULL);
 
-  return object->priv->track;
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
+  ret = object->priv->track;
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
+
+  return ret;
 }
 
 /**
@@ -1338,9 +1390,17 @@ ges_track_element_get_track (GESTrackElement * object)
 GstElement *
 ges_track_element_get_gnlobject (GESTrackElement * object)
 {
+  GstElement *ret;
+  GESTimeline *_locked_timeline;
+
   g_return_val_if_fail (GES_IS_TRACK_ELEMENT (object), NULL);
 
-  return object->priv->nleobject;
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
+  ret = object->priv->nleobject;
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
+
+  return ret;
 }
 
 /**
@@ -1356,9 +1416,17 @@ ges_track_element_get_gnlobject (GESTrackElement * object)
 GstElement *
 ges_track_element_get_nleobject (GESTrackElement * object)
 {
+  GstElement *ret;
+  GESTimeline *_locked_timeline;
+
   g_return_val_if_fail (GES_IS_TRACK_ELEMENT (object), NULL);
 
-  return object->priv->nleobject;
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
+  ret = object->priv->nleobject;
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
+
+  return ret;
 }
 
 /**
@@ -1374,9 +1442,17 @@ ges_track_element_get_nleobject (GESTrackElement * object)
 GstElement *
 ges_track_element_get_element (GESTrackElement * object)
 {
+  GstElement *ret;
+  GESTimeline *_locked_timeline;
+
   g_return_val_if_fail (GES_IS_TRACK_ELEMENT (object), NULL);
 
-  return object->priv->element;
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
+  ret = object->priv->element;
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
+
+  return ret;
 }
 
 /**
@@ -1390,10 +1466,18 @@ ges_track_element_get_element (GESTrackElement * object)
 gboolean
 ges_track_element_is_active (GESTrackElement * object)
 {
+  gboolean ret;
+  GESTimeline *_locked_timeline;
+
   g_return_val_if_fail (GES_IS_TRACK_ELEMENT (object), FALSE);
   g_return_val_if_fail (object->priv->nleobject, FALSE);
 
-  return object->active;
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
+  ret = object->active;
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
+
+  return ret;
 }
 
 /**
@@ -1409,9 +1493,17 @@ ges_track_element_is_active (GESTrackElement * object)
 gboolean
 ges_track_element_has_internal_source (GESTrackElement * object)
 {
+  gboolean ret;
+  GESTimeline *_locked_timeline;
+
   g_return_val_if_fail (GES_IS_TRACK_ELEMENT (object), FALSE);
 
-  return object->priv->has_internal_source;
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
+  ret = object->priv->has_internal_source;
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
+
+  return ret;
 }
 
 /**
@@ -1871,11 +1963,15 @@ gboolean
 ges_track_element_remove_control_binding (GESTrackElement * object,
     const gchar * property_name)
 {
+  gboolean ret = FALSE;
   GESTrackElementPrivate *priv;
   GstControlBinding *binding;
   GstObject *target;
+  GESTimeline *_locked_timeline;
 
   g_return_val_if_fail (GES_IS_TRACK_ELEMENT (object), FALSE);
+
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
 
   priv = GES_TRACK_ELEMENT (object)->priv;
   binding =
@@ -1897,10 +1993,13 @@ ges_track_element_remove_control_binding (GESTrackElement * object,
     gst_object_unref (binding);
     g_hash_table_remove (priv->bindings_hashtable, property_name);
 
-    return TRUE;
+    ret = TRUE;
   }
 
-  return FALSE;
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
+
+  return ret;
 }
 
 /**
@@ -1934,9 +2033,9 @@ ges_track_element_set_control_source (GESTrackElement * object,
   GstElement *element;
   GstControlBinding *binding;
   gboolean direct, direct_absolute;
+  GESTimeline *_locked_timeline;
 
   g_return_val_if_fail (GES_IS_TRACK_ELEMENT (object), FALSE);
-  priv = GES_TRACK_ELEMENT (object)->priv;
 
   if (G_UNLIKELY (!(GST_IS_CONTROL_SOURCE (source)))) {
     GST_WARNING
@@ -1948,6 +2047,10 @@ ges_track_element_set_control_source (GESTrackElement * object,
     GST_WARNING ("You need to provide a valid and controllable property name");
     return FALSE;
   }
+
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
+
+  priv = GES_TRACK_ELEMENT (object)->priv;
 
   /* TODO : update this according to new types of bindings */
   direct = !g_strcmp0 (binding_type, "direct");
@@ -2010,6 +2113,8 @@ ges_track_element_set_control_source (GESTrackElement * object,
   ret = TRUE;
 
 done:
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
   gst_object_unref (element);
 
   return ret;
@@ -2037,14 +2142,21 @@ ges_track_element_get_control_binding (GESTrackElement * object,
 {
   GESTrackElementPrivate *priv;
   GstControlBinding *binding;
+  GESTimeline *_locked_timeline;
 
   g_return_val_if_fail (GES_IS_TRACK_ELEMENT (object), NULL);
+
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
 
   priv = GES_TRACK_ELEMENT (object)->priv;
 
   binding =
       (GstControlBinding *) g_hash_table_lookup (priv->bindings_hashtable,
       property_name);
+
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
+
   return binding;
 }
 
@@ -2075,25 +2187,32 @@ ges_track_element_clamp_control_source (GESTrackElement * object,
   GstControlBinding *binding;
   GstControlSource *source;
   gboolean absolute;
+  GESTimeline *_locked_timeline;
 
   g_return_if_fail (GES_IS_TRACK_ELEMENT (object));
+
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
 
   binding = ges_track_element_get_control_binding (object, property_name);
 
   if (!binding)
-    return;
+    goto done;
 
   g_object_get (binding, "control-source", &source, "absolute", &absolute,
       NULL);
 
   if (!GST_IS_TIMED_VALUE_CONTROL_SOURCE (source)) {
     gst_object_unref (source);
-    return;
+    goto done;
   }
 
   _update_control_source (GST_TIMED_VALUE_CONTROL_SOURCE (source), absolute,
       _INPOINT (object), object->priv->outpoint);
   gst_object_unref (source);
+
+done:
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
 }
 
 /**
@@ -2111,10 +2230,14 @@ void
 ges_track_element_set_auto_clamp_control_sources (GESTrackElement * object,
     gboolean auto_clamp)
 {
+  GESTimeline *_locked_timeline;
+
   g_return_if_fail (GES_IS_TRACK_ELEMENT (object));
 
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
+
   if (auto_clamp == object->priv->auto_clamp_control_sources)
-    return;
+    goto done;
 
   object->priv->auto_clamp_control_sources = auto_clamp;
   if (auto_clamp)
@@ -2123,6 +2246,10 @@ ges_track_element_set_auto_clamp_control_sources (GESTrackElement * object,
 
   g_object_notify_by_pspec (G_OBJECT (object),
       properties[PROP_AUTO_CLAMP_CONTROL_SOURCES]);
+
+done:
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
 }
 
 /**
@@ -2138,9 +2265,17 @@ ges_track_element_set_auto_clamp_control_sources (GESTrackElement * object,
 gboolean
 ges_track_element_get_auto_clamp_control_sources (GESTrackElement * object)
 {
+  gboolean ret;
+  GESTimeline *_locked_timeline;
+
   g_return_val_if_fail (GES_IS_TRACK_ELEMENT (object), FALSE);
 
-  return object->priv->auto_clamp_control_sources;
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
+  ret = object->priv->auto_clamp_control_sources;
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
+
+  return ret;
 }
 
 void
@@ -2178,7 +2313,15 @@ ges_track_element_freeze_control_sources (GESTrackElement * object,
 gboolean
 ges_track_element_is_core (GESTrackElement * object)
 {
+  gboolean ret;
+  GESTimeline *_locked_timeline;
+
   g_return_val_if_fail (GES_IS_TRACK_ELEMENT (object), FALSE);
 
-  return (ges_track_element_get_creator_asset (object) != NULL);
+  _locked_timeline = _ges_timeline_element_lock (GES_TIMELINE_ELEMENT (object));
+  ret = (ges_track_element_get_creator_asset (object) != NULL);
+  _ges_timeline_element_unlock (GES_TIMELINE_ELEMENT (object),
+      _locked_timeline);
+
+  return ret;
 }

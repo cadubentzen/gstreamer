@@ -60,7 +60,6 @@ GST_DEBUG_CATEGORY_STATIC (ges_pipeline_debug);
 #define DEFAULT_VIDEO_TRACK_MAX_SIZE_TIME     3 * GST_SECOND
 #define DEFAULT_TIMELINE_MODE  GES_PIPELINE_MODE_PREVIEW
 #define IN_RENDERING_MODE(timeline) ((timeline->priv->mode) & (GES_PIPELINE_MODE_RENDER | GES_PIPELINE_MODE_SMART_RENDER))
-#define CHECK_THREAD(pipeline) g_assert(pipeline->priv->valid_thread == g_thread_self())
 
 /* Structure corresponding to a timeline - sink link */
 
@@ -610,7 +609,6 @@ ges_pipeline_init (GESPipeline * self)
   self->priv->max_video_queue_bytes = DEFAULT_VIDEO_TRACK_MAX_SIZE_BYTES;
   self->priv->max_video_queue_buffers = DEFAULT_VIDEO_TRACK_MAX_SIZE_BUFFERS;
   self->priv->max_video_queue_time = DEFAULT_VIDEO_TRACK_MAX_SIZE_TIME;
-
 
   self->priv->playsink =
       gst_element_factory_make ("playsink", "internal-sinks");
@@ -1260,7 +1258,6 @@ ges_pipeline_set_timeline (GESPipeline * pipeline, GESTimeline * timeline)
   g_return_val_if_fail (GES_IS_PIPELINE (pipeline), FALSE);
   g_return_val_if_fail (GES_IS_TIMELINE (timeline), FALSE);
   g_return_val_if_fail (pipeline->priv->timeline == NULL, FALSE);
-  CHECK_THREAD (pipeline);
 
   GST_DEBUG ("pipeline:%p, timeline:%p", timeline, pipeline);
 
@@ -1304,7 +1301,6 @@ ges_pipeline_set_render_settings (GESPipeline * pipeline,
   guint n_videotracks = 0, n_audiotracks = 0;
 
   g_return_val_if_fail (GES_IS_PIPELINE (pipeline), FALSE);
-  CHECK_THREAD (pipeline);
 
   /*  FIXME Properly handle multi track, for now GESPipeline
    *  only handles single track per type, so we should just set the
@@ -1441,7 +1437,6 @@ ges_pipeline_set_mode (GESPipeline * pipeline, GESPipelineFlags mode)
 
   GList *tmp;
   g_return_val_if_fail (GES_IS_PIPELINE (pipeline), FALSE);
-  CHECK_THREAD (pipeline);
 
   GST_DEBUG_OBJECT (pipeline, "current mode : %d, mode : %d",
       pipeline->priv->mode, mode);
@@ -1610,7 +1605,6 @@ ges_pipeline_get_thumbnail (GESPipeline * self, GstCaps * caps)
   GstSample *sample = NULL;
 
   g_return_val_if_fail (GES_IS_PIPELINE (self), FALSE);
-  CHECK_THREAD (self);
 
   sink = self->priv->playsink;
 
@@ -1652,7 +1646,6 @@ ges_pipeline_save_thumbnail (GESPipeline * self, int width, int
   gboolean res = TRUE;
 
   g_return_val_if_fail (GES_IS_PIPELINE (self), FALSE);
-  CHECK_THREAD (self);
 
   caps = gst_caps_from_string (format);
 
@@ -1710,7 +1703,6 @@ ges_pipeline_get_thumbnail_rgb24 (GESPipeline * self, gint width, gint height)
   GstCaps *caps;
 
   g_return_val_if_fail (GES_IS_PIPELINE (self), FALSE);
-  CHECK_THREAD (self);
 
   caps = gst_caps_new_simple ("video/x-raw", "format", G_TYPE_STRING,
       "RGB", NULL);
@@ -1740,7 +1732,6 @@ ges_pipeline_preview_get_video_sink (GESPipeline * self)
   GstElement *sink = NULL;
 
   g_return_val_if_fail (GES_IS_PIPELINE (self), FALSE);
-  CHECK_THREAD (self);
 
   g_object_get (self->priv->playsink, "video-sink", &sink, NULL);
 
@@ -1784,7 +1775,6 @@ ges_pipeline_preview_set_video_sink (GESPipeline * self, GstElement * sink)
   GstStateChangeReturn sret;
 
   g_return_if_fail (GES_IS_PIPELINE (self));
-  CHECK_THREAD (self);
 
   gst_object_replace ((GstObject **) & self->priv->video_sink,
       (GstObject *) sink);
@@ -1830,7 +1820,6 @@ ges_pipeline_preview_get_audio_sink (GESPipeline * self)
   GstElement *sink = NULL;
 
   g_return_val_if_fail (GES_IS_PIPELINE (self), FALSE);
-  CHECK_THREAD (self);
 
   g_object_get (self->priv->playsink, "audio-sink", &sink, NULL);
 
@@ -1850,7 +1839,6 @@ ges_pipeline_preview_set_audio_sink (GESPipeline * self, GstElement * sink)
   GstStateChangeReturn sret;
 
   g_return_if_fail (GES_IS_PIPELINE (self));
-  CHECK_THREAD (self);
 
   gst_object_replace ((GstObject **) & self->priv->audio_sink,
       (GstObject *) sink);

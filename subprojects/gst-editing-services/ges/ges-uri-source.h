@@ -34,7 +34,8 @@ struct _GESUriSource
 
   GESTrackElement *element;
 
-  GstPipeline* uridecodepool_pipeline;
+  GstPipeline *uridecodepool_pipeline;
+  GWeakRef toplevel_pipeline;
 
   GList *parent_ges_uri_sources;
   gboolean controls_nested_timeline;

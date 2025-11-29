@@ -417,11 +417,113 @@ uridecodepoolsrc_deep_element_added_cb (GstPipeline * pipeline, GstBin * bin,
   }
 }
 
+static void uridecodepoolsrc_bus_sync_message_cb (GstBus * bus,
+    GstMessage * message, GESUriSource * self);
+
+static GstElement *
+ges_uri_source_get_toplevel_pipeline (GESUriSource * self)
+{
+  return g_weak_ref_get (&self->toplevel_pipeline);
+}
+
+static void
+ges_uri_source_update_toplevel_pipeline (GESUriSource * self)
+{
+  GESTimeline *timeline;
+  GstElement *parent;
+  GstElement *prev_pipeline;
+
+  if (self->parent_ges_uri_sources) {
+    GList *toplevel_src_node = g_list_last (self->parent_ges_uri_sources);
+    GESUriSource *toplevel_src = (GESUriSource *) toplevel_src_node->data;
+
+    timeline = GES_TIMELINE_ELEMENT_TIMELINE (toplevel_src->element);
+  } else {
+    timeline = GES_TIMELINE_ELEMENT_TIMELINE (self->element);
+  }
+
+  if (!timeline) {
+    g_weak_ref_set (&self->toplevel_pipeline, NULL);
+    return;
+  }
+
+  parent = GST_ELEMENT_PARENT (timeline);
+  if (!GST_IS_PIPELINE (parent)) {
+    g_weak_ref_set (&self->toplevel_pipeline, NULL);
+    return;
+  }
+
+  prev_pipeline = g_weak_ref_get (&self->toplevel_pipeline);
+  if (prev_pipeline == parent) {
+    gst_clear_object (&prev_pipeline);
+    return;
+  }
+  gst_clear_object (&prev_pipeline);
+
+  g_weak_ref_set (&self->toplevel_pipeline, parent);
+
+  if (self->decodebin) {
+    GObject *pool =
+        gst_child_proxy_get_child_by_name (GST_CHILD_PROXY (self->decodebin),
+        "pool");
+
+    if (pool) {
+      GstBus *pipeline_bus = gst_element_get_bus (parent);
+
+      if (pipeline_bus) {
+        GST_DEBUG_OBJECT (self->element,
+            "Setting pool bus to pipeline bus %" GST_PTR_FORMAT, pipeline_bus);
+        gst_bus_enable_sync_message_emission (pipeline_bus);
+        g_signal_connect (pipeline_bus, "sync-message",
+            G_CALLBACK (uridecodepoolsrc_bus_sync_message_cb), self);
+        gst_object_unref (pipeline_bus);
+      }
+      g_object_unref (pool);
+    }
+  }
+}
+
+static void
+uridecodepoolsrc_bus_sync_message_cb (GstBus * bus, GstMessage * message,
+    GESUriSource * self)
+{
+  GstElement *toplevel_pipeline;
+
+  if (GST_MESSAGE_TYPE (message) == GST_MESSAGE_NEED_CONTEXT) {
+    const gchar *context_type;
+    GstContext *context = NULL;
+
+    gst_message_parse_context_type (message, &context_type);
+    toplevel_pipeline = ges_uri_source_get_toplevel_pipeline (self);
+    if (toplevel_pipeline) {
+      context = gst_element_get_context (toplevel_pipeline, context_type);
+      if (context) {
+        gst_element_set_context (GST_ELEMENT (GST_MESSAGE_SRC (message)),
+            context);
+        gst_context_unref (context);
+      }
+      gst_object_unref (toplevel_pipeline);
+    }
+  } else if (GST_MESSAGE_TYPE (message) == GST_MESSAGE_HAVE_CONTEXT) {
+    GstContext *context;
+
+    gst_message_parse_have_context (message, &context);
+    toplevel_pipeline = ges_uri_source_get_toplevel_pipeline (self);
+    if (toplevel_pipeline) {
+      gst_element_set_context (toplevel_pipeline, context);
+      gst_object_unref (toplevel_pipeline);
+    }
+    gst_context_unref (context);
+  }
+}
+
 static void
 uridecodepoolsrc_pipeline_notify_cb (GstElement * decodebin,
     GParamSpec * arg G_GNUC_UNUSED, GESUriSource * self)
 {
   GstPipeline *pipeline, *prev_pipeline;
+  GstElement *toplevel_pipeline;
+  GList *contexts, *iter;
 
   g_object_get (decodebin, "pipeline", &pipeline, NULL);
 
@@ -434,6 +536,25 @@ uridecodepoolsrc_pipeline_notify_cb (GstElement * decodebin,
   if (pipeline) {
     g_signal_connect_data (pipeline, "deep-element-added",
         G_CALLBACK (uridecodepoolsrc_deep_element_added_cb), self, NULL, 0);
+
+    /* Propagate contexts from the toplevel pipeline to the new pool pipeline.
+     * This ensures GL context sharing between pool pipelines and the main
+     * rendering pipeline. */
+    ges_uri_source_update_toplevel_pipeline (self);
+    toplevel_pipeline = ges_uri_source_get_toplevel_pipeline (self);
+    if (toplevel_pipeline) {
+      contexts = gst_element_get_contexts (toplevel_pipeline);
+      for (iter = contexts; iter; iter = g_list_next (iter)) {
+        GstContext *context = (GstContext *) iter->data;
+
+        GST_DEBUG_OBJECT (self->element,
+            "Propagating context %s to pool pipeline %" GST_PTR_FORMAT,
+            gst_context_get_context_type (context), pipeline);
+        gst_element_set_context (GST_ELEMENT (pipeline), context);
+      }
+      g_list_free_full (contexts, (GDestroyNotify) gst_context_unref);
+      gst_object_unref (toplevel_pipeline);
+    }
   }
 
   GST_DEBUG_OBJECT (self->element, "Pipeline changed: %" GST_PTR_FORMAT,
@@ -644,6 +765,7 @@ ges_uri_source_track_set_cb (GESTrackElement * element,
   if (!track)
     return;
 
+  ges_uri_source_update_toplevel_pipeline (self);
   caps = ges_track_get_caps (track);
 
   GST_INFO_OBJECT (element,
@@ -660,6 +782,7 @@ ges_uri_source_init (GESTrackElement * element, GESUriSource * self)
   ges_uri_source_init_debug ();
 
   self->element = element;
+  g_weak_ref_init (&self->toplevel_pipeline, NULL);
   g_signal_connect (element, "notify::track",
       G_CALLBACK (ges_uri_source_track_set_cb), self);
 }

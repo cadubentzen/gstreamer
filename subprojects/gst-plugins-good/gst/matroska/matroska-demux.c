@@ -7115,6 +7115,10 @@ gst_matroska_demux_video_caps (GstMatroskaTrackVideoContext *
       }
     }
 
+    if (context->intra_only) {
+      gst_caps_set_simple (caps, "intra-only", G_TYPE_BOOLEAN, TRUE, NULL);
+    }
+
     caps = gst_caps_simplify (caps);
   }
 

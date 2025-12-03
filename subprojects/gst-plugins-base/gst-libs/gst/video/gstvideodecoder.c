@@ -960,9 +960,18 @@ gst_video_decoder_setcaps (GstVideoDecoder * decoder, GstCaps * caps)
       GST_DEBUG_OBJECT (decoder,
           "I-frame rate skip: caps indicate intra-only stream = %d",
           intra_only);
+    } else if (!g_strcmp0 (gst_structure_get_name (structure), "image/jpeg")
+        || !g_strcmp0 (gst_structure_get_name (structure), "image/png")
+        || !g_strcmp0 (gst_structure_get_name (structure), "image/gif")
+        ) {
+      decoder->priv->caps_intra_only = TRUE;
+      GST_DEBUG_OBJECT (decoder,
+          "I-frame rate skip: image format, so we can assume intra-only");
     } else {
       decoder->priv->caps_intra_only = FALSE;
     }
+
+
   }
 
   if (decoder_class->set_format)

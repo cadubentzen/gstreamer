@@ -4058,7 +4058,7 @@ nle_composition_add_object (GstBin * bin, GstElement * element)
   GList *elem_contexts = gst_element_get_contexts (element);
   elem_contexts = gst_element_get_contexts (element);
   GST_OBJECT_LOCK (bin);
-  for (GList *l = GST_ELEMENT_CAST (bin)->contexts; l; l = l->next) {
+  for (GList * l = GST_ELEMENT_CAST (bin)->contexts; l; l = l->next) {
     gst_element_set_context (element, l->data);
   }
   gst_element_set_bus (element, bin->child_bus);

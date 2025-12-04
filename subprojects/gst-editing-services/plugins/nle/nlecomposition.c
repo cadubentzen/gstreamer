@@ -782,7 +782,7 @@ _seek_pipeline_func (NleComposition * comp, SeekData * seekd)
   }
 
   seek_handling (seekd->comp, gst_event_get_seqnum (seekd->event),
-      COMP_UPDATE_STACK_ON_SEEK, force_update);
+      reason, force_update);
 
   if (!initializing_stack && !preparing_toplevel_seek)
     _post_start_composition_update_done (seekd->comp,

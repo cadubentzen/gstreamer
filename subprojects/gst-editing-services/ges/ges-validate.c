@@ -359,8 +359,10 @@ GES_START_VALIDATE_ACTION (_add_track)
   GESTrack *track;
   GESTrackType track_type;
   GstCaps *caps = NULL;
+  GstCaps *restriction_caps = NULL;
   const gchar *track_type_str;
   const gchar *caps_str;
+  const gchar *restriction_caps_str;
   const gchar *name;
 
   track_type_str = gst_structure_get_string (action->structure, "track-type");
@@ -378,6 +380,14 @@ GES_START_VALIDATE_ACTION (_add_track)
         done, "Invalid caps: %s", caps_str);
   }
 
+  restriction_caps_str =
+      gst_structure_get_string (action->structure, "restriction-caps");
+  if (restriction_caps_str) {
+    REPORT_UNLESS ((restriction_caps =
+            gst_caps_from_string (restriction_caps_str)), done,
+        "Invalid restriction-caps: %s", restriction_caps_str);
+  }
+
   gst_validate_printf (action, "Adding %s track to timeline\n", track_type_str);
 
   track = ges_track_new (track_type, caps);
@@ -388,6 +398,10 @@ GES_START_VALIDATE_ACTION (_add_track)
     gst_object_set_name (GST_OBJECT (track), name);
   }
 
+  if (restriction_caps) {
+    ges_track_set_restriction_caps (track, restriction_caps);
+  }
+
   res = ges_timeline_add_track (timeline, track);
   if (!res) {
     GST_VALIDATE_REPORT_ACTION (scenario, action,
@@ -396,8 +410,8 @@ GES_START_VALIDATE_ACTION (_add_track)
   }
 
 beach:
-  if (caps)
-    gst_caps_unref (caps);
+  gst_clear_caps (&caps);
+  gst_clear_caps (&restriction_caps);
 }
 
 GST_END_VALIDATE_ACTION;
@@ -1525,6 +1539,13 @@ ges_validate_register_action_types (void)
         {
           .name = "caps",
           .description = "The caps for the track",
+          .mandatory = FALSE,
+          .types = "string",
+          NULL
+        },
+        {
+          .name = "restriction-caps",
+          .description = "The restriction caps to set on the track",
           .mandatory = FALSE,
           .types = "string",
           NULL

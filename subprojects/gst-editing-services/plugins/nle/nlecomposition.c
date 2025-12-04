@@ -1777,7 +1777,7 @@ ghost_event_probe_handler (GstPad * ghostpad G_GNUC_UNUSED,
     if (is_buffer) {
       priv->got_buffer_for_stack = TRUE;
       if (GST_CLOCK_TIME_IS_VALID (priv->setup_new_stack_start_ts)) {
-        GST_ERROR_OBJECT (comp,
+        GST_INFO_OBJECT (comp,
             "First buffer after setting up a new stack took: %"
             GST_TIME_FORMAT,
             GST_TIME_ARGS (gst_util_get_timestamp () -

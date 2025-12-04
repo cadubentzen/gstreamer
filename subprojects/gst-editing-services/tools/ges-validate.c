@@ -131,9 +131,13 @@ process_ges_validate_structure (GstStructure * ges_struct)
           gst_structure_get_string (ges_struct, "uridecodepoolsrc"))) {
     gboolean enable = !g_strcmp0 (str_value, "enabled")
         || !g_strcmp0 (str_value, "true") || !g_strcmp0 (str_value, "1");
-    g_setenv ("GES_ENABLE_URIDECODEPOOLSRC", enable ? "1" : "0", TRUE);
-    gst_validate_printf (NULL, "Setting GES_ENABLE_URIDECODEPOOLSRC=%s\n",
-        enable ? "1" : "0");
+
+    // Only set if not "from-var"
+    if (g_strcmp0 (str_value, "from-var")) {
+      g_setenv ("GES_ENABLE_URIDECODEPOOLSRC", enable ? "1" : "0", TRUE);
+      gst_validate_printf (NULL, "Setting GES_ENABLE_URIDECODEPOOLSRC=%s\n",
+          bool_value ? "1" : "0");
+    }
   } else if (old_uridecodepoolsrc) {
     gst_validate_printf (NULL,
         "Overriding user environment GES_ENABLE_URIDECODEPOOLSRC=%s with default (0)\n",
@@ -150,7 +154,7 @@ process_ges_validate_structure (GstStructure * ges_struct)
         || !g_strcmp0 (lower_str, "gl")) {
       g_setenv ("GES_CONVERTER_TYPE", str_value, TRUE);
       gst_validate_printf (NULL, "Setting GES_CONVERTER_TYPE=%s\n", str_value);
-    } else {
+    } else if (!g_strcmp0 (lower_str, "from-var")) {
       gst_validate_printf (NULL, "Unknown converter type: %s\n", str_value);
     }
 
@@ -338,7 +342,7 @@ ges_validate_activate (GstPipeline * pipeline, GESLauncher * launcher,
         g_free (struct_str);
       }
 
-      if (apply_defaults){
+      if (apply_defaults) {
         apply_ges_validate_defaults ();
       }
 

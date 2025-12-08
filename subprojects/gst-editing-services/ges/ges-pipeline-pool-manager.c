@@ -366,6 +366,13 @@ new_pipeline_cb (GObject * pool, GstElement * pipeline)
       G_CALLBACK (deep_element_added_cb), NULL);
 }
 
+static void
+ges_pipeline_pool_manager_deinit (GObject * _pool,
+    GESPipelinePoolManager * self)
+{
+  ges_pipeline_pool_clear (self);
+}
+
 void
 ges_pipeline_pool_clear (GESPipelinePoolManager * self)
 {
@@ -383,17 +390,12 @@ ges_pipeline_pool_clear (GESPipelinePoolManager * self)
         self);
     g_signal_handlers_disconnect_by_func (self->pool,
         G_CALLBACK (new_pipeline_cb), NULL);
+    g_signal_handlers_disconnect_by_func (self->pool,
+        G_CALLBACK (ges_pipeline_pool_manager_deinit), self);
   }
 
   gst_clear_object (&self->pool);
   g_rec_mutex_unlock (&self->lock);
-}
-
-static void
-ges_pipeline_pool_manager_deinit (GObject * _pool,
-    GESPipelinePoolManager * self)
-{
-  ges_pipeline_pool_clear (self);
 }
 
 void

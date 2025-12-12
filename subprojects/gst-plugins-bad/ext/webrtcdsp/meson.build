@@ -1,3 +1,7 @@
+if get_option('webrtcdsp').disabled()
+  subdir_done()
+endif
+
 webrtc_sources = [
   'gstwebrtcdsp.cpp',
   'gstwebrtcechoprobe.cpp',

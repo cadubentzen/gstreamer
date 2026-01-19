@@ -116,6 +116,26 @@ ges_multi_file_source_dispose (GObject * object)
   G_OBJECT_CLASS (ges_multi_file_source_parent_class)->dispose (object);
 }
 
+static gboolean
+ges_multi_file_source_create_filters (GESVideoSource * source,
+    GPtrArray * elements, gboolean needs_converters)
+{
+  GESVideoSourceClass *klass =
+      GES_VIDEO_SOURCE_CLASS (ges_multi_file_source_parent_class);
+
+  if (ges_converter_type () == GES_CONVERTER_GL) {
+    GstElement *glupload = gst_element_factory_make ("glupload", NULL);
+    if (glupload) {
+      GST_DEBUG_OBJECT (source, "Adding glupload for GL converter mode");
+      g_ptr_array_add (elements, glupload);
+    } else {
+      GST_WARNING_OBJECT (source, "Could not create glupload element");
+    }
+  }
+
+  return klass->ABI.abi.create_filters (source, elements, needs_converters);
+}
+
 static void
 pad_added_cb (GstElement * decodebin, GstPad * pad, GstElement * bin)
 {
@@ -231,6 +251,7 @@ ges_multi_file_source_class_init (GESMultiFileSourceClass * klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
   GESSourceClass *source_class = GES_SOURCE_CLASS (klass);
+  GESVideoSourceClass *vsource_class = GES_VIDEO_SOURCE_CLASS (klass);
 
   object_class->get_property = ges_multi_file_source_get_property;
   object_class->set_property = ges_multi_file_source_set_property;
@@ -255,6 +276,7 @@ ges_multi_file_source_class_init (GESMultiFileSourceClass * klass)
       g_param_spec_string ("uri", "URI", "multifile uri",
           NULL, G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
   source_class->create_source = ges_multi_file_source_create_source;
+  vsource_class->ABI.abi.create_filters = ges_multi_file_source_create_filters;
 }
 
 static void

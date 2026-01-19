@@ -61,7 +61,6 @@ int gst_thread_func(ThreadArgs *args) {
 
     [NSApp postEvent:event atStart:YES];
     [NSApp stop:nil];
-    g_printerr("DISPATCHED!! -> now?? %d\n", ret);
   });
 
   return ret;

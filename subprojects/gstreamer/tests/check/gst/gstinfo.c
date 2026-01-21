@@ -585,7 +585,7 @@ GST_START_TEST (info_context_log)
   gst_debug_set_default_threshold (GST_LEVEL_DEBUG);
   GST_DEBUG_CATEGORY_INIT (cat, "contextcat", 0, "Log context test category");
 
-  GST_LOG_CONTEXT_INIT (ctx);
+  GST_LOG_CONTEXT_INIT (ctx, GST_LOG_CONTEXT_FLAG_THROTTLE);
   context_log_count = 0;
   /* Test all the different logging macros with context and verify the log level is respected */
   GST_CTX_ERROR (ctx, "Error message with context");
@@ -618,7 +618,7 @@ GST_START_TEST (info_context_log_once)
   /* Enable debug logging to ensure our logs get processed */
   gst_debug_set_default_threshold (GST_LEVEL_DEBUG);
   GST_DEBUG_CATEGORY_INIT (cat, "contextcat", 0, "Log context test category");
-  GST_LOG_CONTEXT_INIT (ctx);
+  GST_LOG_CONTEXT_INIT (ctx, GST_LOG_CONTEXT_FLAG_THROTTLE);
 
   context_log_count = 0;
 
@@ -646,14 +646,14 @@ GST_END_TEST;
 GST_START_TEST (info_context_log_periodic)
 {
   GstDebugCategory *cat = NULL;
-  GstLogContext *ctx;
+  GstLogContext *ctx = NULL;
 
   gst_debug_remove_log_function (gst_debug_log_default);
   gst_debug_add_log_function (context_log_counter_func, NULL, NULL);
   gst_debug_set_default_threshold (GST_LEVEL_DEBUG);
   GST_DEBUG_CATEGORY_INIT (cat, "contextcat", 0, "Log context test category");
 
-  GST_LOG_CONTEXT_INIT (ctx, {
+  GST_LOG_CONTEXT_INIT (ctx, GST_LOG_CONTEXT_FLAG_THROTTLE, {
         GST_LOG_CONTEXT_BUILDER_SET_INTERVAL (10 * GST_MSECOND);
       }
   );
@@ -687,10 +687,10 @@ GST_START_TEST (info_context_log_periodic)
 GST_END_TEST;
 
 /* Test the static context macros */
-GST_LOG_CONTEXT_STATIC_DEFINE (static_ctx);
+GST_LOG_CONTEXT_STATIC_DEFINE (static_ctx, GST_LOG_CONTEXT_FLAG_THROTTLE);
 #define STATIC_CTX GST_LOG_CONTEXT_LAZY_INIT(static_ctx)
 GST_LOG_CONTEXT_STATIC_DEFINE (static_periodic_ctx,
-    GST_LOG_CONTEXT_BUILDER_SET_INTERVAL (1);
+    GST_LOG_CONTEXT_FLAG_THROTTLE, GST_LOG_CONTEXT_BUILDER_SET_INTERVAL (1);
     );
 #define STATIC_PERIODIC_CTX GST_LOG_CONTEXT_LAZY_INIT(static_periodic_ctx)
 
@@ -729,7 +729,7 @@ GST_START_TEST (info_context_log_flags)
 {
   GstDebugCategory *cat = NULL;
   GstElement *element;
-  GstLogContext *ctx1, *ctx2, *ctx3;
+  GstLogContext *ctx1 = NULL, *ctx2 = NULL, *ctx3 = NULL;
 
   /* Set up our counting log function */
   gst_debug_remove_log_function (gst_debug_log_default);
@@ -744,7 +744,7 @@ GST_START_TEST (info_context_log_flags)
   fail_unless (element != NULL);
 
   /* Test DEFAULT context */
-  GST_LOG_CONTEXT_INIT (ctx1);
+  GST_LOG_CONTEXT_INIT (ctx1, GST_LOG_CONTEXT_FLAG_THROTTLE);
   context_log_count = 0;
   GST_CTX_DEBUG_OBJECT (ctx1, element, "Test message with default context");
   GST_CTX_DEBUG_OBJECT (ctx1, NULL, "Test message with default context");
@@ -752,8 +752,8 @@ GST_START_TEST (info_context_log_flags)
   fail_unless_equals_int (context_log_count, 2);
 
   /* Test IGNORE_OBJECT context */
-  GST_LOG_CONTEXT_INIT (ctx2, {
-        GST_LOG_CONTEXT_BUILDER_SET_FLAGS (GST_LOG_CONTEXT_IGNORE_OBJECT);
+  GST_LOG_CONTEXT_INIT (ctx2, GST_LOG_CONTEXT_FLAG_THROTTLE, {
+        GST_LOG_CONTEXT_BUILDER_SET_HASH_FLAGS (GST_LOG_CONTEXT_IGNORE_OBJECT);
       }
   );
   context_log_count = 0;
@@ -764,8 +764,9 @@ GST_START_TEST (info_context_log_flags)
   fail_unless_equals_int (context_log_count, 1);
 
   /* Test USE_LINE_NUMBER context */
-  GST_LOG_CONTEXT_INIT (ctx3, {
-        GST_LOG_CONTEXT_BUILDER_SET_FLAGS (GST_LOG_CONTEXT_USE_LINE_NUMBER);
+  GST_LOG_CONTEXT_INIT (ctx3, GST_LOG_CONTEXT_FLAG_THROTTLE, {
+        GST_LOG_CONTEXT_BUILDER_SET_HASH_FLAGS
+        (GST_LOG_CONTEXT_USE_LINE_NUMBER);
       }
   );
   context_log_count = 0;

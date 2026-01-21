@@ -121,6 +121,19 @@ static char *gst_info_printf_pointer_extension_func (const char *format,
 #  include <unistd.h>           /* getpid on UNIX */
 #endif
 
+#ifdef __clang__
+#define GST_DISABLE_FORMAT_NONLITERAL_WARNING \
+    _Pragma("clang diagnostic push") \
+    _Pragma("clang diagnostic ignored \"-Wformat-nonliteral\"")
+#define GST_ENABLE_FORMAT_NONLITERAL_WARNING \
+    _Pragma("clang diagnostic pop")
+#else
+/* For non-clang compilers, these macros do nothing */
+#define GST_DISABLE_FORMAT_NONLITERAL_WARNING
+#define GST_ENABLE_FORMAT_NONLITERAL_WARNING
+#endif
+
+
 #ifdef G_OS_WIN32
 #  define WIN32_LEAN_AND_MEAN   /* prevents from including too many things */
 #  include <windows.h>          /* GetStdHandle, windows console */
@@ -318,6 +331,7 @@ struct _GstDebugMessage
 
 struct _GstLogContext
 {
+  GstLogContextHashFlags hash_flags;
   GstLogContextFlags flags;
   GstClockTime interval;
   GstDebugCategory *category;
@@ -329,6 +343,7 @@ struct _GstLogContext
 
 struct _GstLogContextBuilder
 {
+  GstLogContextHashFlags hash_flags;
   GstLogContextFlags flags;
   GstDebugCategory *category;
   GstClockTime interval;
@@ -608,14 +623,15 @@ gst_path_basename (const gchar * file_name)
 
 static gchar *
 _gst_log_ctx_get_id_literal (GstLogContext * ctx,
-    const gchar * file, gint line, GObject * object, const gchar *object_id, const gchar * message)
+    const gchar * file, gint line, GObject * object, const gchar * object_id,
+    const gchar * message)
 {
   return g_strdup_printf ("%s:%d/%p/%s/%s",
-      (ctx->flags & GST_LOG_CONTEXT_IGNORE_FILE) ? "" : file,
-      (ctx->flags & GST_LOG_CONTEXT_USE_LINE_NUMBER) ? line : -1,
-      (ctx->flags & GST_LOG_CONTEXT_IGNORE_OBJECT) ? 0 : object,
-      (ctx->flags & GST_LOG_CONTEXT_IGNORE_OBJECT) ? "" : object_id,
-      (ctx->flags & GST_LOG_CONTEXT_IGNORE_FORMAT) ? "" : message);
+      (ctx->hash_flags & GST_LOG_CONTEXT_IGNORE_FILE) ? "" : file,
+      (ctx->hash_flags & GST_LOG_CONTEXT_USE_LINE_NUMBER) ? line : -1,
+      (ctx->hash_flags & GST_LOG_CONTEXT_IGNORE_OBJECT) ? 0 : object,
+      (ctx->hash_flags & GST_LOG_CONTEXT_IGNORE_OBJECT) ? "" : object_id,
+      (ctx->hash_flags & GST_LOG_CONTEXT_IGNORE_FORMAT) ? "" : message);
 
 }
 
@@ -623,14 +639,17 @@ _gst_log_ctx_get_id_literal (GstLogContext * ctx,
 /* Message hashing based on context flags */
 static gchar *
 _gst_log_ctx_get_id_valist (GstLogContext * ctx, const gchar * file, gint line,
-    GObject * object, const gchar *object_id, const gchar * format, va_list args)
+    GObject * object, const gchar * object_id, const gchar * format,
+    va_list args)
 {
   gchar *full_message = NULL;
 
-  if (ctx->flags & GST_LOG_CONTEXT_USE_STRING_ARGS) {
-    g_assert (!(ctx->flags & GST_LOG_CONTEXT_IGNORE_FORMAT));
+  if (ctx->hash_flags & GST_LOG_CONTEXT_USE_STRING_ARGS) {
+    g_assert (!(ctx->hash_flags & GST_LOG_CONTEXT_IGNORE_FORMAT));
 
+    GST_DISABLE_FORMAT_NONLITERAL_WARNING;
     full_message = g_strdup_vprintf (format, args);
+    GST_ENABLE_FORMAT_NONLITERAL_WARNING;
   }
 
   gchar *res = _gst_log_ctx_get_id_literal (ctx, file, line, object, object_id,
@@ -644,6 +663,10 @@ _gst_log_ctx_get_id_valist (GstLogContext * ctx, const gchar * file, gint line,
 static gboolean
 _gst_log_ctx_check_id (GstLogContext * ctx, gchar * id)
 {
+  /* If throttling is not enabled, always return TRUE to allow logging */
+  if (!(ctx->flags & GST_LOG_CONTEXT_FLAG_THROTTLE))
+    return TRUE;
+
   g_mutex_lock (&ctx->lock);
   gboolean res = g_hash_table_add (ctx->logged_messages, id);
   g_mutex_unlock (&ctx->lock);
@@ -668,7 +691,7 @@ _gst_log_ctx_check_periodic_reset (GstLogContext * ctx)
   gboolean ret = TRUE;
 
   g_mutex_lock (&ctx->lock);
-  if (!ctx || ctx->interval == 0)
+  if (ctx->interval == 0)
     goto done;
 
   if (!GST_CLOCK_TIME_IS_VALID (ctx->last_reset_time)) {
@@ -695,7 +718,8 @@ done:
 
 static gboolean
 _gst_log_ctx_check_id_literal (GstLogContext * ctx,
-    const gchar * file, gint line, GObject * object, const gchar *id, const gchar * message)
+    const gchar * file, gint line, GObject * object, const gchar * id,
+    const gchar * message)
 {
   if (!ctx)
     return TRUE;
@@ -711,7 +735,8 @@ _gst_log_ctx_check_id_literal (GstLogContext * ctx,
 static gboolean
 _gst_log_ctx_check_id_valist (GstLogContext * ctx,
     const gchar * file, gint line,
-    GObject * object, const gchar *object_id, const gchar * format, va_list args)
+    GObject * object, const gchar * object_id, const gchar * format,
+    va_list args)
 {
   if (!ctx)
     return TRUE;
@@ -727,7 +752,8 @@ _gst_log_ctx_check_id_valist (GstLogContext * ctx,
 static void
 gst_debug_log_full_valist (GstDebugCategory * category, GstLogContext * ctx,
     GstDebugLevel level, const gchar * file, const gchar * function, gint line,
-    GObject * object, const gchar * object_id, const gchar * format, va_list args)
+    GObject * object, const gchar * object_id, const gchar * format,
+    va_list args)
 {
   GstDebugMessage message;
   LogFuncEntry *entry;
@@ -742,8 +768,8 @@ gst_debug_log_full_valist (GstDebugCategory * category, GstLogContext * ctx,
     va_list arguments;
 
     G_VA_COPY (arguments, args);
-    if (!_gst_log_ctx_check_id_valist (ctx, file, line, object, object_id, format,
-            arguments)) {
+    if (!_gst_log_ctx_check_id_valist (ctx, file, line, object, object_id,
+            format, arguments)) {
       va_end (arguments);
       return;
     }
@@ -755,7 +781,8 @@ gst_debug_log_full_valist (GstDebugCategory * category, GstLogContext * ctx,
   g_return_if_fail (format != NULL);
 
 #ifdef GST_ENABLE_EXTRA_CHECKS
-  g_return_if_fail (object_id != NULL || object == NULL || G_IS_OBJECT (object));
+  g_return_if_fail (object_id != NULL || object == NULL
+      || G_IS_OBJECT (object));
 #endif
 
   message.message = NULL;
@@ -2719,13 +2746,12 @@ _register_log_context (GstLogContext * ctx)
   }
 
   g_hash_table_add (_log_contexts_registry, ctx);
-
   g_mutex_unlock (&_log_contexts_registry_lock);
 }
 
 /**
- * gst_log_context_builder_new:
- * @category: the debug category to use, or NULL for no specific category
+ * gst_log_context_builder_new: (skip):
+ * @category: the debug category to use
  * @flags: the flags to use for the log context
  *
  * Creates a new builder for configuring a #GstLogContext with the specified
@@ -2736,14 +2762,16 @@ _register_log_context (GstLogContext * ctx)
  * Since: 1.28
  */
 GstLogContextBuilder *
-gst_log_context_builder_new (GstDebugCategory * category)
+gst_log_context_builder_new (GstDebugCategory * category,
+    GstLogContextFlags flags)
 {
   GstLogContextBuilder *builder;
 
   g_return_val_if_fail (category, NULL);
 
   builder = g_new0 (GstLogContextBuilder, 1);
-  builder->flags = GST_LOG_CONTEXT_DEFAULT;
+  builder->hash_flags = GST_LOG_CONTEXT_DEFAULT;
+  builder->flags = flags;
   builder->interval = 0;
   builder->category = category;
 
@@ -2752,7 +2780,7 @@ gst_log_context_builder_new (GstDebugCategory * category)
 
 
 /**
- * gst_log_context_builder_set_category:
+ * gst_log_context_builder_set_category: (skip):
  * @builder: (transfer full): a #GstLogContextBuilder
  * @category: the debug category to use, or NULL for no specific category
  *
@@ -2774,30 +2802,31 @@ gst_log_context_builder_set_category (GstLogContextBuilder * builder,
 }
 
 /**
- * gst_log_context_builder_set_flags:
+ * gst_log_context_builder_set_hash_flags: (skip):
  * @builder: (transfer full): a #GstLogContextBuilder
- * @flags: the flags to use for the log context
+ * @flags: the hash flags to use for the log context
  *
- * Sets the flags for the log context being built.
+ * Sets the hash flags for the log context being built. These determine how
+ * message hashes are calculated for determining duplicates.
  *
  * Returns: (transfer full): the same #GstLogContextBuilder
 
  * Since: 1.28
  */
 GstLogContextBuilder *
-gst_log_context_builder_set_flags (GstLogContextBuilder * builder,
-    GstLogContextFlags flags)
+gst_log_context_builder_set_hash_flags (GstLogContextBuilder * builder,
+    GstLogContextHashFlags flags)
 {
   g_return_val_if_fail (builder != NULL, NULL);
 
-  builder->flags = flags;
+  builder->hash_flags = flags;
 
   return builder;
 }
 
 
 /**
- * gst_log_context_builder_set_interval:
+ * gst_log_context_builder_set_interval: (skip):
  * @builder: (transfer full): a #GstLogContextBuilder
  * @interval: the interval in nanoseconds for automatic reset
  *
@@ -2820,7 +2849,7 @@ gst_log_context_builder_set_interval (GstLogContextBuilder * builder,
 }
 
 /**
- * gst_log_context_builder_build:
+ * gst_log_context_builder_build: (skip):
  * @builder: (transfer full): a #GstLogContextBuilder
  *
  * Builds a #GstLogContext from the builder configuration.
@@ -2837,6 +2866,7 @@ gst_log_context_builder_build (GstLogContextBuilder * builder)
   GstLogContext *ctx;
 
   ctx = g_new0 (GstLogContext, 1);
+  ctx->hash_flags = builder->hash_flags;
   ctx->flags = builder->flags;
   ctx->interval = builder->interval;
   ctx->logged_messages =
@@ -2846,12 +2876,13 @@ gst_log_context_builder_build (GstLogContextBuilder * builder)
 
   /* Register for cleanup */
   _register_log_context (ctx);
+  g_free (builder);
 
   return ctx;
 }
 
 /**
- * gst_log_context_get_category:
+ * gst_log_context_get_category: (skip):
  * @context: a #GstLogContext
  *
  * Get the #GstDebugCategory associated with this log context.
@@ -2913,7 +2944,6 @@ gst_log_context_free (GstLogContext * ctx)
 /**
  * gst_debug_log_with_context:
  * @ctx: a #GstLogContext
- * @category: category to log
  * @level: level of the message
  * @file: the file that emitted the message, usually the __FILE__ identifier
  * @function: the function that emitted the message
@@ -2946,7 +2976,6 @@ gst_debug_log_with_context (GstLogContext * ctx,
 /**
  * gst_debug_log_with_context_valist:
  * @ctx: a #GstLogContext
- * @category: category to log
  * @level: level of the message
  * @file: the file that emitted the message, usually the __FILE__ identifier
  * @function: the function that emitted the message
@@ -2976,7 +3005,6 @@ gst_debug_log_with_context_valist (GstLogContext * ctx,
 /**
  * gst_debug_log_literal_with_context:
  * @ctx: a #GstLogContext
- * @category: category to log
  * @level: level of the message
  * @file: the file that emitted the message, usually the __FILE__ identifier
  * @function: the function that emitted the message
@@ -2985,9 +3013,8 @@ gst_debug_log_with_context_valist (GstLogContext * ctx,
  *     or %NULL if none
  * @message: message string
  *
- * Logs a literal message with the specified context. If the context has
- * already seen this message based on its flags configuration, the message will
- * not be logged.
+ * Logs a literal message with the specified context. Depending on the context
+ * state, the message may not be logged at all.
  *
  * Since: 1.28
  */
@@ -3004,7 +3031,6 @@ gst_debug_log_literal_with_context (GstLogContext * ctx,
 /**
  * gst_debug_log_id_with_context:
  * @ctx: a #GstLogContext
- * @category: category to log
  * @level: level of the message
  * @file: the file that emitted the message, usually the __FILE__ identifier
  * @function: the function that emitted the message
@@ -3034,9 +3060,8 @@ gst_debug_log_id_with_context (GstLogContext * ctx,
 }
 
 /**
- * gst_debug_log_id_valist_with_context:
+ * gst_debug_log_id_with_context_valist:
  * @ctx: a #GstLogContext
- * @category: category to log
  * @level: level of the message
  * @file: the file that emitted the message, usually the __FILE__ identifier
  * @function: the function that emitted the message
@@ -3045,9 +3070,9 @@ gst_debug_log_id_with_context (GstLogContext * ctx,
  * @format: a printf style format string
  * @args: optional arguments for the format string
  *
- * Logs a message with the specified context and ID using a va_list. If the
- * context has already seen this message based on its flags configuration, the
- * message will not be logged.
+ * Logs a message with the specified context and ID. If the context has already
+ * seen this message based on its flags configuration, the message will not be
+ * logged.
  *
  * Since: 1.28
  */
@@ -3065,7 +3090,6 @@ gst_debug_log_id_with_context_valist (GstLogContext * ctx,
 /**
  * gst_debug_log_id_literal_with_context:
  * @ctx: a #GstLogContext
- * @category: category to log
  * @level: level of the message
  * @file: the file that emitted the message, usually the __FILE__ identifier
  * @function: the function that emitted the message
@@ -3073,9 +3097,9 @@ gst_debug_log_id_with_context_valist (GstLogContext * ctx,
  * @id: (nullable): the contextual ID of the message
  * @message: message string
  *
- * Logs a literal message with the specified context and ID. If the context has
- * already seen this message based on its flags configuration, the message will
- * not be logged.
+ * Logs a message with the specified context and ID. If the context has already
+ * seen this message based on its flags configuration, the message will not be
+ * logged.
  *
  * Since: 1.28
  */

@@ -1433,6 +1433,32 @@ GST_CAT_LEVEL_LOG_ID (GstDebugCategory * cat, GstDebugLevel level,
 #define GST_CTX_TRACE(ctx,...)                          GST_CTX_TRACE_OBJECT(ctx,NULL,__VA_ARGS__)
 #define GST_CTX_MEMDUMP(ctx,...)                        GST_CTX_MEMDUMP_OBJECT(ctx,NULL,__VA_ARGS__)
 
+#define GST_LOG_CONTEXT_STATIC_DEFINE(name, flags, ...) \
+  static GstLogContext *name = NULL; \
+  static void _init_##name (void) { \
+    GstLogContextBuilder *builder = GST_LOG_CONTEXT_BUILDER_NEW(flags); \
+    GST_LOG_CONTEXT_BUILDER_SET_CATEGORY(GST_CAT_DEFAULT); \
+    GST_LOG_CONTEXT_BUILDER_SET_HASH_FLAGS(GST_LOG_CONTEXT_DEFAULT); \
+    __VA_ARGS__ \
+    name = gst_log_context_builder_build(builder); \
+  } \
+  G_GNUC_UNUSED static GstLogContext * _ensure_##name (void) { \
+    static gsize _init_##name##_guard = 0; \
+    if (g_once_init_enter (&_init_##name##_guard)) { \
+      _init_##name (); \
+      g_once_init_leave (&_init_##name##_guard, 1); \
+    } \
+    return name; \
+  }
+
+#define GST_LOG_CONTEXT_INIT(var, flags, ...) G_STMT_START { \
+      GstLogContextBuilder *builder = GST_LOG_CONTEXT_BUILDER_NEW(flags); \
+      GST_LOG_CONTEXT_BUILDER_SET_CATEGORY(GST_CAT_DEFAULT); \
+      GST_LOG_CONTEXT_BUILDER_SET_HASH_FLAGS(GST_LOG_CONTEXT_DEFAULT); \
+      __VA_ARGS__ \
+      var = gst_log_context_builder_build(builder); \
+    } G_STMT_END;
+
 #else
 #ifdef G_HAVE_GNUC_VARARGS
 
@@ -1525,6 +1551,33 @@ GST_CAT_LEVEL_LOG_ID (GstDebugCategory * cat, GstDebugLevel level,
 #define GST_CTX_FIXME_ID(ctx,id,args...)            GST_CTX_LEVEL_LOG_ID(ctx,GST_LEVEL_FIXME,id,##args)
 #define GST_CTX_TRACE_ID(ctx,id,args...)            GST_CTX_LEVEL_LOG_ID(ctx,GST_LEVEL_TRACE,id,##args)
 #define GST_CTX_MEMDUMP_ID(ctx,id,args...)          GST_CTX_LEVEL_LOG_ID(ctx,GST_LEVEL_MEMDUMP,id,##args)
+
+#define GST_LOG_CONTEXT_STATIC_DEFINE(name, flags, _init_code...) \
+  static GstLogContext *name = NULL; \
+  static void _init_##name (void) { \
+    GstLogContextBuilder *builder = GST_LOG_CONTEXT_BUILDER_NEW(flags); \
+    GST_LOG_CONTEXT_BUILDER_SET_CATEGORY(GST_CAT_DEFAULT); \
+    GST_LOG_CONTEXT_BUILDER_SET_HASH_FLAGS(GST_LOG_CONTEXT_DEFAULT); \
+    _init_code \
+    name = gst_log_context_builder_build(builder); \
+
+  } \
+  G_GNUC_UNUSED static GstLogContext * _ensure_##name (void) { \
+    static gsize _init_##name##_guard = 0; \
+    if (g_once_init_enter (&_init_##name##_guard)) { \
+      _init_##name (); \
+      g_once_init_leave (&_init_##name##_guard, 1); \
+    } \
+    return name; \
+  }
+
+#define GST_LOG_CONTEXT_INIT(var, flags, _init_code...) G_STMT_START { \
+      GstLogContextBuilder *builder = GST_LOG_CONTEXT_BUILDER_NEW(flags); \
+      GST_LOG_CONTEXT_BUILDER_SET_CATEGORY(GST_CAT_DEFAULT); \
+      GST_LOG_CONTEXT_BUILDER_SET_HASH_FLAGS(GST_LOG_CONTEXT_DEFAULT); \
+      _init_code \
+      var = gst_log_context_builder_build(builder); \
+    } G_STMT_END;
 
 #else
 /* no variadic macros, use inline */
@@ -2279,6 +2332,10 @@ GST_CTX_TRACE_ID (GstLogContext *ctx, gpointer id, const char *format, ...)
 #define GST_FIXME(...)					G_STMT_START{ }G_STMT_END
 #define GST_TRACE(...)					G_STMT_START{ }G_STMT_END
 
+/* we are using dummy function prototypes here to eat ';' as these macros are used outside of functions */
+#define GST_LOG_CONTEXT_STATIC_DEFINE(name, flags, ...) void _gst_log_context_dummy_static_##name (void)
+#define GST_LOG_CONTEXT_INIT(var, flags, ...)
+
 #else /* !G_HAVE_ISO_VARARGS */
 #ifdef G_HAVE_GNUC_VARARGS
 
@@ -2323,6 +2380,9 @@ GST_CTX_TRACE_ID (GstLogContext *ctx, gpointer id, const char *format, ...)
 #define GST_LOG(args...)				G_STMT_START{ }G_STMT_END
 #define GST_FIXME(args...)				G_STMT_START{ }G_STMT_END
 #define GST_TRACE(args...)				G_STMT_START{ }G_STMT_END
+
+#define GST_LOG_CONTEXT_STATIC_DEFINE(name, flags, _init_code...) void _gst_log_context_dummy_static_##name (void)
+#define GST_LOG_CONTEXT_INIT(var, flags, _init_code...)
 
 #else /* !G_HAVE_GNUC_VARARGS */
 static inline void
@@ -2526,8 +2586,6 @@ GST_TRACE (const char *format, ...)
 #define GST_CTX_MEMDUMP(ctx,...)                        G_STMT_START{ }G_STMT_END
 
 /* Log context macros are no-ops when debugging is disabled */
-#define GST_LOG_CONTEXT_STATIC(name, flags)             G_STMT_START{ }G_STMT_END
-#define GST_LOG_CONTEXT_STATIC_PERIODIC(name, flags, interval) G_STMT_START{ }G_STMT_END
 
 #endif /* GST_DISABLE_GST_DEBUG */
 
@@ -2546,16 +2604,19 @@ GST_API
 gchar **              gst_debug_ring_buffer_logger_get_logs (void);
 
 /**
- * GstLogContextFlags:
+ * GstLogContextHashFlags:
  * @GST_LOG_CONTEXT_DEFAULT: Default behavior for logging context
- * @GST_LOG_CONTEXT_IGNORE_OBJECT: Ignore object pointer or object ID when calculating message identitier
+ *                          (uses object, format, file but not line number or string args)
+ * @GST_LOG_CONTEXT_IGNORE_OBJECT: Ignore object pointer or object ID when calculating message hash
  * @GST_LOG_CONTEXT_IGNORE_FORMAT: Ignore the "format" part of the debug
  * log message
  * @GST_LOG_CONTEXT_IGNORE_FILE: Ignore file name when calculating message hash
- * @GST_LOG_CONTEXT_USE_LINE_NUMBER: Use line number when calculating message hash
- * @GST_LOG_CONTEXT_USE_STRING_ARGS: Use the arguments part of the string message
+ * @GST_LOG_CONTEXT_USE_LINE_NUMBER: Use line number when calculating message hash (not used by default)
+ * @GST_LOG_CONTEXT_USE_STRING_ARGS: Use the arguments part of the string message (not used by default)
  *
- * Flags to control the behavior of a #GstLogContext.
+ * Flags to control how the message hash is calculated in a #GstLogContext.
+ * The message hash is used to determine if a message is a duplicate of a previously
+ * logged message.
  *
  * Since: 1.28
  */
@@ -2566,6 +2627,24 @@ typedef enum {
   GST_LOG_CONTEXT_IGNORE_FILE        = (1 << 2),
   GST_LOG_CONTEXT_USE_LINE_NUMBER    = (1 << 3),
   GST_LOG_CONTEXT_USE_STRING_ARGS    = (1 << 4),
+} GstLogContextHashFlags;
+
+/**
+ * GstLogContextFlags:
+ * @GST_LOG_CONTEXT_FLAG_NONE: No special behavior (empty flags)
+ * @GST_LOG_CONTEXT_FLAG_THROTTLE: Enable message throttling/deduplication. This
+ *  makes the context track which messages have been logged already based on
+ *  their message hash, and only log them once (or periodically if an
+ *  interval is set). Without this flag, all messages will be logged regardless
+ *  of whether they've been logged before.
+ *
+ * Flags to control the behavior of a #GstLogContext.
+ *
+ * Since: 1.28
+ */
+typedef enum {
+  GST_LOG_CONTEXT_FLAG_NONE          = 0,
+  GST_LOG_CONTEXT_FLAG_THROTTLE      = (1 << 0),
 } GstLogContextFlags;
 
 /**
@@ -2579,20 +2658,20 @@ typedef enum {
  *
  * ``` c
  * // At global/file scope:
- * GST_LOG_CONTEXT_STATIC_DEFINE(my_context, );
+ * GST_LOG_CONTEXT_STATIC_DEFINE(my_context, GST_LOG_CONTEXT_FLAG_THROTTLE, );
  * #define MY_CONTEXT GST_LOG_CONTEXT_LAZY_INIT(my_context)
  *
  * // Then in code:
  * GST_CTX_INFO(MY_CONTEXT, "This will only appear once per file/line");
  * ```
  *
- * ## Periodic logging with builder pattern
+ * ## Periodic logging
  *
  * For messages that should be logged periodically (e.g., maximum once per minute):
  *
  * ``` c
  * // At global/file scope:
- * GST_LOG_CONTEXT_STATIC_DEFINE(my_periodic_context,
+ * GST_LOG_CONTEXT_STATIC_DEFINE(my_periodic_context, GST_LOG_CONTEXT_FLAG_THROTTLE,
  *   GST_LOG_CONTEXT_BUILDER_SET_INTERVAL(60 * GST_SECOND);
  * );
  * #define MY_PERIODIC_CONTEXT GST_LOG_CONTEXT_LAZY_INIT(my_periodic_context)
@@ -2601,34 +2680,20 @@ typedef enum {
  * GST_CTX_INFO(MY_PERIODIC_CONTEXT, "This appears once per minute");
  * ```
  *
- * ## Customizing Message ID with custom flags and category
+ * ## Customizing Message hash with custom flags and category
  *
- * By default, a message's ID is determined by the file name, object pointer,
+ * By default, a message's hash is determined by the file name, object pointer,
  * and format string. You can customize this with builder operations:
  *
  * ``` c
- * // Ignore the object pointer when determining message ID
- * GST_LOG_CONTEXT_STATIC_DEFINE(obj_independent_ctx,
- *   builder = GST_LOG_CONTEXT_BUILDER_SET_FLAGS(GST_LOG_CONTEXT_IGNORE_OBJECT);
+ * // Ignore the object pointer when determining message hash (with throttling)
+ * GST_LOG_CONTEXT_STATIC_DEFINE(obj_independent_ctx, GST_LOG_CONTEXT_FLAG_THROTTLE,
+ *   GST_LOG_CONTEXT_BUILDER_SET_HASH_FLAGS(GST_LOG_CONTEXT_IGNORE_OBJECT);
  * );
  *
- * // Use a custom category
- * GST_LOG_CONTEXT_STATIC_DEFINE(custom_cat_ctx,
+ * // Use a custom category (without throttling)
+ * GST_LOG_CONTEXT_STATIC_DEFINE(custom_cat_ctx, GST_LOG_CONTEXT_FLAG_NONE,
  *   GST_LOG_CONTEXT_BUILDER_SET_CATEGORY(my_category);
- *   GST_LOG_CONTEXT_BUILDER_SET_FLAGS(GST_LOG_CONTEXT_IGNORE_OBJECT | GST_LOG_CONTEXT_USE_LINE_NUMBER);
- * );
- * ```
- *
- * ## Advanced Builder Pattern Usage
- *
- * For dynamic creation or more complex configuration:
- *
- * ``` c
- * // Dynamic creation
- * GST_LOG_CONTEXT_DEFINE(ctx,
- *   GST_LOG_CONTEXT_BUILDER_SET_INTERVAL(1000 * GST_MSECOND);
- *   GST_LOG_CONTEXT_BUILDER_SET_CATEGORY(my_category);
- *   GST_LOG_CONTEXT_BUILDER_SET_FLAGS(GST_LOG_CONTEXT_IGNORE_OBJECT);
  * );
  * ```
  *
@@ -2672,7 +2737,7 @@ void gst_debug_log_with_context_valist          (GstLogContext *ctx,
                                                  gint line,
                                                  GObject *object,
                                                  const gchar *format,
-                                                 va_list args);
+                                                 va_list args)  G_GNUC_PRINTF (7, 0) G_GNUC_NO_INSTRUMENT;
 
 GST_API
 void gst_debug_log_literal_with_context         (GstLogContext *ctx,
@@ -2701,7 +2766,7 @@ void gst_debug_log_id_with_context_valist       (GstLogContext *ctx,
                                                  gint line,
                                                  const gchar *id,
                                                  const gchar *format,
-                                                 va_list args);
+                                                 va_list args) G_GNUC_PRINTF(7, 0);;
 
 GST_API
 void gst_debug_log_id_literal_with_context      (GstLogContext *ctx,
@@ -2714,11 +2779,12 @@ void gst_debug_log_id_literal_with_context      (GstLogContext *ctx,
 
 /* Builder pattern API */
 GST_API
-GstLogContextBuilder* gst_log_context_builder_new           (GstDebugCategory *category);
+GstLogContextBuilder* gst_log_context_builder_new           (GstDebugCategory *category,
+                                                             GstLogContextFlags flags);
 
 GST_API
-GstLogContextBuilder* gst_log_context_builder_set_flags     (GstLogContextBuilder* builder,
-                                                             GstLogContextFlags flags);
+GstLogContextBuilder* gst_log_context_builder_set_hash_flags (GstLogContextBuilder* builder,
+                                                             GstLogContextHashFlags flags);
 
 GST_API
 GstLogContextBuilder* gst_log_context_builder_set_category  (GstLogContextBuilder* builder,
@@ -2731,60 +2797,6 @@ GstLogContextBuilder* gst_log_context_builder_set_interval  (GstLogContextBuilde
 GST_API
 GstLogContext*        gst_log_context_builder_build         (GstLogContextBuilder* builder);
 
-#ifdef G_HAVE_ISO_VARARGS
-#define GST_LOG_CONTEXT_STATIC_DEFINE(name, ...) \
-  static GstLogContext *name = NULL; \
-  static void _init_##name (void) { \
-    GstLogContextBuilder *builder = GST_LOG_CONTEXT_BUILDER_NEW(); \
-    GST_LOG_CONTEXT_BUILDER_SET_CATEGORY(GST_CAT_DEFAULT); \
-    GST_LOG_CONTEXT_BUILDER_SET_FLAGS(GST_LOG_CONTEXT_DEFAULT); \
-    __VA_ARGS__ \
-    name = gst_log_context_builder_build(builder); \
-  } \
-  G_GNUC_UNUSED static GstLogContext * _ensure_##name (void) { \
-    static gsize _init_##name##_guard = 0; \
-    if (g_once_init_enter (&_init_##name##_guard)) { \
-      _init_##name (); \
-      g_once_init_leave (&_init_##name##_guard, 1); \
-    } \
-    return name; \
-  }
-
-#define GST_LOG_CONTEXT_INIT(var, ...) G_STMT_START { \
-      GstLogContextBuilder *builder = GST_LOG_CONTEXT_BUILDER_NEW(); \
-      GST_LOG_CONTEXT_BUILDER_SET_CATEGORY(GST_CAT_DEFAULT); \
-      GST_LOG_CONTEXT_BUILDER_SET_FLAGS(GST_LOG_CONTEXT_DEFAULT); \
-      __VA_ARGS__ \
-      var = gst_log_context_builder_build(builder); \
-    } G_STMT_END;
-#else
-#define GST_LOG_CONTEXT_STATIC_DEFINE(name, _init_code...) \
-  static GstLogContext *name = NULL; \
-  static void _init_##name (void) { \
-    GstLogContextBuilder *builder = GST_LOG_CONTEXT_BUILDER_NEW(); \
-    GST_LOG_CONTEXT_BUILDER_SET_CATEGORY(GST_CAT_DEFAULT); \
-    GST_LOG_CONTEXT_BUILDER_SET_FLAGS(GST_LOG_CONTEXT_DEFAULT); \
-    _init_code \
-    name = gst_log_context_builder_build(builder); \
-  } \
-  G_GNUC_UNUSED static GstLogContext * _ensure_##name (void) { \
-    static gsize _init_##name##_guard = 0; \
-    if (g_once_init_enter (&_init_##name##_guard)) { \
-      _init_##name (); \
-      g_once_init_leave (&_init_##name##_guard, 1); \
-    } \
-    return name; \
-  }
-
-#define GST_LOG_CONTEXT_INIT(var, _init_code...) G_STMT_START { \
-      GstLogContextBuilder *builder = GST_LOG_CONTEXT_BUILDER_NEW(); \
-      GST_LOG_CONTEXT_BUILDER_SET_CATEGORY(GST_CAT_DEFAULT); \
-      GST_LOG_CONTEXT_BUILDER_SET_FLAGS(GST_LOG_CONTEXT_DEFAULT); \
-      _init_code \
-      var = gst_log_context_builder_build(builder); \
-    } G_STMT_END;
-#endif
-
 /**
  * GST_LOG_CONTEXT_BUILDER_NEW:
  *
@@ -2794,21 +2806,22 @@ GstLogContext*        gst_log_context_builder_build         (GstLogContextBuilde
  *
  * Since: 1.28
  */
-#define GST_LOG_CONTEXT_BUILDER_NEW() \
-  gst_log_context_builder_new(GST_CAT_DEFAULT)
+#define GST_LOG_CONTEXT_BUILDER_NEW(flags) \
+  gst_log_context_builder_new(GST_CAT_DEFAULT, flags)
 
 /**
- * GST_LOG_CONTEXT_BUILDER_SET_FLAGS:
- * @flags: #GstLogContextFlags to control context behavior
+ * GST_LOG_CONTEXT_BUILDER_SET_HASH_FLAGS:
+ * @flags: #GstLogContextHashFlags to control message hash calculation
  *
- * Sets the flags for the log context being built.
+ * Sets the hash flags for the log context being built, which control how
+ * the message hash is calculated.
  *
  * Returns: the same #GstLogContextBuilder for chaining
  *
  * Since: 1.28
  */
-#define GST_LOG_CONTEXT_BUILDER_SET_FLAGS(flags) \
-  gst_log_context_builder_set_flags(builder, (flags))
+#define GST_LOG_CONTEXT_BUILDER_SET_HASH_FLAGS(flags) \
+  gst_log_context_builder_set_hash_flags(builder, (flags))
 
 /**
  * GST_LOG_CONTEXT_BUILDER_SET_CATEGORY:
@@ -2856,14 +2869,15 @@ GstLogContext*        gst_log_context_builder_build         (GstLogContextBuilde
  * @_init_code: optional initialization code to customize the context
  *
  * Creates a static logging context that will be automatically initialized on
- * first use and cleaned up during GStreamer deinitialization. By default, the
- * context uses GST_CAT_DEFAULT and GST_LOG_CONTEXT_DEFAULT settings, but
- * can be further customized with optional initialization code.
+ * first use and cleaned up during GStreamer deinitialization. It requires the
+ * behavior flags as a parameter to explicitly control whether throttling is enabled.
+ * By default, it uses GST_CAT_DEFAULT and GST_LOG_CONTEXT_DEFAULT hash flags,
+ * but can be further customized with optional initialization code.
  *
  * Example usage:
  * ```
- * // Simple case with defaults (logs messages only once)
- * GST_LOG_CONTEXT_STATIC_DEFINE(simple_ctx, );
+ * // Simple case with throttling enabled (logs messages only once)
+ * GST_LOG_CONTEXT_STATIC_DEFINE(simple_ctx, GST_LOG_CONTEXT_FLAG_THROTTLE, );
  *
  * // With interval for periodic logging (allow message to repeat after 60 seconds)
  * GST_LOG_CONTEXT_STATIC_DEFINE(periodic_ctx,
@@ -2908,22 +2922,24 @@ GstLogContext*        gst_log_context_builder_build         (GstLogContextBuilde
 /**
  * GST_LOG_CONTEXT_INIT:
  * @var: name for the context variable to initialize
+ * @flags: #GstLogContextFlags to control throttling behavior
  * @_init_code: optional initialization code to customize the context
  *
- * Initializes a new log context for immediate use within a function. By default, the
- * context uses GST_CAT_DEFAULT and GST_LOG_CONTEXT_DEFAULT settings, but
- * can be further customized with optional initialization code.
+ * Initializes a new log context for immediate use within a function. It requires
+ * flags to explicitly control whether throttling is enabled.
+ * By default, the context uses GST_CAT_DEFAULT and GST_LOG_CONTEXT_DEFAULT hash flags,
+ * but can be further customized with optional initialization code.
  *
  * Typical usage:
  *
  * ``` c
- * // Simple case with defaults
- * GStLogContext *ctx = NULL, *periodic_ctx = NULL;
+ * // Simple case with throttling
+ * GstLogContext *ctx = NULL, *periodic_ctx = NULL;
  *
- * GST_LOG_CONTEXT_INIT(ctx);
+ * GST_LOG_CONTEXT_INIT(ctx, GST_LOG_CONTEXT_FLAG_THROTTLE);
  *
- * // With interval for periodic reset
- * GST_LOG_CONTEXT_INIT(periodic_ctx,
+ * // With interval for periodic reset and throttling
+ * GST_LOG_CONTEXT_INIT(periodic_ctx, GST_LOG_CONTEXT_FLAG_THROTTLE,
  *   GST_LOG_CONTEXT_BUILDER_SET_INTERVAL(60 * GST_SECOND);
  * );
  * ```
@@ -2934,12 +2950,36 @@ GstLogContext*        gst_log_context_builder_build         (GstLogContextBuilde
  */
 
 /**
+ * GST_CTX_LEVEL_LOG:
+ * @ctx: #GstLogContext to use
+ * @level: level of the message
+ * @object: (nullable): an object or %NULL
+ * @...: format string and optional arguments, followed by optional context
+ *
+ * Logs a memory dump message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/**
+ * GST_CTX_LEVEL_LOG_ID:
+ * @ctx: #GstLogContext to use
+ * @level: level of the message
+ * @id: (nullable): an object or %NULL
+ * @...: format string and optional arguments, followed by optional context
+ *
+ * Logs a memory dump message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/**
  * GST_CTX_ERROR_OBJECT:
  * @ctx: #GstLogContext to use
  * @object: (nullable): a #GObject or %NULL
  * @...: format string and optional arguments, followed by optional context
  *
- * Logs an error message in the specified context with the default category.
+ * Logs an error message in the specified context.
  *
  * Since: 1.28
  */
@@ -2950,7 +2990,18 @@ GstLogContext*        gst_log_context_builder_build         (GstLogContextBuilde
  * @object: (nullable): a #GObject or %NULL
  * @...: format string and optional arguments, followed by optional context
  *
- * Logs a warning message in the specified context with the default category.
+ * Logs a warning message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/**
+ * GST_CTX_DEBUG_OBJECT:
+ * @ctx: #GstLogContext to use
+ * @object: (nullable): a #GObject or %NULL
+ * @...: format string and optional arguments, followed by optional context
+ *
+ * Logs an info message in the specified context.
  *
  * Since: 1.28
  */
@@ -2961,7 +3012,83 @@ GstLogContext*        gst_log_context_builder_build         (GstLogContextBuilde
  * @object: (nullable): a #GObject or %NULL
  * @...: format string and optional arguments, followed by optional context
  *
- * Logs an info message in the specified context with the default category.
+ * Logs an info message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/**
+ * GST_CTX_LOG_OBJECT:
+ * @ctx: #GstLogContext to use
+ * @object: (nullable): a #GObject or %NULL
+ * @...: format string and optional arguments, followed by optional context
+ *
+ * Logs a log message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/**
+ * GST_CTX_FIXME_OBJECT:
+ * @ctx: #GstLogContext to use
+ * @object: (nullable): a #GObject or %NULL
+ * @...: format string and optional arguments, followed by optional context
+ *
+ * Logs a fixme message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/**
+ * GST_CTX_TRACE_OBJECT:
+ * @ctx: #GstLogContext to use
+ * @object: (nullable): a #GObject or %NULL
+ * @...: format string and optional arguments, followed by optional context
+ *
+ * Logs a trace message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/**
+ * GST_CTX_MEMDUMP_OBJECT:
+ * @ctx: #GstLogContext to use
+ * @object: (nullable): a #GObject or %NULL
+ * @...: format string and optional arguments, followed by optional context
+ *
+ * Logs a memory dump message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/* Similar macros for non-object logging */
+
+/**
+ * GST_CTX_ERROR:
+ * @ctx: #GstLogContext to use
+ * @...: format string and optional arguments, followed by optional context
+ *
+ * Logs an error message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/**
+ * GST_CTX_WARNING:
+ * @ctx: #GstLogContext to use
+ * @...: format string and optional arguments, followed by optional context
+ *
+ * Logs a warning message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/**
+ * GST_CTX_INFO:
+ * @ctx: #GstLogContext to use
+ * @...: format string and optional arguments, followed by optional context
+ *
+ * Logs an info message in the specified context.
  *
  * Since: 1.28
  */
@@ -2971,7 +3098,7 @@ GstLogContext*        gst_log_context_builder_build         (GstLogContextBuilde
  * @ctx: #GstLogContext to use for determining if message should be logged
  * @...: format string and optional arguments
  *
- * Logs a debug message in the specified context with the default category.
+ * Logs a debug message in the specified context.
  * If this exact message was already logged from the same location with this
  * context, it will not be logged again unless the context has been reset.
  *
@@ -2990,102 +3117,12 @@ GstLogContext*        gst_log_context_builder_build         (GstLogContextBuilde
  * Since: 1.28
  */
 
-
-/**
- * GST_CTX_LOG_OBJECT:
- * @ctx: #GstLogContext to use
- * @object: (nullable): a #GObject or %NULL
- * @...: format string and optional arguments, followed by optional context
- *
- * Logs a log message in the specified context with the default category.
- *
- * Since: 1.28
- */
-
-/**
- * GST_CTX_FIXME_OBJECT:
- * @ctx: #GstLogContext to use
- * @object: (nullable): a #GObject or %NULL
- * @...: format string and optional arguments, followed by optional context
- *
- * Logs a fixme message in the specified context with the default category.
- *
- * Since: 1.28
- */
-
-/**
- * GST_CTX_TRACE_OBJECT:
- * @ctx: #GstLogContext to use
- * @object: (nullable): a #GObject or %NULL
- * @...: format string and optional arguments, followed by optional context
- *
- * Logs a trace message in the specified context with the default category.
- *
- * Since: 1.28
- */
-
-/**
- * GST_CTX_MEMDUMP_OBJECT:
- * @ctx: #GstLogContext to use
- * @object: (nullable): a #GObject or %NULL
- * @...: format string and optional arguments, followed by optional context
- *
- * Logs a memory dump message in the specified context with the default category.
- *
- * Since: 1.28
- */
-
-/* Similar macros for non-object logging */
-
-
-/* And finally macros for default category, no object */
-
-/**
- * GST_CTX_ERROR:
- * @ctx: #GstLogContext to use
- * @...: format string and optional arguments, followed by optional context
- *
- * Logs an error message in the specified context with the default category.
- *
- * Since: 1.28
- */
-
-/**
- * GST_CTX_WARNING:
- * @ctx: #GstLogContext to use
- * @...: format string and optional arguments, followed by optional context
- *
- * Logs a warning message in the specified context with the default category.
- *
- * Since: 1.28
- */
-
-/**
- * GST_CTX_INFO:
- * @ctx: #GstLogContext to use
- * @...: format string and optional arguments, followed by optional context
- *
- * Logs an info message in the specified context with the default category.
- *
- * Since: 1.28
- */
-
-/**
- * GST_CTX_DEBUG:
- * @ctx: #GstLogContext to use
- * @...: format string and optional arguments, followed by optional context
- *
- * Logs a debug message in the specified context with the default category.
- *
- * Since: 1.28
- */
-
 /**
  * GST_CTX_LOG:
  * @ctx: #GstLogContext to use
  * @...: format string and optional arguments, followed by optional context
  *
- * Logs a log message in the specified context with the default category.
+ * Logs a log message in the specified context.
  *
  * Since: 1.28
  */
@@ -3095,7 +3132,7 @@ GstLogContext*        gst_log_context_builder_build         (GstLogContextBuilde
  * @ctx: #GstLogContext to use
  * @...: format string and optional arguments, followed by optional context
  *
- * Logs a fixme message in the specified context with the default category.
+ * Logs a fixme message in the specified context.
  *
  * Since: 1.28
  */
@@ -3105,7 +3142,7 @@ GstLogContext*        gst_log_context_builder_build         (GstLogContextBuilde
  * @ctx: #GstLogContext to use
  * @...: format string and optional arguments, followed by optional context
  *
- * Logs a trace message in the specified context with the default category.
+ * Logs a trace message in the specified context.
  *
  * Since: 1.28
  */
@@ -3115,7 +3152,97 @@ GstLogContext*        gst_log_context_builder_build         (GstLogContextBuilde
  * @ctx: #GstLogContext to use
  * @...: format string and optional arguments, followed by optional context
  *
- * Logs a memory dump message in the specified context with the default category.
+ * Logs a memory dump message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/* Similar macros for object ID logging */
+
+/**
+ * GST_CTX_ERROR_ID:
+ * @ctx: #GstLogContext to use
+ * @...: format string and optional arguments, followed by optional context
+ * @id: (nullable): an object ID or %NULL
+ *
+ * Logs an error message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/**
+ * GST_CTX_WARNING_ID:
+ * @ctx: #GstLogContext to use
+ * @...: format string and optional arguments, followed by optional context
+ * @id: (nullable): an object ID or %NULL
+ *
+ * Logs a warning message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/**
+ * GST_CTX_INFO_ID:
+ * @ctx: #GstLogContext to use
+ * @...: format string and optional arguments, followed by optional context
+ * @id: (nullable): an object ID or %NULL
+ *
+ * Logs an info message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/**
+ * GST_CTX_DEBUG_ID:
+ * @ctx: #GstLogContext to use
+ * @...: format string and optional arguments, followed by optional context
+ * @id: (nullable): an object ID or %NULL
+ *
+ * Logs a debug message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/**
+ * GST_CTX_LOG_ID:
+ * @ctx: #GstLogContext to use
+ * @...: format string and optional arguments, followed by optional context
+ * @id: (nullable): an object ID or %NULL
+ *
+ * Logs a log message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/**
+ * GST_CTX_FIXME_ID:
+ * @ctx: #GstLogContext to use
+ * @...: format string and optional arguments, followed by optional context
+ * @id: (nullable): an object ID or %NULL
+ *
+ * Logs a fixme message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/**
+ * GST_CTX_TRACE_ID:
+ * @ctx: #GstLogContext to use
+ * @...: format string and optional arguments, followed by optional context
+ * @id: (nullable): an object ID or %NULL
+ *
+ * Logs a trace message in the specified context.
+ *
+ * Since: 1.28
+ */
+
+/**
+ * GST_CTX_MEMDUMP_ID:
+ * @ctx: #GstLogContext to use
+ * @...: format string and optional arguments, followed by optional context
+ * @id: (nullable): an object ID or %NULL
+ *
+ * Logs a memory dump message in the specified context.
  *
  * Since: 1.28
  */

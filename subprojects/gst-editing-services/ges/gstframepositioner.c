@@ -951,8 +951,9 @@ gst_frame_positioner_sync_meta_internal (GstClockTime stream_time,
       ges_util_object_properties_to_structure (G_OBJECT
       (framepositioner->proxied_pad),
       gst_frame_positioner_ignore_proxied_properties_names);
-  gst_structure_set_parent_refcount (meta->extra_properties,
-      &GST_MINI_OBJECT_REFCOUNT (buf));
+  if (meta->extra_properties)
+    gst_structure_set_parent_refcount (meta->extra_properties,
+        &GST_MINI_OBJECT_REFCOUNT (buf));
 
   meta->alpha = framepositioner->alpha;
   meta->posx = framepositioner->posx;

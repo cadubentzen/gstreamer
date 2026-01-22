@@ -298,6 +298,16 @@ G_STMT_START {                                          \
         GES_TIMELINE_ELEMENT (el1), prop, &val1); \
     ges_timeline_element_get_child_property_by_pspec ( \
         GES_TIMELINE_ELEMENT (el2), prop, &val2); \
+    /* gst_value_serialize doesn't handle NULL GstStructure */ \
+    if (prop->value_type == GST_TYPE_STRUCTURE \
+        && g_value_get_boxed (&val1) == NULL) { \
+      fail_unless (g_value_get_boxed (&val2) == NULL, \
+          "Child property '%s' for %s is NULL but not for %s", \
+          prop->name, name1, name2); \
+      g_value_unset (&val1); \
+      g_value_unset (&val2); \
+      continue; \
+    } \
     ser1 = gst_value_serialize (&val1); \
     ser2 = gst_value_serialize (&val2); \
     fail_unless (gst_value_compare (&val1, &val2) == GST_VALUE_EQUAL, \

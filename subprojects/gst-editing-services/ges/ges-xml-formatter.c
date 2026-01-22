@@ -1142,6 +1142,12 @@ _serialize_properties (GObject * object, gint * ret_n_props,
       (const gchar **) ignored_fieldsv);
   g_strfreev (ignored_fieldsv);
 
+  if (!structure) {
+    if (ret_n_props)
+      *ret_n_props = 0;
+    return g_strdup ("");
+  }
+
   ret = gst_structure_to_string (structure);
   if (ret_n_props)
     *ret_n_props = gst_structure_n_fields (structure);

@@ -347,6 +347,9 @@ ges_util_object_properties_to_structure (GObject * object,
     const gchar ** ignored_fields)
 {
   guint n_props, j;
+
+  if (!object)
+    return NULL;
   GParamSpec *spec, **pspecs;
   GObjectClass *class = G_OBJECT_GET_CLASS (object);
   GstStructure *structure = gst_structure_new_empty ("properties");

@@ -292,6 +292,9 @@ G_STMT_START {                                          \
       continue; \
     if (g_strcmp0 (prop->name, "parent") == 0) \
       continue; \
+    /* zorder depends on position in the layer */ \
+    if (g_strcmp0 (prop->name, "zorder") == 0) \
+      continue; \
     g_value_init (&val1, prop->value_type); \
     g_value_init (&val2, prop->value_type); \
     ges_timeline_element_get_child_property_by_pspec ( \

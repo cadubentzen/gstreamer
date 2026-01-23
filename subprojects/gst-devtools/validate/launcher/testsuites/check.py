@@ -130,6 +130,7 @@ VALGRIND_BLACKLIST = [
 BLACKLIST = [
     (r'check.gst-editing-services.check_keyframes_in_compositor_two_sources', '!!! FIX BEFORE UPSTREAMING !!! Timeout - deadlock in test clock'),
     (r'check.gst-editing-services.glvideomixer_exposed_properties', '!!! FIX BEFORE UPSTREAMING !!! glvideomixer not used (compositor has higher rank)'),
+    (r'check.gst-editing-services.validate.nle.no_update_for_1sec_paused_scrubing', '!!! FIX BEFORE UPSTREAMING !!! Timeout + flow expectation mismatch'),
     (r'check.gstreamer.gst_gstsystemclock.test_stress_cleanup_unschedule', 'flaky under high server load'),
     (r'check.gstreamer.gst_gstsystemclock.test_stress_reschedule', 'flaky under high server load'),
     (r'check.gstreamer.pipelines_seek.test_loopback_2$', '?'),

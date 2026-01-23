@@ -101,6 +101,7 @@ if gstvalidate_dep.found() and not get_option('tools').disabled()
     'edit_while_seeked_with_stop': true,
     'complex_effect_bin_desc': true,
     'check_keyframes_in_compositor_two_sources': true,
+    'glvideomixer_exposed_properties': true,
     'check-clip-positioning': true,
     'set-layer-on-command-line': true,
   }

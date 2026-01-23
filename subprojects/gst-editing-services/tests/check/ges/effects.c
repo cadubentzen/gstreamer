@@ -513,7 +513,7 @@ GST_START_TEST (test_effect_set_properties)
   assert_equals_int (color_aging, FALSE);
 
   pspecs = ges_timeline_element_list_children_properties (effect, &n_props);
-  assert_equals_int (n_props, 7);
+  assert_equals_int (n_props, 16);
 
   spec = pspecs[0];
   i = 1;

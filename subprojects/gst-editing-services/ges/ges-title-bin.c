@@ -127,23 +127,10 @@ _control_binding_removed (GESTrackElement * _element,
 }
 
 static void
-ges_title_bin_dispose (GObject * object)
-{
-  GESTitleBin *self = GES_TITLE_BIN (object);
-
-  g_signal_handlers_disconnect_by_func (self->source,
-      G_CALLBACK (_control_binding_added), self);
-  g_signal_handlers_disconnect_by_func (self->source,
-      G_CALLBACK (_control_binding_removed), self);
-}
-
-static void
 ges_title_bin_class_init (GESTitleBinClass * klass)
 {
-  GObjectClass *object_class = G_OBJECT_CLASS (klass);
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
 
-  object_class->dispose = ges_title_bin_dispose;
   element_class->change_state = ges_title_bin_change_state;
 }
 
@@ -215,7 +202,6 @@ ges_title_bin_new (GESTitleSource * source, const gchar * name)
     /* Store references to GL elements */
     self->glupload_el = glupload;
     self->overlaycomposition_el = overlaycomposition;
-    self->source = source;
 
     /* Create ghost pad from freeze src */
     pad = gst_element_get_static_pad (freeze, "src");
@@ -240,10 +226,11 @@ ges_title_bin_new (GESTitleSource * source, const gchar * name)
     goto err;
   }
 
-  g_signal_connect (source, "control-binding-added",
-      G_CALLBACK (_control_binding_added), self);
-  g_signal_connect (source, "control-binding-removed",
-      G_CALLBACK (_control_binding_removed), self);
+  self->source = source;
+  g_signal_connect_object (source, "control-binding-added",
+      G_CALLBACK (_control_binding_added), self, 0);
+  g_signal_connect_object (source, "control-binding-removed",
+      G_CALLBACK (_control_binding_removed), self, 0);
 
   return self;
 

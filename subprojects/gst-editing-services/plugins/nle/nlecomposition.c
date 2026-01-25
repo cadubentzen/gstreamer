@@ -2270,7 +2270,7 @@ _seek_current_stack (NleComposition * comp, GstEvent * event,
   GST_INFO_OBJECT (comp, "Seeking itself %" GST_PTR_FORMAT, event);
 
   if (!peer) {
-    gst_event_unref (event);
+    gst_clear_event (&event);
     GST_ERROR_OBJECT (comp, "Can't seek because no pad available - "
         "no children in the composition ready to be used, the duration is 0, "
         "or not committed yet");
@@ -3686,7 +3686,7 @@ _activate_new_stack (NleComposition * comp, GstEvent * toplevel_seek)
 
     GST_DEBUG_OBJECT (comp, "Nothing else in the composition"
         ", update 'worked'");
-    gst_event_unref (toplevel_seek);
+    gst_clear_event (&toplevel_seek);
     goto resync_state;
   }
 

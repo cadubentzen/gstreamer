@@ -532,6 +532,7 @@ ges_timeline_finalize (GObject * object)
   g_node_destroy (tl->priv->tree);
   ges_pipeline_pool_clear (&tl->priv->pool_manager);
   g_free (tl->priv->primary_id);
+  g_weak_ref_clear (&tl->priv->parent_source);
 
   G_OBJECT_CLASS (ges_timeline_parent_class)->finalize (object);
 }
@@ -1178,6 +1179,8 @@ ges_timeline_init (GESTimeline * self)
 
   ges_pipeline_pool_manager_init (&priv->pool_manager, self);
   priv->pool_manager.max_preloaded_sources = DEFAULT_MAX_PRELOADED_SOURCES;
+
+  g_weak_ref_init (&priv->parent_source, NULL);
 
   priv->rate = 1.0;
 }

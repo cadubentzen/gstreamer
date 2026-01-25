@@ -694,8 +694,19 @@ nle_source_prepare (NleObject * object)
     return FALSE;
   }
 
-  if (priv->staticpad)
+  if (priv->staticpad) {
     pad = gst_object_ref (priv->staticpad);
+  } else {
+    /* Link the pad we just found to the internal identity */
+    if (gst_pad_link (pad, priv->identity->sinkpads->data) != GST_PAD_LINK_OK) {
+      GST_ERROR_OBJECT (source, "Could not link pads: %" GST_PTR_FORMAT
+          " and %" GST_PTR_FORMAT, pad, priv->identity->sinkpads->data);
+    } else {
+      GST_DEBUG_OBJECT (source, "Linked pads: %" GST_PTR_FORMAT
+          " and %" GST_PTR_FORMAT, pad, priv->identity->sinkpads->data);
+    }
+    priv->staticpad = gst_object_ref (pad);
+  }
   priv->ghostedpad = pad;
 
   if (object->in_composition == FALSE) {

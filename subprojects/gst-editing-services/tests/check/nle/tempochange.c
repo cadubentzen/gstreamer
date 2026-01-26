@@ -149,7 +149,7 @@ _test_pad_events (GstPad * pad, GstPadProbeInfo * info, PadEventData * data)
     data->num_eos++;
     fail_unless (data->num_eos <= data->expect_num_eos, "%s received %u "
         "EOS, more than the expected %u EOS", data->name, data->num_eos,
-        data->expect_num_seeks);
+        data->expect_num_eos);
   }
 
   return GST_PAD_PROBE_OK;
@@ -159,7 +159,7 @@ static void
 _pad_event_data_check_received (PadEventData * data)
 {
   fail_unless (data->num_eos == data->expect_num_eos, "%s received %u "
-      "EOS, rather than %u", data->num_eos, data->expect_num_eos);
+      "EOS, rather than %u", data->name, data->num_eos, data->expect_num_eos);
   fail_unless (data->num_segments == data->expect_num_segments,
       "%s received %u segments, rather than %u", data->name,
       data->num_segments, data->expect_num_segments);
@@ -270,6 +270,12 @@ enum
   NUM_DATA
 };
 
+static gboolean
+nle_object_cant_seek_in_ready (NleObject * _o, gpointer udata)
+{
+  return FALSE;
+}
+
 static PadEventData **
 _setup_test (GstElement * pipeline, gdouble rate)
 {
@@ -295,6 +301,8 @@ _setup_test (GstElement * pipeline, gdouble rate)
   nle_source =
       audiotest_bin_src ("nle_source", 3 * GST_SECOND, 4 * GST_SECOND, 3,
       FALSE);
+  g_signal_connect (nle_source,
+      "can-seek-in-ready", G_CALLBACK (nle_object_cant_seek_in_ready), NULL);
   g_object_set (nle_source, "inpoint", (guint64) 7 * GST_SECOND, NULL);
   src = _get_source (nle_source);
   g_object_set (src, "name", "middle-source", NULL);
@@ -302,12 +310,16 @@ _setup_test (GstElement * pipeline, gdouble rate)
   nle_prev =
       audiotest_bin_src ("nle_previous", 0 * GST_SECOND, 3 * GST_SECOND, 2,
       FALSE);
+  g_signal_connect (nle_prev,
+      "can-seek-in-ready", G_CALLBACK (nle_object_cant_seek_in_ready), NULL);
   g_object_set (nle_prev, "inpoint", (guint64) 99 * GST_SECOND, NULL);
   prev = _get_source (nle_prev);
   g_object_set (src, "name", "previous-source", NULL);
 
   nle_post =
       audiotest_bin_src ("post", 7 * GST_SECOND, 5 * GST_SECOND, 2, FALSE);
+  g_signal_connect (nle_post,
+      "can-seek-in-ready", G_CALLBACK (nle_object_cant_seek_in_ready), NULL);
   g_object_set (nle_post, "inpoint", (guint64) 20 * GST_SECOND, NULL);
   post = _get_source (nle_post);
   g_object_set (src, "name", "post-source", NULL);

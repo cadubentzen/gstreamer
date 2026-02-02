@@ -10,7 +10,7 @@ meta,
         "+clip", "$(media_file)/red_timed_frames_video_only_1fps.mkv", "start=1.0", "i=5.0", "d=2.0",
         "+clip", "$(media_file)/timed_frames_video_only_1fps.mkv", "i=1.0", "d=5.0", "layer=1",
         "--track-types=video",
-        "--videosink=glimagesink name=videosink",
+        "--videosink=$(videosink) name=videosink",
     },
     configs = {
         "$(validateflow), pad=\"^........._timed_frames_video_only_1fps.mkv_1-vsrc0-uridecodepoolsrc:src$\", record-buffers=true, ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position\", logged-upstream-event-types={seek}",

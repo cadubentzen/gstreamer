@@ -75,6 +75,13 @@ done:                                                                          \
   return res;                                                                  \
 }
 
+static gboolean
+_nle_source_wrapping_composition_can_seek_in_ready_cb (GstElement * nleobject,
+    gpointer user_data)
+{
+  return FALSE;
+}
+
 NLE_START_VALIDATE_ACTION (_add_object)
 {
   GError *err = NULL;
@@ -96,6 +103,15 @@ NLE_START_VALIDATE_ACTION (_add_object)
 
   gboolean is_operation = NLE_IS_OPERATION (nleobj);
   gboolean is_src = NLE_IS_SOURCE (nleobj);
+
+  /* When adding a composition as child of an NleSource, disable
+   * seek-in-ready to avoid EOS seqnum mismatches in nested compositions */
+  if (is_src && NLE_IS_COMPOSITION (child)) {
+    g_signal_connect (nleobj, "can-seek-in-ready",
+        G_CALLBACK (_nle_source_wrapping_composition_can_seek_in_ready_cb),
+        NULL);
+  }
+
   if (GST_IS_BIN (child) && (is_src || is_operation)) {
     if (child->numsrcpads == 0 && !gst_element_class_get_pad_template
         (GST_ELEMENT_GET_CLASS (child), "src")) {

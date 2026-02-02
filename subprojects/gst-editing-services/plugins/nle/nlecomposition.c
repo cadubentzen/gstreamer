@@ -879,6 +879,12 @@ _initialize_stack_func (NleComposition * comp, UpdateCompositionData * ucompo)
     gst_event_set_seqnum (stack_setup_seek, gst_util_seqnum_next ());
     SeekData *seekd = create_seek_data (comp, stack_setup_seek);
 
+    /* Replace awaited_toplevel_seek with the copy so that
+     * _seek_pipeline_func's pointer comparison
+     * (priv->awaited_toplevel_seek == seekd->event) succeeds and the
+     * reason is correctly set to COMP_UPDATE_STACK_INITIALIZE */
+    gst_event_replace (&priv->awaited_toplevel_seek, stack_setup_seek);
+
     _seek_pipeline_func (comp, seekd);
     _free_seek_data (seekd);
     gst_clear_event (&priv->awaited_toplevel_seek);
@@ -3912,6 +3918,12 @@ update_pipeline (NleComposition * comp, GstClockTime currenttime,
   stack =
       get_clean_toplevel_stack (comp, &currenttime, &new_start, &new_stop,
       &can_seek_in_ready);
+
+  /* Sub-compositions should not seek in ready: the parent will send an
+   * initializing seek that cascades down, so seeking here would just
+   * create a redundant flush cycle. */
+  if (priv->awaited_toplevel_seek)
+    can_seek_in_ready = FALSE;
   is_new_stack = !are_same_stacks (priv->current, stack);
   tear_down = is_new_stack
       || nle_composition_query_needs_teardown (comp, update_reason);

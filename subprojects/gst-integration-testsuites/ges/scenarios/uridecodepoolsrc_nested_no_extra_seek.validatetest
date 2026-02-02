@@ -10,7 +10,7 @@ meta,
           "+effect",
             "timeoverlay", "set-valignment", "center",
         "--track-types=video",
-        "--videosink=glimagesink name=videosink sync=false",
+        "--videosink=$(videosink) name=videosink sync=false",
     },
     configs = {
         "$(validateflow), pad=videosink:sink, record-buffers=true, ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position\"",

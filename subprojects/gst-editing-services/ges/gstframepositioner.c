@@ -957,8 +957,15 @@ gst_frame_positioner_sync_meta_internal (GstClockTime stream_time,
   meta->alpha = framepositioner->alpha;
   meta->posx = framepositioner->posx;
   meta->posy = framepositioner->posy;
-  meta->width = framepositioner->width;
-  meta->height = framepositioner->height;
+
+  /* If width/height were reset to -1 by a downstream scale effect
+   * (e.g. gesvideoscale), preserve that sentinel so the compositor
+   * does not re-apply dimensions that have already been consumed. */
+  if (meta->width >= 0)
+    meta->width = framepositioner->width;
+  if (meta->height >= 0)
+    meta->height = framepositioner->height;
+
   meta->zorder = framepositioner->zorder;
   meta->operator = framepositioner->operator;
 

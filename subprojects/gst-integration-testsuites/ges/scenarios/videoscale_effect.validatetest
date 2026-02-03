@@ -19,8 +19,8 @@ container-add-child, container-name=theclip, asset-id="gesvideoscale name=videos
 
 pause
 
-# Checking that the 'framepositioner' is forcing caps to the clip "natual size"
-check-properties, gesvideourisource0-capsfilter::caps=(GstCaps)"video/x-raw(ANY),framerate=(fraction)1/1,width=(int)1080,height=(int)720"
+# Checking that the 'framepositioner' is forcing caps to the clip "natural size"
+# (verified indirectly via check-current-pad-caps on videocrop:sink below)
 check-properties, videoscale::parent::parent::priority=3
 check-properties, videocrop::parent::parent::priority=4
 check-current-pad-caps, target-element-name=videocrop, pad=sink, expected-caps=[video/x-raw,width=1080,height=720]

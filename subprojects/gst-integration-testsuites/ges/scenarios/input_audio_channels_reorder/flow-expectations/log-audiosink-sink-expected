@@ -18,32 +18,32 @@ CHECKPOINT: Checking CINE order.
 event stream-start: GstEventStreamStart, flags=(GstStreamFlags)GST_STREAM_FLAG_NONE;
 event caps: audio/x-raw, channel-mask=(bitmask)0x0000000000000003, channels=(int)2, format=(string)F32LE, layout=(string)interleaved, rate=(int)48000;
 event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=0:00:30.000000000, flags=0x01, time=0:00:00.000000000, base=0:00:00.000000000, position=0:00:00.000000000
-buffer: checksum=203fce4efef89b9526b608b0d4f5f5c0097be3a3, pts=0:00:00.000000000, dur=0:00:00.010000000
+buffer: checksum=d49660e0035e2c789a55145e79b8136e16f3962a, pts=0:00:00.000000000, dur=0:00:00.010000000
 
 CHECKPOINT: Checking AC3 order.
 
 event stream-start: GstEventStreamStart, flags=(GstStreamFlags)GST_STREAM_FLAG_NONE;
 event caps: audio/x-raw, channel-mask=(bitmask)0x0000000000000003, channels=(int)2, format=(string)F32LE, layout=(string)interleaved, rate=(int)48000;
 event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=0:00:30.000000000, flags=0x01, time=0:00:00.000000000, base=0:00:00.000000000, position=0:00:00.000000000
-buffer: checksum=18ea51cc5086625305ea18e4d0abbabc66616136, pts=0:00:00.000000000, dur=0:00:00.010000000
+buffer: checksum=104b5cfaa21a6f2dfe10d9f05960f99eabeff06c, pts=0:00:00.000000000, dur=0:00:00.010000000
 
 CHECKPOINT: Checking AAC order.
 
 event stream-start: GstEventStreamStart, flags=(GstStreamFlags)GST_STREAM_FLAG_NONE;
 event caps: audio/x-raw, channel-mask=(bitmask)0x0000000000000003, channels=(int)2, format=(string)F32LE, layout=(string)interleaved, rate=(int)48000;
 event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=0:00:30.000000000, flags=0x01, time=0:00:00.000000000, base=0:00:00.000000000, position=0:00:00.000000000
-buffer: checksum=70620194e45b76eb1469b7221f8dec05a5505c93, pts=0:00:00.000000000, dur=0:00:00.010000000
+buffer: checksum=36a02094d6341a35d1a35fd94001611d4c1bdbad, pts=0:00:00.000000000, dur=0:00:00.010000000
 
 CHECKPOINT: Checking MONO order.
 
 event stream-start: GstEventStreamStart, flags=(GstStreamFlags)GST_STREAM_FLAG_NONE;
 event caps: audio/x-raw, channel-mask=(bitmask)0x0000000000000003, channels=(int)2, format=(string)F32LE, layout=(string)interleaved, rate=(int)48000;
 event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=0:00:30.000000000, flags=0x01, time=0:00:00.000000000, base=0:00:00.000000000, position=0:00:00.000000000
-buffer: checksum=3cffd73a8ddcafa0d0cd17151af4d2bd6c26f620, pts=0:00:00.000000000, dur=0:00:00.010000000
+buffer: checksum=32987c83063b21301df94a5a325a8c3fc18e579b, pts=0:00:00.000000000, dur=0:00:00.010000000
 
 CHECKPOINT: Checking ALTERNATE order.
 
 event stream-start: GstEventStreamStart, flags=(GstStreamFlags)GST_STREAM_FLAG_NONE;
 event caps: audio/x-raw, channel-mask=(bitmask)0x0000000000000003, channels=(int)2, format=(string)F32LE, layout=(string)interleaved, rate=(int)48000;
 event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=0:00:30.000000000, flags=0x01, time=0:00:00.000000000, base=0:00:00.000000000, position=0:00:00.000000000
-buffer: checksum=e1472a1300859dea1e3ecf4ac6a16298d6fb4e63, pts=0:00:00.000000000, dur=0:00:00.010000000
+buffer: checksum=d7609211f58653783d644d9f812ace9fe08d0491, pts=0:00:00.000000000, dur=0:00:00.010000000

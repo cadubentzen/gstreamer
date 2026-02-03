@@ -34,6 +34,7 @@
 #include "ges-track.h"
 #include "ges-layer.h"
 #include "ges.h"
+#include "gstframepositioner.h"
 #include <gst/base/base.h>
 
 static GESConverterType __converter_type = GES_CONVERTER_SOFTWARE;
@@ -195,6 +196,9 @@ compositor_rank_changed_cb (GstPluginFeature * feature, GParamSpec * pspec,
   gst_clear_object (&compositor_pad_creator);
   compositor_factory = NULL;
   G_UNLOCK (compositor_factory);
+
+  /* Also reset the cached operator type since it depends on the compositor */
+  gst_compositor_operator_reset_cache ();
 }
 
 static gboolean

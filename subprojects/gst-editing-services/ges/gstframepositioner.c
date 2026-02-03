@@ -85,35 +85,52 @@ GST_STATIC_PAD_TEMPLATE ("sink",
 G_DEFINE_TYPE (GstFramePositioner, gst_frame_positioner,
     GST_TYPE_BASE_TRANSFORM);
 
+/* Cache for compositor operator type - can be reset when compositor changes */
+static gint operator_cache_initialized = 0;
+static int cached_operator_value = 0;
+static GType cached_operator_gtype = G_TYPE_NONE;
+
+void
+gst_compositor_operator_reset_cache (void)
+{
+  g_atomic_int_set (&operator_cache_initialized, 0);
+  cached_operator_value = 0;
+  cached_operator_gtype = G_TYPE_NONE;
+}
+
 GType
 gst_compositor_operator_get_type_and_default_value (int *default_operator_value)
 {
-  static gsize _init = 0;
-  static int operator_value = 0;
-  static GType operator_gtype = G_TYPE_NONE;
-
-  if (g_once_init_enter (&_init)) {
+  if (!g_atomic_int_get (&operator_cache_initialized)) {
     GstPad *compositor_pad = ges_compositor_pad_new ();
 
-    GParamSpec *pspec =
-        g_object_class_find_property (G_OBJECT_GET_CLASS (compositor_pad),
-        "operator");
+    if (compositor_pad) {
+      GParamSpec *pspec =
+          g_object_class_find_property (G_OBJECT_GET_CLASS (compositor_pad),
+          "operator");
 
-    if (pspec) {
-      operator_value =
-          g_value_get_enum (g_param_spec_get_default_value (pspec));
-      operator_gtype = pspec->value_type;
+      if (pspec) {
+        cached_operator_value =
+            g_value_get_enum (g_param_spec_get_default_value (pspec));
+        cached_operator_gtype = pspec->value_type;
+      } else {
+        cached_operator_value = 0;
+        cached_operator_gtype = G_TYPE_NONE;
+      }
+
+      gst_object_unref (compositor_pad);
+    } else {
+      cached_operator_value = 0;
+      cached_operator_gtype = G_TYPE_NONE;
     }
 
-    gst_object_unref (compositor_pad);
-
-    g_once_init_leave (&_init, 1);
+    g_atomic_int_set (&operator_cache_initialized, 1);
   }
 
   if (default_operator_value)
-    *default_operator_value = operator_value;
+    *default_operator_value = cached_operator_value;
 
-  return operator_gtype;
+  return cached_operator_gtype;
 }
 
 static GstElement *

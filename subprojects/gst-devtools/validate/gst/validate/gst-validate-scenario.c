@@ -3342,7 +3342,6 @@ stop_waiting_signal_cb (WaitingSignalData * data, GstObject * prop_object,
   g_mutex_lock (&data->lock);
   if (data->check_done) {
     GST_INFO_OBJECT (data->action, "Check already done, ignoring signal");
-    g_mutex_unlock (&data->lock);
 
     goto cleanup;
   }
@@ -3412,7 +3411,6 @@ cleanup:
   g_mutex_unlock (&data->lock);
   gst_validate_action_unref (action);
   gst_clear_object (&scenario);
-  g_mutex_unlock (&data->lock);
 }
 
 static GstValidateExecuteActionReturn

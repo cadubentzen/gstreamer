@@ -652,7 +652,7 @@ ges_uri_source_create_uridecodepoolsrc (GESUriSource * self)
 
       } else {
         filter =
-            "rsvideoconvert ! capsfilter caps=\"video/x-raw,format=RGBA\" ! segmentclipper";
+            "videoconvert ! capsfilter caps=\"video/x-raw(ANY),format=RGBA\" ! segmentclipper";
       }
     }
     GST_DEBUG ("Using caps: %" GST_PTR_FORMAT " for uridecodepoolsrc", caps);

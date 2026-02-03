@@ -1,6 +1,7 @@
 set-globals, media_file="$(test_dir)/../../medias/defaults/matroska/timed_frames_video_only_1fps.mkv"
 meta,
     tool = "ges-launch-$(gst_api_version)",
+    ges = "uridecodepoolsrc=enabled",
     handles-states=true,
     needs_preroll=true,
     monitor-all-pipelines = true,
@@ -15,25 +16,12 @@ meta,
     configs = {
         "$(validateflow), pad=videosink:sink, record-buffers=true, ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position\"",
 
-        "$(validateflow), pad=\"gessmartmixer0-compositor:src\", record-buffers=true, ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position\", logged-upstream-event-types={seek}",
+        "$(validateflow), pad=\"gessmartmixer0-compositor:src\", ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position\", logged-upstream-event-types={seek}",
 
-        # uridecodebin3-0 and uridecodebin3-1 are used during the discovery
-        "$(validateflow), pad=\"dbin-..............._timed_frames_video_only_1fps.mkv_1-vsrc1-uridecodepoolsrc_0:video_0\", logged-event-types={}, ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position\", logged-upstream-event-types={seek}",
+        # Monitor the uridecodepoolsrc src pad for unexpected seeks
+        "$(validateflow), pad=\"^........._timed_frames_video_only_1fps.mkv_1-vsrc0-uridecodepoolsrc:src$\", record-buffers=true, ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position\", logged-upstream-event-types={seek}",
 
         "$(validateflow), pad=timed_frames_video_only_1fps.mkv_1-vsrc1:src, record-buffers=true, logged-event-types={}, ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position\", logged-upstream-event-types={seek}",
-
-        # Ensure that no extra testsrcbin are created by trying to attach a
-        # validateflow to it and expect it to fail
-        "$(validateflow), pad=\"dbin-..............._timed_frames_video_only_1fps.mkv_1-vsrc1-uridecodepoolsrc_1:video_0\", logged-event-types={}, ignored-fields=\"stream-start={stream-id,group-id,stream}\", logged-upstream-event-types={seek}",
-    },
-    expected-issues = {
-        [
-            # Ensure that no extra testsrcbin are created
-            expected-issue,
-                level=critical,
-                summary="The pad to monitor was never attached.",
-                details="The test ended without the pad ever being attached: dbin-..............._timed_frames_video_only_1fps.mkv_1-vsrc1-uridecodepoolsrc_1:video_0",
-        ],
     }
 
 wait-project-loaded

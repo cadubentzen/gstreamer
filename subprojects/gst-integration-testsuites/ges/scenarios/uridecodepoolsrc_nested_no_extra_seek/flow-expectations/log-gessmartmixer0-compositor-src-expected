@@ -1,5 +1,5 @@
 event stream-start: GstEventStreamStart, flags=(GstStreamFlags)GST_STREAM_FLAG_NONE;
-event caps: video/x-raw, chroma-site=(string)jpeg, colorimetry=(string)1:4:0:0, format=(string)I420, framerate=(fraction)30/1, height=(int)720, width=(int)1280;
+event caps: video/x-raw, framerate=(fraction)30/1, height=(int)720, width=(int)1280;
 event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=none, time=0:00:00.000000000, base=0:00:00.000000000
 event seek: GstEventSeek, cur=(gint64)0, cur-type=(GstSeekType)set, flags=(GstSeekFlags)GST_SEEK_FLAG_FLUSH+GST_SEEK_FLAG_ACCURATE, format=(GstFormat)time, rate=(double)1, stop=(gint64)2000000000, stop-type=(GstSeekType)set, trickmode-interval=(guint64)0;
 event flush-start: (no structure)
@@ -7,7 +7,7 @@ event flush-stop: GstEventFlushStop, reset-time=(boolean)true;
 event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=0:00:02.000000000, flags=0x01, time=0:00:00.000000000, base=0:00:00.000000000
 event eos: (no structure)
 event stream-start: GstEventStreamStart, flags=(GstStreamFlags)GST_STREAM_FLAG_NONE;
-event caps: video/x-raw, chroma-site=(string)jpeg, colorimetry=(string)bt601, format=(string)A444_16LE, framerate=(fraction)30/1, height=(int)720, width=(int)1280;
+event caps: video/x-raw, framerate=(fraction)30/1, height=(int)720, width=(int)1280;
 event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=none, time=0:00:00.000000000, base=0:00:00.000000000
 event seek: GstEventSeek, cur=(gint64)2000000000, cur-type=(GstSeekType)set, flags=(GstSeekFlags)GST_SEEK_FLAG_FLUSH+GST_SEEK_FLAG_ACCURATE, format=(GstFormat)time, rate=(double)1, stop=(gint64)2000000001, stop-type=(GstSeekType)set, trickmode-interval=(guint64)0;
 event flush-start: (no structure)

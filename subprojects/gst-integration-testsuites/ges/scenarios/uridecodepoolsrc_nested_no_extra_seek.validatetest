@@ -14,14 +14,14 @@ meta,
         "--videosink=$(videosink) name=videosink sync=false",
     },
     configs = {
-        "$(validateflow), pad=videosink:sink, record-buffers=true, ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position\"",
+        "$(validateflow), pad=videosink:sink, record-buffers=true, ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position,seek=nle-seek-reason,buffer=meta\", caps-properties={height,width,framerate}",
 
-        "$(validateflow), pad=\"gessmartmixer0-compositor:src\", ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position\", logged-upstream-event-types={seek}",
+        "$(validateflow), pad=\"gessmartmixer0-compositor:src\", ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position,seek=nle-seek-reason,buffer=meta\", logged-upstream-event-types={seek}, caps-properties={height,width,framerate}",
 
         # Monitor the uridecodepoolsrc src pad for unexpected seeks
-        "$(validateflow), pad=\"^........._timed_frames_video_only_1fps.mkv_1-vsrc0-uridecodepoolsrc:src$\", record-buffers=true, ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position\", logged-upstream-event-types={seek}",
+        "$(validateflow), pad=\"^........._timed_frames_video_only_1fps.mkv_1-vsrc0-uridecodepoolsrc:src$\", record-buffers=true, ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position,seek=nle-seek-reason,buffer=meta\", logged-upstream-event-types={seek}, caps-properties={height,width,framerate}",
 
-        "$(validateflow), pad=timed_frames_video_only_1fps.mkv_1-vsrc1:src, record-buffers=true, logged-event-types={}, ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position\", logged-upstream-event-types={seek}",
+        "$(validateflow), pad=timed_frames_video_only_1fps.mkv_1-vsrc1:src, record-buffers=true, logged-event-types={}, ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position,seek=nle-seek-reason,buffer=meta\", logged-upstream-event-types={seek}, caps-properties={height,width,framerate}",
     }
 
 wait-project-loaded

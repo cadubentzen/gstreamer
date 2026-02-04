@@ -90,6 +90,13 @@ struct _ValidateFlowOverride
   gchar **logged_upstream_event_types;
   gchar **ignored_event_types;
 
+  /* Conditional buffer recording: only record buffers after seeing
+   * the complete event sequence (e.g., seek then segment). Resets
+   * when seeing initial event again. */
+  gchar **record_buffers_after_events;
+  gboolean seen_first_event;
+  gboolean record_buffers_enabled;
+
   gchar *expectations_file_path;
   gchar *actual_results_file_path;
   ValidateFlowMode mode;
@@ -188,6 +195,41 @@ validate_flow_override_event_handler (GstValidateOverride * override,
   if (flow->error_writing_file)
     return;
 
+  /* Check if this event should affect buffer recording.
+   * Only record buffers after seeing the complete event sequence (e.g., seek then segment).
+   * When we see the last event without having seen the first, disable recording. */
+  if (flow->record_buffers_after_events && flow->record_buffers_after_events[0]) {
+    const gchar *event_type_name =
+        gst_event_type_get_name (GST_EVENT_TYPE (event));
+    const gchar *first_event = flow->record_buffers_after_events[0];
+    gint last_idx = g_strv_length (flow->record_buffers_after_events) - 1;
+    const gchar *last_event = flow->record_buffers_after_events[last_idx];
+
+    if (g_ascii_strcasecmp (event_type_name, first_event) == 0) {
+      /* Saw first event (e.g., seek): mark it and disable recording */
+      flow->seen_first_event = TRUE;
+      flow->record_buffers_enabled = FALSE;
+      GST_DEBUG_OBJECT (flow,
+          "Saw %s event, waiting for %s to enable buffer recording",
+          event_type_name, last_event);
+    } else if (g_ascii_strcasecmp (event_type_name, last_event) == 0) {
+      if (flow->seen_first_event) {
+        /* Saw last event after first (e.g., segment after seek): enable recording */
+        flow->record_buffers_enabled = TRUE;
+        flow->seen_first_event = FALSE;
+        GST_DEBUG_OBJECT (flow,
+            "Saw %s event after %s, enabling buffer recording",
+            event_type_name, first_event);
+      } else {
+        /* Saw last event without first (e.g., initial segment): disable recording */
+        flow->record_buffers_enabled = FALSE;
+        GST_DEBUG_OBJECT (flow,
+            "Saw %s event without prior %s, disabling buffer recording",
+            event_type_name, first_event);
+      }
+    }
+  }
+
   event_string = validate_flow_format_event (event,
       (const gchar * const *) flow->caps_properties,
       flow->logged_fields,
@@ -210,6 +252,10 @@ validate_flow_override_buffer_handler (GstValidateOverride * override,
   gchar *buffer_str;
 
   if (flow->error_writing_file || !flow->record_buffers)
+    return;
+
+  /* Only record buffers after seeing the complete event sequence */
+  if (flow->record_buffers_after_events && !flow->record_buffers_enabled)
     return;
 
   buffer_str = validate_flow_format_buffer (buffer, flow->checksum_type,
@@ -300,6 +346,16 @@ validate_flow_override_new (GstStructure * config)
       gst_validate_utils_get_strv (config, "logged-upstream-event-types");
   flow->ignored_event_types =
       gst_validate_utils_get_strv (config, "ignored-event-types");
+
+  /* record-buffers-after-event: Only record buffers after seeing the
+   * specified event sequence. For example, "seek,segment" will only
+   * record buffers after seeing a seek followed by a segment. Buffers
+   * that arrive before or between events in the sequence are ignored.
+   * Can be a single event or comma-separated list. */
+  flow->record_buffers_after_events =
+      gst_validate_utils_get_strv (config, "record-buffers-after-event");
+  flow->seen_first_event = FALSE;
+  flow->record_buffers_enabled = (flow->record_buffers_after_events == NULL);
 
   tmpval = gst_structure_get_value (config, "ignored-fields");
   if (tmpval) {
@@ -631,6 +687,7 @@ validate_flow_override_finalize (GObject * object)
   g_strfreev (flow->logged_event_types);
   g_strfreev (flow->logged_upstream_event_types);
   g_strfreev (flow->ignored_event_types);
+  g_strfreev (flow->record_buffers_after_events);
   if (flow->ignored_fields)
     gst_structure_free (flow->ignored_fields);
 

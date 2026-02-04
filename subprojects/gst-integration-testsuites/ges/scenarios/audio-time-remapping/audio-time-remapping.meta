@@ -13,7 +13,7 @@ meta, handles-states=true,
         --audiosink, "$(audiosink) name=audiosink qos=false sync=false",
     },
     configs = {
-        "$(validateflow), pad=pitch-effect:src, record-buffers=true, buffers-checksum=as-id, ignored-fields=\"stream-start={stream-id,group-id,stream}\", ignored-event-types={tag,stream-group-done,flush-start,flush-stop}, logged-upstream-event-types={seek}",
+        "$(validateflow), pad=pitch-effect:src, record-buffers=true, buffers-checksum=as-id, ignored-fields=\"stream-start={stream-id,group-id,stream},seek=nle-seek-reason\", ignored-event-types={tag,stream-group-done,flush-start,flush-stop}, logged-upstream-event-types={seek}",
     }
 
 add-clip, name=audioclip, asset-id="file://$(test_dir)/../../../medias/defaults/mp4/audio_1000hz_volume_up20s_ticks.mp4", layer-priority=0, type=GESUriClip, duration=100.0

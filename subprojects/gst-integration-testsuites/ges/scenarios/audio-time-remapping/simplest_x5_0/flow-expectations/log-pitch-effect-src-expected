@@ -1,8 +1,6 @@
 event stream-start: GstEventStreamStart, flags=(GstStreamFlags)GST_STREAM_FLAG_NONE;
 event caps: audio/x-raw, channel-mask=(bitmask)0x0000000000000003, channels=(int)2, format=(string)F32LE, layout=(string)interleaved, rate=(int)48000;
 event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=0:00:03.919520919, time=0:00:00.000000000, base=0:00:00.000000000, position=0:00:00.000000000
-buffer: content-id=0, pts=0:00:00.000000000, dur=0:00:00.011250000
-buffer: content-id=1, pts=0:00:00.011250000, dur=0:00:00.013000000
 event seek: GstEventSeek, cur=(gint64)0, cur-type=(GstSeekType)set, flags=(GstSeekFlags)GST_SEEK_FLAG_FLUSH+GST_SEEK_FLAG_ACCURATE, format=(GstFormat)time, rate=(double)1, stop=(gint64)4000000000, stop-type=(GstSeekType)set, trickmode-interval=(guint64)0;
 event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=0:00:03.919520919, flags=0x01, time=0:00:00.000000000, base=0:00:00.000000000, position=0:00:00.000000000
 buffer: content-id=0, pts=0:00:00.000000000, dur=0:00:00.011250000
@@ -318,8 +316,6 @@ event eos: (no structure)
 event stream-start: GstEventStreamStart, flags=(GstStreamFlags)GST_STREAM_FLAG_NONE;
 event caps: audio/x-raw, channel-mask=(bitmask)0x0000000000000003, channels=(int)2, format=(string)F32LE, layout=(string)interleaved, rate=(int)48000;
 event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=0:00:03.919520919, time=0:00:00.000000000, base=0:00:00.000000000, position=0:00:00.000000000
-buffer: content-id=0, pts=0:00:00.000000000, dur=0:00:00.011250000
-buffer: content-id=1, pts=0:00:00.011250000, dur=0:00:00.013000000
 event seek: GstEventSeek, cur=(gint64)4000000000, cur-type=(GstSeekType)set, flags=(GstSeekFlags)GST_SEEK_FLAG_FLUSH+GST_SEEK_FLAG_ACCURATE, format=(GstFormat)time, rate=(double)1, stop=(gint64)4010666666, stop-type=(GstSeekType)set, trickmode-interval=(guint64)0;
 event segment: format=TIME, start=0:00:04.000000105, offset=0:00:00.000000000, stop=0:00:03.919520919, flags=0x01, time=0:00:04.000000000, base=0:00:00.000000000, position=0:00:03.908854272
 buffer: content-id=309, pts=0:00:03.908854272, dur=0:00:00.011250000

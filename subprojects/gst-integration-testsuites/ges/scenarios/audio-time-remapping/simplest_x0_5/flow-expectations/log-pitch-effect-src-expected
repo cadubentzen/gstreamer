@@ -1,8 +1,6 @@
 event stream-start: GstEventStreamStart, flags=(GstStreamFlags)GST_STREAM_FLAG_NONE;
 event caps: audio/x-raw, channel-mask=(bitmask)0x0000000000000003, channels=(int)2, format=(string)F32LE, layout=(string)interleaved, rate=(int)48000;
 event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=0:00:40.060813866, time=0:00:00.000000000, base=0:00:00.000000000, position=0:00:00.000000000
-buffer: content-id=0, pts=0:00:00.000000000, dur=0:00:00.057000000
-buffer: content-id=1, pts=0:00:00.057000000, dur=0:00:00.065000000
 event seek: GstEventSeek, cur=(gint64)0, cur-type=(GstSeekType)set, flags=(GstSeekFlags)GST_SEEK_FLAG_FLUSH+GST_SEEK_FLAG_ACCURATE, format=(GstFormat)time, rate=(double)1, stop=(gint64)4000000000, stop-type=(GstSeekType)set, trickmode-interval=(guint64)0;
 event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=0:00:04.000000042, flags=0x01, time=0:00:00.000000000, base=0:00:00.000000000, position=0:00:00.000000000
 buffer: content-id=0, pts=0:00:00.000000000, dur=0:00:00.057000000
@@ -72,8 +70,6 @@ event eos: (no structure)
 event stream-start: GstEventStreamStart, flags=(GstStreamFlags)GST_STREAM_FLAG_NONE;
 event caps: audio/x-raw, channel-mask=(bitmask)0x0000000000000003, channels=(int)2, format=(string)F32LE, layout=(string)interleaved, rate=(int)48000;
 event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=0:00:40.060813866, time=0:00:00.000000000, base=0:00:00.000000000, position=0:00:00.000000000
-buffer: content-id=0, pts=0:00:00.000000000, dur=0:00:00.057000000
-buffer: content-id=1, pts=0:00:00.057000000, dur=0:00:00.065000000
 event seek: GstEventSeek, cur=(gint64)4000000000, cur-type=(GstSeekType)set, flags=(GstSeekFlags)GST_SEEK_FLAG_FLUSH+GST_SEEK_FLAG_ACCURATE, format=(GstFormat)time, rate=(double)1, stop=(gint64)8000000000, stop-type=(GstSeekType)set, trickmode-interval=(guint64)0;
 event segment: format=TIME, start=0:00:03.999999958, offset=0:00:00.000000000, stop=0:00:08.000000042, flags=0x01, time=0:00:04.000000000, base=0:00:00.000000000, position=0:00:03.954145792
 buffer: content-id=63, pts=0:00:03.954145792, dur=0:00:00.057000000
@@ -143,8 +139,6 @@ event eos: (no structure)
 event stream-start: GstEventStreamStart, flags=(GstStreamFlags)GST_STREAM_FLAG_NONE;
 event caps: audio/x-raw, channel-mask=(bitmask)0x0000000000000003, channels=(int)2, format=(string)F32LE, layout=(string)interleaved, rate=(int)48000;
 event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=0:00:40.060813866, time=0:00:00.000000000, base=0:00:00.000000000, position=0:00:00.000000000
-buffer: content-id=0, pts=0:00:00.000000000, dur=0:00:00.057000000
-buffer: content-id=1, pts=0:00:00.057000000, dur=0:00:00.065000000
 event seek: GstEventSeek, cur=(gint64)8000000000, cur-type=(GstSeekType)set, flags=(GstSeekFlags)GST_SEEK_FLAG_FLUSH+GST_SEEK_FLAG_ACCURATE, format=(GstFormat)time, rate=(double)1, stop=(gint64)20053333333, stop-type=(GstSeekType)set, trickmode-interval=(guint64)0;
 event segment: format=TIME, start=0:00:07.999999958, offset=0:00:00.000000000, stop=0:00:20.053334570, flags=0x01, time=0:00:08.000000000, base=0:00:00.000000000, position=0:00:07.954145792
 buffer: content-id=126, pts=0:00:07.954145792, dur=0:00:00.057000000

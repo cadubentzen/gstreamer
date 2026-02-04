@@ -15,6 +15,10 @@ meta, handles-states=true,
     ges = "uridecodepoolsrc=enabled",
     configs = {
         "$(validateflow), pad=pitch-effect:src, record-buffers=true, buffers-checksum=as-id, record-buffers-after-event={seek,segment}, ignored-fields=\"stream-start={stream-id,group-id,stream},seek=nle-seek-reason\", ignored-event-types={tag,stream-group-done,flush-start,flush-stop}, logged-upstream-event-types={seek}",
+    },
+    # Different soundtouch versions produce slightly different durations for the last buffer before EOS
+    expected-issues = {
+        "expected-issue, issue-id=validateflow::mismatch, sometimes=true, details=\"buffer: content-id=(\\\\d+), pts=([^,]+), dur=.*\\\\nActual:\\\\nbuffer: content-id=\\\\1, pts=\\\\2, dur=.*\"",
     }
 
 add-clip, name=audioclip, asset-id="file://$(test_dir)/../../../medias/defaults/mp4/audio_1000hz_volume_up20s_ticks.mp4", layer-priority=0, type=GESUriClip, duration=100.0

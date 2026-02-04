@@ -1,7 +1,5 @@
 event stream-start: GstEventStreamStart, flags=(GstStreamFlags)GST_STREAM_FLAG_SELECT;
 event caps: video/x-raw, framerate=(fraction)1/1, height=(int)720, width=(int)1080;
-event tag: GstTagList-global, taglist=(taglist)"taglist\,\ datetime\=\(datetime\)2018-07-14T12:54:08Z\,\ container-format\=\(string\)Matroska\;";
-event tag: GstTagList-stream, taglist=(taglist)"taglist\,\ video-codec\=\(string\)\"Motion\\\ JPEG\"\,\ container-specific-track-id\=\(string\)1\;";
 event segment: format=TIME, start=0:00:01.000000000, offset=0:00:00.000000000, stop=0:00:02.000000000, flags=0x01, time=0:00:01.000000000, base=0:00:00.000000000
 buffer: pts=0:00:01.000000000, dur=0:00:01.000000000, flags=discont
 event eos: eos, faking-eos=(boolean)true;

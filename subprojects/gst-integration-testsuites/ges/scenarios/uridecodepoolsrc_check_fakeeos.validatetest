@@ -13,7 +13,7 @@ meta,
         "--videosink=$(videosink) name=videosink",
     },
     configs = {
-        "$(validateflow), pad=\"^........._timed_frames_video_only_1fps.mkv_1-vsrc0-uridecodepoolsrc:src$\", record-buffers=true, ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position,buffer={meta}\", logged-upstream-event-types={seek}, caps-properties={height,width,framerate}",
+        "$(validateflow), pad=\"^........._timed_frames_video_only_1fps.mkv_1-vsrc0-uridecodepoolsrc:src$\", record-buffers=true, ignored-fields=\"stream-start={stream-id,group-id,stream},segment=position,buffer={meta}\", ignored-event-types={tag}, logged-upstream-event-types={seek}, caps-properties={height,width,framerate}",
     }
 
 wait-project-loaded

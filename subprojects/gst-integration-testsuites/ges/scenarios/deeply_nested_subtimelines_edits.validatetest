@@ -4,10 +4,10 @@ meta,
     seek=true,
     handles-states=true,
     needs_preroll=true,
-    ges = "uridecodepoolsrc=from-var,converter-type=from-var,compositor-factory=glvideomixer",
+    ges = "uridecodepoolsrc=enabled,converter-type=gl,compositor-factory=glvideomixer",
     ges-options={
         "--track-types=video",
-        "--video-caps=video/x-raw, format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)30/1",
+        "--video-caps=video/x-raw(ANY), format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)30/1",
         --videosink, "$(videosink) name=videosink",
         -o, /tmp/test.mp4,
     }
@@ -29,11 +29,11 @@ add-clip, project-uri="gessubtimeline:beat0", name=beat0_clip1, asset-id="$(medi
 
 add-clip, project-uri="gessubtimeline:beat1", name=beat1_clip0, asset-id="$(media_uri)", duration=5.0
 container-add-child, project-uri="gessubtimeline:beat1", container-name=beat1_clip0,
-  asset-id="textoverlay text='First clip of the second beat' ! capsfilter caps=video/x-raw", child-type=GESEffect
+  asset-id="textoverlay text='First clip of the second beat' ! capsfilter caps=video/x-raw(ANY)", child-type=GESEffect
 add-clip, project-uri="gessubtimeline:beat1", name=beat1_clip1, asset-id="$(media_uri1)", start=5.0, duration=2.0, inpoint=1.
 
 container-add-child, project-uri="gessubtimeline:beat1", container-name=beat1_clip1,
-  asset-id="textoverlay text='Second clip of the second beat' ! capsfilter caps=video/x-raw", child-type=GESEffect
+  asset-id="textoverlay text='Second clip of the second beat' ! capsfilter caps=video/x-raw(ANY)", child-type=GESEffect
 
 add-clip, project-uri="gessubtimeline:scene0", name=scene0_beat0, asset-id="gessubtimeline:beat0", start=0.0, inpoint=2.0, duration=5.0
 add-clip, project-uri="gessubtimeline:scene0", name=scene0_beat1, asset-id="gessubtimeline:beat1", start=5.0

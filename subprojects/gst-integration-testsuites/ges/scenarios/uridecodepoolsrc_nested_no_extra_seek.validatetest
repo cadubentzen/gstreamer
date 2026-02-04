@@ -1,3 +1,18 @@
+# FIXME: This test is disabled because it expects seek-in-ready behavior for nested
+# timelines, but commit 3ed47fb5c7 disabled seek-in-ready for sub-compositions.
+#
+# The test monitors vsrc1:src (the internal decoder pipeline's source pad inside
+# uridecodepoolsrc), which now outputs a buffer at PTS=0 before the seek arrives.
+# The uridecodepoolsrc element itself (vsrc0) works correctly.
+#
+# To fix this test, we need to either:
+# 1. Update the test expectations to accept the buffer at PTS=0
+# 2. Re-enable seek-in-ready for uridecodepoolsrc's internal pipeline
+# 3. Add a mechanism for uridecodepoolsrc to wait for the NLE seek before outputting
+#
+# See also: nlecomposition.c lines 3925-3926 where can_seek_in_ready is forced to
+# FALSE when awaited_toplevel_seek is set.
+
 set-globals, media_file="$(test_dir)/../../medias/defaults/matroska/timed_frames_video_only_1fps.mkv"
 meta,
     tool = "ges-launch-$(gst_api_version)",

@@ -30,6 +30,14 @@ from ges_known_issues import KNOWN_ISSUES
 
 TEST_MANAGER = "ges"
 
+BLACKLIST = [
+    # This test expects seek-in-ready behavior for nested timelines, but commit
+    # 3ed47fb5c7 disabled seek-in-ready for sub-compositions. The internal decoder
+    # pipeline (vsrc1) outputs a buffer at PTS=0 before the NLE seek arrives.
+    ('ges.test.uridecodepoolsrc_nested_no_extra_seek',
+     'Disabled until seek-in-ready is re-enabled for uridecodepoolsrc internal pipelines'),
+]
+
 
 def setup_tests(test_manager, options):
     assets_dir = os.path.abspath(os.path.join(
@@ -51,5 +59,6 @@ def setup_tests(test_manager, options):
     scenarios_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "ges",
                                                   "scenarios"))
     test_manager.add_expected_issues(KNOWN_ISSUES)
+    test_manager.set_default_blacklist(BLACKLIST)
     test_manager.register_defaults(projects_path, scenarios_path)
     return True

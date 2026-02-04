@@ -19,7 +19,7 @@ set-vars,
 foreach, subtimeline_primary_id=<"act0", "scene0", "beat0", "beat1">,
   actions = {
     [register-subtimeline-primary, primary-id="$(subtimeline_primary_id)"],
-    [add-track, project-uri="gessubtimeline:$(subtimeline_primary_id)", track-type=video, caps="video/x-raw", name="$(subtimeline_primary_id)_video_track"],
+    [add-track, project-uri="gessubtimeline:$(subtimeline_primary_id)", track-type=video, caps="video/x-raw(ANY)", name="$(subtimeline_primary_id)_video_track"],
   }
 
 # Create the 'beats' timeline, which could be a compared as 'a paragraph or two'

@@ -273,6 +273,13 @@ _transform_caps (GstGLVideoFlip * vf, GstPadDirection direction, GstCaps * caps)
     gint width, height;
     gint par_n, par_d;
 
+    /* Remove framerate from output caps - glvideoflip doesn't change framerate
+     * and we need to allow downstream elements (like videorate) to negotiate
+     * any framerate they need. Without this, gst_base_transform's internal
+     * caps negotiation can fail when it queries the output_capsfilter directly
+     * (bypassing the probe that's supposed to skip the capsfilter). */
+    gst_structure_remove_field (structure, "framerate");
+
     if (gst_structure_get_int (structure, "width", &width) &&
         gst_structure_get_int (structure, "height", &height)) {
 

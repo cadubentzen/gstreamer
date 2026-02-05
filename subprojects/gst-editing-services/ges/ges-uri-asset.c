@@ -39,6 +39,8 @@
 #include "ges-internal.h"
 #include "ges-track-element-asset.h"
 
+#define SUBTIMELINE_URI_PREFIX "gessubtimeline:"
+
 #define DEFAULT_DISCOVERY_TIMEOUT (60 * GST_SECOND)
 
 static GHashTable *parent_newparent_table = NULL;
@@ -918,6 +920,138 @@ ges_uri_source_asset_is_image (GESUriSourceAsset * asset)
       asset->priv->sinfo);
 }
 
+static GstDiscovererContainerInfo *
+_ges_build_container_info_from_timeline (const gchar * uri,
+    GESTimeline * timeline)
+{
+  GList *tracks, *l;
+  GstCaps *container_caps;
+  GChecksum *cs;
+  const gchar *uri_hash;
+  guint i = 0;
+
+  container_caps = gst_caps_from_string ("application/x-ges-timeline");
+  tracks = ges_timeline_get_tracks (timeline);
+
+  /* Generate SHA256 hash of URI, matching gst_element_decorate_stream_id_internal */
+  cs = g_checksum_new (G_CHECKSUM_SHA256);
+  g_checksum_update (cs, (const guchar *) uri, strlen (uri));
+  uri_hash = g_checksum_get_string (cs);
+
+  /* *INDENT-OFF* */
+  GstDiscovererContainerInfo *container =
+      GST_DISCOVERER_CONTAINER_BUILD (container_caps,
+      for (l = tracks; l; l = l->next, i++) {
+        GESTrack *track = GES_TRACK (l->data);
+        GstCaps *caps = ges_track_get_restriction_caps (track);
+        /* Use SHA256(uri)/track_N format matching GStreamer's stream ID convention
+         * from gst_element_decorate_stream_id_internal */
+        gchar *stream_id = g_strdup_printf ("%s/track_%u", uri_hash, i);
+        GESTrackType type = track->type;
+
+        if (!caps)
+          caps = ges_track_get_caps_full (track);
+
+        if (type == GES_TRACK_TYPE_VIDEO) {
+          GST_DISCOVERER_CONTAINER_ADD_STREAM (
+              GST_DISCOVERER_VIDEO_STREAM_BUILD (stream_id, caps,));
+        } else if (type == GES_TRACK_TYPE_AUDIO) {
+          GST_DISCOVERER_CONTAINER_ADD_STREAM (
+              GST_DISCOVERER_AUDIO_STREAM_BUILD (stream_id, caps,));
+        }
+
+        g_free (stream_id);
+        gst_caps_unref (caps);
+      }
+  );
+  /* *INDENT-ON* */
+
+  g_checksum_free (cs);
+  gst_caps_unref (container_caps);
+  g_list_free_full (tracks, gst_object_unref);
+
+  return container;
+}
+
+static GstDiscovererInfo *
+_ges_build_discoverer_info_from_timeline (const gchar * uri,
+    GESTimeline * timeline)
+{
+  GstTagList *tags = gst_tag_list_new ("is-ges-timeline", TRUE, NULL);
+
+  /* *INDENT-OFF* */
+  GstDiscovererInfo *info = GST_DISCOVERER_INFO_BUILD (uri,
+      _ges_build_container_info_from_timeline (uri, timeline),
+      GST_DISCOVERER_INFO_DURATION (ges_timeline_get_duration (timeline));
+      GST_DISCOVERER_INFO_SEEKABLE (TRUE);
+      GST_DISCOVERER_INFO_TAGS (tags);
+  );
+  /* *INDENT-ON* */
+
+  gst_tag_list_unref (tags);
+
+  return info;
+}
+
+static GstDiscovererInfo *
+load_serialized_info_for_subtimeline (GESDiscovererManager * manager,
+    const gchar * uri, gpointer user_data)
+{
+  GESTimeline *timeline;
+  GstDiscovererInfo *info;
+  const gchar *primary_id;
+
+  if (!g_str_has_prefix (uri, SUBTIMELINE_URI_PREFIX))
+    return NULL;
+
+  GstElementFactory *gesdemuxfactory = gst_element_factory_find ("gesdemux");
+  if (!gesdemuxfactory) {
+    GST_DEBUG ("No gesdemux found, cannot load subtimeline serialized info");
+    return NULL;
+  }
+  GstElementFactory *loaded_demux_factory =
+      GST_ELEMENT_FACTORY (gst_plugin_feature_load (GST_PLUGIN_FEATURE
+          (gesdemuxfactory)));
+  gst_object_unref (gesdemuxfactory);
+
+  if (!loaded_demux_factory) {
+    GST_DEBUG ("Could not load gesdemux factory, cannot load subtimeline "
+        "serialized info");
+    return NULL;
+  }
+
+  GType gtype = gst_element_factory_get_element_type (loaded_demux_factory);
+  if (gtype == G_TYPE_NONE) {
+    GST_DEBUG ("Could not get class from gesdemux factory, cannot load "
+        "subtimeline serialized info");
+    gst_object_unref (loaded_demux_factory);
+    return NULL;
+  }
+
+  GObjectClass *demux_class = g_type_class_ref (gtype);
+  g_type_class_unref (demux_class);
+
+  primary_id = uri + strlen (SUBTIMELINE_URI_PREFIX);
+  GST_ERROR ("Looking up subtimeline primary '%s'", primary_id);
+
+  timeline = ges_timeline_get_subtimeline_primary (primary_id);
+  if (!timeline) {
+    GST_DEBUG ("Subtimeline primary '%s' not registered, discovery will run "
+        "normally", primary_id);
+    return NULL;
+  }
+
+  GST_ERROR ("Building discoverer info for subtimeline '%s' from timeline %"
+      GST_PTR_FORMAT, primary_id, timeline);
+
+  info = _ges_build_discoverer_info_from_timeline (uri, timeline);
+  gst_object_unref (timeline);
+
+  GST_ERROR ("Built discoverer info for '%s': %" GST_PTR_FORMAT, uri, info);
+
+  return info;
+}
+
 void
 _ges_uri_asset_cleanup (void)
 {
@@ -963,6 +1097,8 @@ _ges_uri_asset_ensure_setup (gpointer uriasset_class)
     ges_discoverer_manager_set_timeout (manager, timeout);
     g_signal_connect (manager, "discovered",
         G_CALLBACK (discoverer_discovered_cb), NULL);
+    g_signal_connect (manager, "load-serialized-info",
+        G_CALLBACK (load_serialized_info_for_subtimeline), NULL);
 
     gst_object_unref (manager);
 

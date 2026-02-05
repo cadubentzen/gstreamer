@@ -1,0 +1,64 @@
+# Test preload cache invalidation when editing clips inside subtimelines
+#
+# When using uridecodepoolsrc, the pipeline pool manager preloads sources
+# based on their coordinates at commit time. If a clip inside a subtimeline
+# is edited (e.g. its inpoint changes), the preloaded seek position may become
+# stale because:
+# - The pool manager rebuilds pooled_sources on commit from the root timeline
+# - Nested timeline sources are discovered via GESNewTimeline bus messages
+# - After editing inner clips, the coordinate mappings may not be re-computed
+#
+# This test edits the inner clip's inpoint inside the subtimeline and verifies
+# that the displayed frame reflects the edit.
+
+set-globals, media_dir="$(test_dir)/../../medias/defaults"
+meta, seek=true, handles-states=true, needs_preroll=true,
+    tool = "ges-launch-$(gst_api_version)",
+    ges = "uridecodepoolsrc=enabled",
+    args = {
+        --track-types, video,
+        --video-caps, "video/x-raw(ANY), format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1",
+        --videosink, "$(videosink) name=videosink",
+    }
+
+set-vars,
+    media_uri="file://$(media_dir)/matroska/timed_frames_video_only_1fps_with_qrcodes.mkv"
+
+# Register subtimeline
+register-subtimeline-primary, primary-id="inner"
+add-track, project-uri="gessubtimeline:inner", track-type=video, caps="video/x-raw(ANY)"
+
+# Inner timeline: media clip with inpoint=0
+add-clip, project-uri="gessubtimeline:inner", name=inner_clip, asset-id="$(media_uri)", layer-priority=0, type=GESUriClip, inpoint=0.0, duration=15.0
+
+# Main timeline: nested timeline clip with inpoint=0
+add-clip, name=nested_clip, asset-id="gessubtimeline:inner", layer-priority=0, type=GESUriClip, inpoint=0.0, duration=10.0
+
+pause;
+
+# Verify initial state: at position 0, we see frame 0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)0]
+
+# Now edit the INNER clip inside the subtimeline: trim start by 3s
+# This changes the inner clip's inpoint from 0 to 3, start from 0 to 3
+edit-container, project-uri="gessubtimeline:inner", container-name=inner_clip, edit-mode=edit_trim, position=3.0, edge=edge_start
+check-ges-properties, project-uri="gessubtimeline:inner", element-name=inner_clip, start=(guint64)3000000000, in-point=(guint64)3000000000, duration=(guint64)12000000000
+
+# Move it back to position 0 within the subtimeline (keeping inpoint=3)
+edit-container, project-uri="gessubtimeline:inner", container-name=inner_clip, edit-mode=edit_normal, position=0.0
+check-ges-properties, project-uri="gessubtimeline:inner", element-name=inner_clip, start=(guint64)0, in-point=(guint64)3000000000, duration=(guint64)12000000000
+
+# After editing the inner clip's inpoint to 3:
+# At position 0, we should now see frame 3 (TIMESTAMP = 3000000000ns)
+# If preload cache wasn't invalidated, we might still see frame 0
+commit;
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)3000000000]
+
+# At position 2, should see frame 5 (3 + 2)
+seek, flags=accurate+flush, start=2.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)5000000000]
+
+# Clean up
+unregister-subtimeline-primary, primary-id="inner"
+
+stop;

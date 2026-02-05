@@ -20,6 +20,16 @@
 #pragma once
 
 typedef struct {
+  GESClip *clip;
+  GESTrack *track;
+  /* Committed values captured during timeline commit - these reflect
+   * what NLE sees, not potentially uncommitted GES edits */
+  GstClockTime timeline_inpoint;    /* Where we start reading in the nested timeline */
+  GstClockTime timeline_duration;   /* How much of the nested timeline we read */
+  GstClockTime outer_start;         /* Where the clip appears in the outer timeline */
+} NestedTimelineInfo;
+
+typedef struct {
     GRecMutex lock;
     GArray *pooled_sources;
     GArray *prepared_sources;
@@ -30,6 +40,9 @@ typedef struct {
     gboolean rendering;
 
     guint max_preloaded_sources;
+
+    GArray *pending_nested_timelines;
+    GPtrArray *pipeline_buses;
 } GESPipelinePoolManager;
 
 void ges_pipeline_pool_manager_init   (GESPipelinePoolManager *self, GESTimeline *timeline);

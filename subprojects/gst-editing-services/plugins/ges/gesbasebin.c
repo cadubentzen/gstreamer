@@ -380,6 +380,13 @@ ges_base_bin_set_timeline (GESBaseBin * self, GESTimeline * timeline)
   gst_element_no_more_pads (GST_ELEMENT (sbin));
   gst_element_sync_state_with_parent (GST_ELEMENT (timeline));
 
+  /* Post GESNewTimeline message so pool managers can discover nested sources */
+  GstStructure *s = gst_structure_new ("GESNewTimeline",
+      "timeline", GES_TYPE_TIMELINE, timeline,
+      NULL);
+  gst_element_post_message (GST_ELEMENT (self),
+      gst_message_new_element (GST_OBJECT (self), s));
+
   return TRUE;
 }
 

@@ -19,6 +19,7 @@ ges_tests = [
     ['ges/negative'],
     ['ges/markerlist'],
     ['ges/subtimeline'],
+    ['ges/nestedtimelinepreload'],
     ['nle/simple'],
     ['nle/complex'],
     ['nle/nleoperation'],

@@ -1,0 +1,52 @@
+# Test nested timeline preloading using register-subtimeline-primary pattern
+#
+# This test uses the register-subtimeline-primary approach (alternative to file
+# serialization) to create nested timelines and verify preloading works with
+# uridecodepoolsrc.
+#
+# Structure:
+#   - Inner: media clip with inpoint=2
+#   - Outer: nested timeline with inpoint=3
+#   - Total inpoint = 5
+#
+# When playback starts, frame 5 should be displayed
+
+set-globals, media_dir="$(test_dir)/../../medias/defaults"
+meta, seek=true, handles-states=true,
+    tool = "ges-launch-$(gst_api_version)",
+    ges = "uridecodepoolsrc=enabled",
+    args = {
+        --track-types, video,
+        --video-caps, "video/x-raw(ANY), format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1",
+        --videosink, "$(videosink) name=videosink",
+    }
+
+set-vars,
+    media_uri="file://$(media_dir)/matroska/timed_frames_video_only_1fps_with_qrcodes.mkv"
+
+# Register subtimeline primary for the inner timeline
+register-subtimeline-primary, primary-id="inner"
+add-track, project-uri="gessubtimeline:inner", track-type=video, caps="video/x-raw(ANY)"
+
+# Inner timeline: media clip with inpoint=2
+add-clip, project-uri="gessubtimeline:inner", name=inner_clip, asset-id="$(media_uri)", layer-priority=0, type=GESUriClip, inpoint=2.0, duration=10.0
+
+# Main timeline: nested timeline referencing inner with inpoint=3
+add-clip, name=main_clip, asset-id="gessubtimeline:inner", layer-priority=0, type=GESUriClip, inpoint=3.0, duration=5.0
+
+commit;
+pause;
+
+# Verify first frame is at TIMESTAMP 5 seconds (5000000000 ns)
+# Position 0: inner position = 3 (outer inpoint), source frame = 3 + 2 (inner inpoint) = 5
+seek, flags=accurate+flush, start=0.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)5000000000]
+
+# Position 1: inner position = 4, source frame = 4 + 2 = 6
+seek, flags=accurate+flush, start=1.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)6000000000]
+
+# Clean up
+unregister-subtimeline-primary, primary-id="inner"
+
+stop;

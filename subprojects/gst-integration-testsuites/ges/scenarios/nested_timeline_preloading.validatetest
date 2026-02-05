@@ -1,0 +1,33 @@
+set-globals, media_dir="$(test_dir)/../../medias/defaults"
+meta,
+    tool = "ges-launch-$(gst_api_version)",
+    handles-states=true,
+    needs_preroll=true,
+    ges-options= {
+        --track-types, video,
+        --video-caps, "video/x-raw, format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1, chroma-site=(string)jpeg, colorimetry=(string)bt601",
+        --videosink, "$(videosink) name=videosink",
+    }
+
+set-vars,
+    nested_timeline1_uri="file://$(logsdir)/ges/scenarios/$(test_name)/nested_timeline1.xges",
+    nested_timeline2_uri="file://$(logsdir)/ges/scenarios/$(test_name)/nested_timeline2.xges"
+
+# Create nested timeline 1: first 3 frames
+add-clip, name=clip1, asset-id="file://$(media_dir)/matroska/timed_frames_video_only_1fps.mkv", layer-priority=0, type=GESUriClip, inpoint=0.0, duration=3.0
+serialize-project, uri="$(nested_timeline1_uri)"
+remove-clip, name=clip1
+
+# Create nested timeline 2: next 3 frames
+add-clip, name=clip2, asset-id="file://$(media_dir)/matroska/timed_frames_video_only_1fps.mkv", layer-priority=0, type=GESUriClip, inpoint=3.0, duration=3.0
+serialize-project, uri="$(nested_timeline2_uri)"
+remove-clip, name=clip2
+
+# Add nested timelines back to back
+# scene1: 0s - 3s (shows frames 0, 1, 2)
+# scene2: 3s - 6s (shows frames 3, 4, 5)
+add-clip, name=scene1, asset-id="$(nested_timeline1_uri)", layer-priority=0, type=GESUriClip, start=0.0, duration=3.0
+add-clip, name=scene2, asset-id="$(nested_timeline2_uri)", layer-priority=0, type=GESUriClip, start=3.0, duration=3.0
+
+commit;
+play;

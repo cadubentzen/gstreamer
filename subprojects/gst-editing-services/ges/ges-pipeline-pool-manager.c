@@ -20,6 +20,9 @@ typedef struct
   GstClockTime end;
 
   GObject *decoderpipe;
+
+  /* For nested timeline sources */
+  GESTimeline *source_timeline; /* NULL for top-level sources */
 } PooledSource;
 
 static gint
@@ -252,6 +255,12 @@ ges_pipeline_pool_manager_unprepare_all (GESPipelinePoolManager * self)
   g_ptr_array_unref (to_unprepare);
 }
 
+static void
+nested_timeline_info_clear (NestedTimelineInfo * info)
+{
+  g_object_unref (info->clip);
+}
+
 /* With self->lock taken */
 static gboolean
 list_pooled_sources (GNode * node, GESPipelinePoolManager * self)
@@ -259,15 +268,34 @@ list_pooled_sources (GNode * node, GESPipelinePoolManager * self)
   if (GES_IS_AUDIO_URI_SOURCE (node->data)
       || GES_IS_VIDEO_URI_SOURCE (node->data)) {
     gboolean is_nested_timeline;
+    GESClip *clip = GES_CLIP (GES_TIMELINE_ELEMENT_PARENT (node->data));
 
-    g_object_get (ges_extractable_get_asset (GES_EXTRACTABLE
-            (GES_TIMELINE_ELEMENT_PARENT (node->data))), "is-nested-timeline",
-        &is_nested_timeline, NULL);
+    g_object_get (ges_extractable_get_asset (GES_EXTRACTABLE (clip)),
+        "is-nested-timeline", &is_nested_timeline, NULL);
 
     if (is_nested_timeline) {
-      GST_INFO_OBJECT (self->timeline, "Ignoring nested timeline");
+      /* Capture committed values now - these are the values NLE sees */
+      GstClockTime clip_start = GES_TIMELINE_ELEMENT_START (clip);
+      GstClockTime clip_inpoint = GES_TIMELINE_ELEMENT_INPOINT (clip);
+      GstClockTime clip_duration = GES_TIMELINE_ELEMENT_DURATION (clip);
+
+      NestedTimelineInfo info = {
+        .clip = g_object_ref (clip),
+        .track = ges_track_element_get_track (node->data),
+        .timeline_inpoint = clip_inpoint,
+        .timeline_duration = clip_duration,
+        .outer_start = clip_start,
+      };
+
+      GST_DEBUG_OBJECT (self->timeline,
+          "Recording pending nested timeline clip %" GES_FORMAT
+          " inpoint=%" GST_TIME_FORMAT " duration=%" GST_TIME_FORMAT,
+          GES_ARGS (clip), GST_TIME_ARGS (clip_inpoint),
+          GST_TIME_ARGS (clip_duration));
+
+      g_array_append_val (self->pending_nested_timelines, info);
       self->has_subtimelines = TRUE;
-      return TRUE;
+      return FALSE;
     }
 
     GstElement *source_element =
@@ -279,6 +307,7 @@ list_pooled_sources (GNode * node, GESPipelinePoolManager * self)
         .track = ges_track_element_get_track (node->data),
         .start = GES_TIMELINE_ELEMENT_START (node->data),
         .end = GES_TIMELINE_ELEMENT_END (node->data),
+        .source_timeline = NULL,
       };
 
       g_array_append_val (self->pooled_sources, s);
@@ -335,10 +364,11 @@ ges_pipeline_pool_manager_commit (GESPipelinePoolManager * self)
 
   GNode *tree = timeline_get_tree (self->timeline);
   g_array_remove_range (self->pooled_sources, 0, self->pooled_sources->len);
+  if (self->pending_nested_timelines)
+    g_array_remove_range (self->pending_nested_timelines, 0,
+        self->pending_nested_timelines->len);
   g_node_traverse (tree, G_IN_ORDER, G_TRAVERSE_LEAVES, -1,
       (GNodeTraverseFunc) list_pooled_sources, self);
-  if (self->has_subtimelines)
-    g_array_remove_range (self->pooled_sources, 0, self->pooled_sources->len);
   self->has_subtimelines = FALSE;
 
 done:
@@ -357,13 +387,256 @@ deep_element_added_cb (GstBin * _pipeline, GstBin * _sub_bin,
   g_object_set (element, "output-out-of-segment", TRUE, NULL);
 }
 
+typedef struct
+{
+  GESPipelinePoolManager *pool_manager;
+  GESTimeline *nested_timeline;
+  NestedTimelineInfo *info;
+} NestedTimelineTraversalData;
+
+static gboolean
+list_nested_timeline_sources (GNode * node, NestedTimelineTraversalData * data)
+{
+  GESPipelinePoolManager *self = data->pool_manager;
+  NestedTimelineInfo *info = data->info;
+
+  if (GES_IS_AUDIO_URI_SOURCE (node->data)
+      || GES_IS_VIDEO_URI_SOURCE (node->data)) {
+    gboolean is_nested_timeline;
+    GESClip *clip = GES_CLIP (GES_TIMELINE_ELEMENT_PARENT (node->data));
+
+    g_object_get (ges_extractable_get_asset (GES_EXTRACTABLE (clip)),
+        "is-nested-timeline", &is_nested_timeline, NULL);
+
+    if (is_nested_timeline) {
+      GESTrack *nested_track = ges_track_element_get_track (node->data);
+
+      if (nested_track->type != info->track->type) {
+        return FALSE;
+      }
+
+      /* Deeply nested timeline - compute coordinates for it */
+      GstClockTime clip_start = GES_TIMELINE_ELEMENT_START (clip);
+      GstClockTime clip_inpoint = GES_TIMELINE_ELEMENT_INPOINT (clip);
+      GstClockTime clip_duration = GES_TIMELINE_ELEMENT_DURATION (clip);
+      GstClockTime clip_end = clip_start + clip_duration;
+
+      /* Use parent's visible window in nested timeline coordinates */
+      GstClockTime inner_visible_start = info->timeline_inpoint;
+      GstClockTime inner_visible_end =
+          info->timeline_inpoint + info->timeline_duration;
+
+      /* Check if deeply nested clip intersects the visible window */
+      if (clip_end <= inner_visible_start || clip_start >= inner_visible_end) {
+        GST_DEBUG_OBJECT (self->timeline,
+            "Deeply nested timeline %" GES_FORMAT " outside visible window",
+            GES_ARGS (clip));
+        return FALSE;
+      }
+
+      /* Clamp clip position to visible window */
+      GstClockTime clamped_start =
+          CLAMP (clip_start, inner_visible_start, inner_visible_end);
+      GstClockTime clamped_end =
+          CLAMP (clip_end, inner_visible_start, inner_visible_end);
+
+      /* Convert to outer timeline coordinates */
+      GstClockTime outer_start =
+          clamped_start - info->timeline_inpoint + info->outer_start;
+
+      /* Adjust inpoint based on how much we trimmed from the start */
+      GstClockTime adjusted_inpoint =
+          clip_inpoint + (clamped_start - clip_start);
+      GstClockTime adjusted_duration = clamped_end - clamped_start;
+
+      NestedTimelineInfo nested_info = {
+        .clip = g_object_ref (clip),
+        .track = info->track,
+        .timeline_inpoint = adjusted_inpoint,
+        .timeline_duration = adjusted_duration,
+        .outer_start = outer_start,
+      };
+
+      GST_DEBUG_OBJECT (self->timeline,
+          "Recording deeply nested timeline clip %" GES_FORMAT
+          " outer_start=%" GST_TIME_FORMAT " inpoint=%" GST_TIME_FORMAT
+          " duration=%" GST_TIME_FORMAT,
+          GES_ARGS (clip), GST_TIME_ARGS (outer_start),
+          GST_TIME_ARGS (adjusted_inpoint), GST_TIME_ARGS (adjusted_duration));
+
+      g_array_append_val (self->pending_nested_timelines, nested_info);
+      return FALSE;
+    }
+
+    GstElement *source_element =
+        ges_source_get_source_element (GES_SOURCE (node->data));
+    if (!g_strcmp0 (GST_OBJECT_NAME (gst_element_get_factory (source_element)),
+            "uridecodepoolsrc")) {
+      GESTrack *nested_track = ges_track_element_get_track (node->data);
+
+      if (nested_track->type != info->track->type) {
+        return FALSE;
+      }
+
+      /* Source times are in nested timeline coordinates */
+      GstClockTime source_start = GES_TIMELINE_ELEMENT_START (node->data);
+      GstClockTime source_end = GES_TIMELINE_ELEMENT_END (node->data);
+
+      /* Use committed values captured at commit time */
+      GstClockTime inner_visible_start = info->timeline_inpoint;
+      GstClockTime inner_visible_end =
+          info->timeline_inpoint + info->timeline_duration;
+
+      /* Check if source intersects the visible window (in inner coordinates) */
+      if (source_end <= inner_visible_start
+          || source_start >= inner_visible_end) {
+        return FALSE;
+      }
+
+      /* Clamp to visible window in inner coordinates, then convert to outer */
+      GstClockTime clamped_start =
+          CLAMP (source_start, inner_visible_start, inner_visible_end);
+      GstClockTime clamped_end =
+          CLAMP (source_end, inner_visible_start, inner_visible_end);
+
+      /* Convert to outer timeline coordinates:
+       * outer = inner - timeline_inpoint + outer_start */
+      GstClockTime outer_start =
+          clamped_start - info->timeline_inpoint + info->outer_start;
+      GstClockTime outer_end =
+          clamped_end - info->timeline_inpoint + info->outer_start;
+
+      PooledSource s = {
+        .element = gst_object_ref (source_element),
+        .track = info->track,
+        .start = outer_start,
+        .end = outer_end,
+        .source_timeline = data->nested_timeline,
+      };
+
+      GST_DEBUG_OBJECT (self->timeline,
+          "Adding nested source %s [%" GST_TIME_FORMAT " - %" GST_TIME_FORMAT
+          "] (inner: [%" GST_TIME_FORMAT " - %" GST_TIME_FORMAT "])",
+          GST_OBJECT_NAME (source_element),
+          GST_TIME_ARGS (s.start), GST_TIME_ARGS (s.end),
+          GST_TIME_ARGS (clamped_start), GST_TIME_ARGS (clamped_end));
+
+      g_array_append_val (self->pooled_sources, s);
+    }
+  }
+
+  return FALSE;
+}
 
 static void
-new_pipeline_cb (GObject * pool, GstElement * pipeline)
+ges_pipeline_pool_manager_add_nested_timeline (GESPipelinePoolManager * self,
+    GESTimeline * nested_timeline)
 {
+  GESSource *parent_source;
+  GESClip *parent_clip;
+
+  g_rec_mutex_lock (&self->lock);
+  if (!self->pooled_sources || !self->pending_nested_timelines) {
+    g_rec_mutex_unlock (&self->lock);
+    return;
+  }
+
+  /* Get the parent source that contains this nested timeline.
+   * This is set by uridecodepoolsrc_deep_element_added_cb when the timeline
+   * is added to the pipeline. */
+  parent_source = timeline_get_parent_uri_source (nested_timeline);
+  if (!parent_source) {
+    GST_DEBUG_OBJECT (self->timeline,
+        "Nested timeline has no parent source, skipping");
+    g_rec_mutex_unlock (&self->lock);
+    return;
+  }
+
+  parent_clip = GES_CLIP (GES_TIMELINE_ELEMENT_PARENT (parent_source));
+
+  GST_DEBUG_OBJECT (self->timeline,
+      "Looking for pending entry matching clip %" GES_FORMAT,
+      GES_ARGS (parent_clip));
+
+  for (guint i = 0; i < self->pending_nested_timelines->len; i++) {
+    NestedTimelineInfo *info =
+        &g_array_index (self->pending_nested_timelines, NestedTimelineInfo, i);
+
+    /* Match by clip pointer - this works for any nesting depth */
+    if (info->clip != parent_clip) {
+      continue;
+    }
+
+    GST_DEBUG_OBJECT (self->timeline,
+        "Found matching pending entry for clip %" GES_FORMAT,
+        GES_ARGS (parent_clip));
+
+    GNode *tree = timeline_get_tree (nested_timeline);
+    NestedTimelineTraversalData data = {
+      .pool_manager = self,
+      .nested_timeline = nested_timeline,
+      .info = info,
+    };
+
+    g_node_traverse (tree, G_IN_ORDER, G_TRAVERSE_LEAVES, -1,
+        (GNodeTraverseFunc) list_nested_timeline_sources, &data);
+  }
+
+  g_object_unref (parent_source);
+  g_array_sort (self->pooled_sources, (GCompareFunc) compare_pooled_source);
+
+  GST_DEBUG_OBJECT (self->timeline,
+      "After adding nested timeline sources, pooled_sources has %d entries",
+      self->pooled_sources->len);
+
+  g_rec_mutex_unlock (&self->lock);
+}
+
+static void
+pipeline_bus_sync_message_cb (GstBus * bus, GstMessage * message,
+    GESPipelinePoolManager * self)
+{
+  if (GST_MESSAGE_TYPE (message) == GST_MESSAGE_ELEMENT) {
+    const GstStructure *s = gst_message_get_structure (message);
+    if (gst_structure_has_name (s, "GESNewTimeline")) {
+      GESTimeline *nested_timeline = NULL;
+
+      gst_structure_get (s, "timeline", GES_TYPE_TIMELINE,
+          &nested_timeline, NULL);
+
+      if (nested_timeline) {
+        GST_DEBUG_OBJECT (self->timeline,
+            "Received GESNewTimeline message for nested timeline %"
+            GST_PTR_FORMAT, nested_timeline);
+        ges_pipeline_pool_manager_add_nested_timeline (self, nested_timeline);
+        gst_object_unref (nested_timeline);
+      }
+    }
+  }
+}
+
+static void
+new_pipeline_cb (GObject * pool, GstElement * pipeline,
+    GESPipelinePoolManager * self)
+{
+  GstBus *bus;
+
   GST_DEBUG_OBJECT (pipeline, "Connecting %" GST_PTR_FORMAT, pool);
   g_signal_connect (pipeline, "deep-element-added",
       G_CALLBACK (deep_element_added_cb), NULL);
+
+  bus = gst_element_get_bus (pipeline);
+  if (bus) {
+    gst_bus_enable_sync_message_emission (bus);
+    g_signal_connect (bus, "sync-message",
+        G_CALLBACK (pipeline_bus_sync_message_cb), self);
+    g_rec_mutex_lock (&self->lock);
+    if (self->pipeline_buses)
+      g_ptr_array_add (self->pipeline_buses, bus);
+    else
+      gst_object_unref (bus);
+    g_rec_mutex_unlock (&self->lock);
+  }
 }
 
 static void
@@ -384,12 +657,28 @@ ges_pipeline_pool_clear (GESPipelinePoolManager * self)
     self->pooled_sources = NULL;
   }
 
+  if (self->pending_nested_timelines) {
+    g_array_free (self->pending_nested_timelines, TRUE);
+    self->pending_nested_timelines = NULL;
+  }
+
+  if (self->pipeline_buses) {
+    for (guint i = 0; i < self->pipeline_buses->len; i++) {
+      GstBus *bus = g_ptr_array_index (self->pipeline_buses, i);
+      g_signal_handlers_disconnect_by_func (bus,
+          G_CALLBACK (pipeline_bus_sync_message_cb), self);
+      gst_bus_disable_sync_message_emission (bus);
+    }
+    g_ptr_array_unref (self->pipeline_buses);
+    self->pipeline_buses = NULL;
+  }
+
   if (self->pool) {
     g_signal_handlers_disconnect_by_func (self->pool,
         G_CALLBACK (ges_pipeline_pool_manager_prepare_pipeline_removed_cb),
         self);
     g_signal_handlers_disconnect_by_func (self->pool,
-        G_CALLBACK (new_pipeline_cb), NULL);
+        G_CALLBACK (new_pipeline_cb), self);
     g_signal_handlers_disconnect_by_func (self->pool,
         G_CALLBACK (ges_pipeline_pool_manager_deinit), self);
   }
@@ -425,6 +714,12 @@ ges_pipeline_pool_manager_init (GESPipelinePoolManager * self,
   self->prepared_sources = g_array_new (100, TRUE, sizeof (PooledSource));
   g_array_set_clear_func (self->prepared_sources,
       (GDestroyNotify) pooled_source_clear);
+  self->pending_nested_timelines =
+      g_array_new (FALSE, TRUE, sizeof (NestedTimelineInfo));
+  g_array_set_clear_func (self->pending_nested_timelines,
+      (GDestroyNotify) nested_timeline_info_clear);
+  self->pipeline_buses =
+      g_ptr_array_new_with_free_func ((GDestroyNotify) gst_object_unref);
   self->pool =
       gst_child_proxy_get_child_by_name (GST_CHILD_PROXY (uridecodepoolsrc),
       "pool");
@@ -434,6 +729,6 @@ ges_pipeline_pool_manager_init (GESPipelinePoolManager * self,
   g_signal_connect (self->pool, "prepared-pipeline-removed",
       G_CALLBACK (ges_pipeline_pool_manager_prepare_pipeline_removed_cb), self);
   g_signal_connect (self->pool, "new-pipeline", G_CALLBACK (new_pipeline_cb),
-      NULL);
+      self);
   gst_object_unref (uridecodepoolsrc);
 }

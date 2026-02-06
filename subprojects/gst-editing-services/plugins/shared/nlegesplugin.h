@@ -37,3 +37,18 @@ GType nle_query_parent_nle_object_get_type (void) G_GNUC_CONST;
 /* *INDENT-ON* */
 
 void nle_query_parent_nle_object_release (NleQueryParentNleObject * query);
+
+#define NLE_OBJECT_QUERY_INITIALIZATION_SEEK_MESSAGE_STRUCT_NAME "nleobject-query-initialization-seek"
+typedef struct
+{
+  GMutex lock;
+  GstEvent *initialization_seek;
+} NleObjectQueryInitializationSeek;
+
+/* *INDENT-OFF* */
+#define NLE_TYPE_OBJECT_QUERY_INITIALIZATION_SEEK nle_object_query_initialization_seek_get_type ()
+GType nle_object_query_initialization_seek_get_type (void) G_GNUC_CONST;
+/* *INDENT-ON* */
+
+void
+nle_object_query_needs_initialization_seek_free (NleObjectQueryInitializationSeek *query);

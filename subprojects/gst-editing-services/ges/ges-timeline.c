@@ -148,6 +148,7 @@
 #include "ges-layer.h"
 #include "ges-auto-transition.h"
 #include "ges.h"
+#include "plugins/shared/nlegesplugin.h"
 
 
 static GPtrArray *select_tracks_for_object_default (GESTimeline * timeline,
@@ -632,6 +633,58 @@ ges_timeline_handle_message (GstBin * bin, GstMessage * message)
 
         goto forward;
       }
+    } else if (gst_structure_has_name (mstructure,
+            NLE_OBJECT_QUERY_INITIALIZATION_SEEK_MESSAGE_STRUCT_NAME)) {
+      GESSource *parent_source = timeline_get_parent_uri_source (timeline);
+
+      if (parent_source) {
+        NleObjectQueryInitializationSeek *q;
+        GstClockTime start =
+            GES_TIMELINE_ELEMENT_INPOINT (parent_source);
+        GstClockTime stop =
+            start + GES_TIMELINE_ELEMENT_DURATION (parent_source);
+
+        /* Let parent bins answer first */
+        gst_message_ref (message);
+        GST_BIN_CLASS (parent_class)->handle_message (bin, message);
+
+        {
+          const GValue *v =
+              gst_structure_get_value (mstructure, "query");
+
+          g_assert (v);
+          q = g_atomic_rc_box_acquire (g_value_get_boxed (v));
+        }
+
+        g_mutex_lock (&q->lock);
+        if (!q->initialization_seek) {
+          gdouble rate = ges_timeline_get_rate (timeline);
+
+          q->initialization_seek = gst_event_new_seek (
+              rate == 0.0 ? 1.0 : rate,
+              GST_FORMAT_TIME,
+              GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
+              GST_SEEK_TYPE_SET, start,
+              GST_SEEK_TYPE_SET, stop);
+
+          GST_INFO_OBJECT (timeline,
+              "Providing initialization seek [%" GST_TIME_FORMAT " - %"
+              GST_TIME_FORMAT "] rate=%f from parent source %"
+              GST_PTR_FORMAT, GST_TIME_ARGS (start),
+              GST_TIME_ARGS (stop), rate, parent_source);
+        }
+        g_mutex_unlock (&q->lock);
+
+        g_atomic_rc_box_release (q);
+        g_object_unref (parent_source);
+
+        /* Already recursed up via parent_class->handle_message.
+         * Unref the extra ref we took above. */
+        gst_message_unref (message);
+        return;
+      }
+
+      goto forward;
     } else {
       goto forward;
     }

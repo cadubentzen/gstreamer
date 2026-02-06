@@ -1133,7 +1133,6 @@ _add_seek_action (NleComposition * comp, GstEvent * event)
 
   comp->priv->next_eos_seqnum = 0;
   comp->priv->real_eos_seqnum = 0;
-  comp->priv->seek_seqnum = 0;
   _add_action_locked (comp, G_CALLBACK (_seek_pipeline_func), seekd,
       G_PRIORITY_DEFAULT);
 
@@ -2986,7 +2985,7 @@ _set_current_bin_to_ready (NleComposition * comp, NleUpdateStackReason reason)
       if (reason != COMP_UPDATE_STACK_ON_SEEK)
         priv->flush_seqnum = gst_event_get_seqnum (flush_event);
       else
-        gst_event_set_seqnum (flush_event, priv->seek_seqnum);
+        gst_event_set_seqnum (flush_event, priv->flush_seqnum);
 
       GST_INFO_OBJECT (comp, "sending flushes downstream with seqnum %d",
           priv->flush_seqnum);

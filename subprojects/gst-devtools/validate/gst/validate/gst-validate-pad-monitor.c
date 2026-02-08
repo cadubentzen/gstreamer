@@ -1992,8 +1992,12 @@ gst_validate_pad_monitor_downstream_event_check (GstValidatePadMonitor *
       }
 
       if (seekdata && seekdata != pad_monitor->current_seek) {
-        /* Check for accurate seeks */
-        if (seekdata->flags & GST_SEEK_FLAG_ACCURATE) {
+        /* Check for accurate seeks — only on sink pads.  On src pads the
+         * element itself may have transformed the segment (e.g. a time
+         * effect remapping the time domain), so comparing the downstream
+         * segment against the upstream seek values is not valid. */
+        if (GST_PAD_DIRECTION (pad) == GST_PAD_SINK
+            && seekdata->flags & GST_SEEK_FLAG_ACCURATE) {
           if (segment->time != seekdata->start) {
             /* For reverse playback, demux elements may have issues with accurate segment.time,
              * so make it a warning instead of critical */

@@ -140,25 +140,34 @@ ges_base_effect_can_seek_in_ready_cb (GstElement * nleobject,
 {
   GESBaseEffect *effect = GES_BASE_EFFECT (self);
 
-  if (!ges_base_effect_is_time_effect (effect)) {
-    GST_LOG_OBJECT (effect, "Not a time effect, can seek in ready");
+  if (!ges_base_effect_is_time_effect (effect))
     return TRUE;
+
+  /* For non-nested clips, the NLE seek coordinates already position the source
+   * correctly in media time. The time effect only changes the output rate, not
+   * the position-to-frame mapping, so seek-in-ready is safe.
+   *
+   * For nested timeline clips, time effects need to be involved in seek
+   * translation to correctly position the inner timeline, so we keep the
+   * old behavior. */
+  GESTimelineElement *parent = GES_TIMELINE_ELEMENT_PARENT (self);
+  if (parent && GES_IS_CLIP (parent)) {
+    gboolean is_nested_timeline = FALSE;
+    GESAsset *asset =
+        ges_extractable_get_asset (GES_EXTRACTABLE (parent));
+    if (asset)
+      g_object_get (asset, "is-nested-timeline", &is_nested_timeline, NULL);
+
+    if (!is_nested_timeline) {
+      GST_DEBUG_OBJECT (effect, "Time effect on non-nested clip, "
+          "can seek in ready");
+      return TRUE;
+    }
   }
 
-  GHashTable *values = ges_base_effect_get_time_property_values (effect);
-  GstClockTime scaled_duration =
-      ges_base_effect_translate_source_to_sink_time (effect,
-      GES_TIMELINE_ELEMENT_DURATION (self),
-      values);
-  g_hash_table_unref (values);
-
-  if (scaled_duration != GES_TIMELINE_ELEMENT_DURATION (self)) {
-    GST_DEBUG_OBJECT (effect, "Time is remapped, can't seek in ready");
-    return FALSE;
-  }
-
-  GST_DEBUG_OBJECT (effect, "Time is not remapped, can seek in ready");
-  return TRUE;
+  GST_DEBUG_OBJECT (effect, "Time effect on nested clip, "
+      "can't seek in ready");
+  return FALSE;
 }
 
 static GstElement *

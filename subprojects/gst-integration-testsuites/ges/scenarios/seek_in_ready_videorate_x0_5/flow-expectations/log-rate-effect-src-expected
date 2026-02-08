@@ -1,0 +1,13 @@
+event segment: start=0:00:02.000000000, stop=0:00:12.000000000
+
+CHECKPOINT: seek to position 1, expect media_time=3s
+
+event segment: start=0:00:06.000000000, stop=0:00:14.000000000
+
+CHECKPOINT: seek to position 2, expect media_time=4s
+
+event segment: start=0:00:08.000000000, stop=0:00:14.000000000
+
+CHECKPOINT: seek to position 4, expect media_time=6s
+
+event segment: start=0:00:12.000000000, stop=0:00:14.000000000

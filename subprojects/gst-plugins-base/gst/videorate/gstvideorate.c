@@ -1318,7 +1318,7 @@ gst_video_rate_src_event (GstBaseTransform * trans, GstEvent * event)
 
       event = gst_event_make_writable (event);
       gst_structure_set (gst_event_writable_structure (event),
-          "start", G_TYPE_INT64, start, "stop", G_TYPE_INT64, stop, NULL);
+          "cur", G_TYPE_INT64, start, "stop", G_TYPE_INT64, stop, NULL);
 
       res = gst_pad_push_event (sinkpad, event);
       break;

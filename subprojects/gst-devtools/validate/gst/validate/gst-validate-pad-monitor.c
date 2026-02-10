@@ -2802,6 +2802,9 @@ gst_validate_pad_monitor_pad_probe (GstPad * pad, GstPadProbeInfo * info,
         GST_PAD_PROBE_INFO_TYPE (info) & GST_PAD_PROBE_TYPE_PULL);
   else if (info->type & GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM)
     gst_validate_pad_monitor_event_probe (pad, info->data, udata);
+  else if (info->type & GST_PAD_PROBE_TYPE_EVENT_UPSTREAM)
+    gst_validate_pad_monitor_event_overrides (GST_VALIDATE_PAD_MONITOR_CAST
+        (udata), info->data);
 
   return GST_PAD_PROBE_OK;
 }
@@ -3036,6 +3039,14 @@ gst_validate_pad_monitor_do_setup (GstValidateMonitor * monitor)
     else
       gst_pad_set_event_function_full (pad,
           gst_validate_pad_monitor_sink_event_func, eventdata, eventnotify);
+
+    /* Add probe for upstream events on sink pads so that overrides
+     * (like validateflow) can log them */
+    pad_monitor->pad_probe_id =
+        gst_pad_add_probe (pad,
+        GST_PAD_PROBE_TYPE_EVENT_UPSTREAM,
+        (GstPadProbeCallback) gst_validate_pad_monitor_pad_probe, pad_monitor,
+        NULL);
   } else {
     gst_pad_set_event_function_full (pad,
         gst_validate_pad_monitor_src_event_func, eventdata, eventnotify);

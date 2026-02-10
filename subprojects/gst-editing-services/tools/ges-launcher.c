@@ -1347,6 +1347,13 @@ _create_pipeline (GESLauncher * self, const gchar * serialized_timeline)
   if (opts->outputuri)
     ges_pipeline_set_mode (self->priv->pipeline, 0);
 
+  /* Apply GES converter default before loading the project so that
+   * ges_converter_type() reads the correct env var value during
+   * element creation. The full defaults (compositor rank, etc.) are
+   * applied later in ges_validate_activate(). */
+  if (opts->enable_validate)
+    g_setenv ("GES_CONVERTER_TYPE", "software", TRUE);
+
   if (!_create_timeline (self, serialized_timeline, uri, opts->scenario
           || opts->testfile)) {
     GST_ERROR ("Could not create the timeline");

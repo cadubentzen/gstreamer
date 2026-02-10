@@ -1,0 +1,74 @@
+# Test nested timeline preloading with rate effect and multiple inner clips
+#
+# Tests rate-adjusted seek positions crossing inner clip boundaries. When
+# rate=2.0 doubles the seek offset, positions that were in one clip may
+# jump into the next, testing correct clip selection after adjustment.
+#
+# Structure:
+#   - Inner: clip1(start=0, inpoint=2, dur=5) + clip2(start=5, inpoint=4, dur=3)
+#   - Outer: nested timeline, inpoint=1, videorate rate=2.0, duration=7
+#
+# P is the seek position in the main timeline. Seek translation:
+#
+#   Outer NLE: media_time = P - 0 + 1 = P + 1
+#   Outer rate (inpoint=1): offset = (P+1) - 1 = P, adj = P*2
+#     -> start = 1 + P*2
+#   -> inner composition receives seek at position 1 + P*2
+#
+# Inside the inner composition, the active clip depends on position:
+#   If 1+P*2 < 5: clip1 (start=0, inpoint=2)
+#     Inner NLE: media_time = (1+P*2) - 0 + 2 = 3 + P*2
+#   If 1+P*2 >= 5: clip2 (start=5, inpoint=4)
+#     Inner NLE: media_time = (1+P*2) - 5 + 4 = P*2
+#
+#   P=0: inner=1 -> clip1, frame = 3
+#   P=1: inner=3 -> clip1, frame = 5
+#   P=2: inner=5 -> clip2, frame = 4
+#   P=3: inner=7 -> clip2, frame = 6
+
+set-globals, media_dir="$(test_dir)/../../medias/defaults"
+meta, seek=true, handles-states=true,
+    tool = "ges-launch-$(gst_api_version)",
+    ges = "uridecodepoolsrc=enabled",
+    args = {
+        --track-types, video,
+        --video-caps, "video/x-raw(ANY), format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1",
+        --videosink, "$(videosink) name=videosink",
+    }
+
+set-vars,
+    media_uri="file://$(media_dir)/matroska/timed_frames_video_only_1fps_with_qrcodes.mkv",
+    nested_timeline_uri="file://$(logsdir)/ges/scenarios/$(test_name)/inner.xges"
+
+# Create the inner timeline with 2 clips
+add-clip, name=clip1, asset-id="$(media_uri)", layer-priority=0, type=GESUriClip, inpoint=2.0, duration=5.0
+add-clip, name=clip2, asset-id="$(media_uri)", layer-priority=0, type=GESUriClip, start=5.0, inpoint=4.0, duration=3.0
+
+serialize-project, uri="$(nested_timeline_uri)"
+remove-clip, name=clip1
+remove-clip, name=clip2
+
+# Add the nested timeline with inpoint=1 and rate=2.0 effect
+add-clip, name=nested_clip, asset-id="$(nested_timeline_uri)", layer-priority=0, type=GESUriClip, inpoint=1.0, duration=7.0
+container-add-child, container-name=nested_clip, asset-id="videorate rate=2.0 name=rate-effect", child-type=GESEffect
+
+commit;
+pause;
+
+# P=0: inner_pos=1, clip1 position=1, frame = 1 + 2 = 3
+seek, flags=accurate+flush, start=0.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)3000000000]
+
+# P=1: inner_pos=3, clip1 position=3, frame = 3 + 2 = 5
+seek, flags=accurate+flush, start=1.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)5000000000]
+
+# P=2: inner_pos=5, clip2 at start=5, position=0, frame = 0 + 4 = 4
+seek, flags=accurate+flush, start=2.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)4000000000]
+
+# P=3: inner_pos=7, clip2 position=2, frame = 2 + 4 = 6
+seek, flags=accurate+flush, start=3.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)6000000000]
+
+stop;

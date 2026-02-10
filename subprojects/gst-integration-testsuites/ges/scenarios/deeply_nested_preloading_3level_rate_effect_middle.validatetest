@@ -1,0 +1,78 @@
+# Test 3-level nesting with rate effect on the middle-level clip
+#
+# Rate effect on the clip that controls a nested timeline. The middle clip's
+# translate_composition_seek_cb adjusts the seek before it enters the inner
+# composition. Completes the "where can the effect be" matrix for 3-level
+# nesting (outer/middle/inner).
+#
+# Structure:
+#   - L1 (inner): media clip with inpoint=1, duration=15
+#   - L2 (middle): nested timeline referencing L1, inpoint=2, videorate rate=2.0, dur=13
+#   - L3 (outer): nested timeline referencing L2, inpoint=1, no effects, duration=6
+#
+# P is the seek position in the main timeline. Seek translation at each level:
+#
+#   L3 NLE: media_time = P - 0 + 1 = P + 1  (no effect)
+#   L2 NLE: media_time = (P+1) - 0 + 2 = P + 3
+#   L2 rate (inpoint=2): offset = (P+3) - 2 = P+1, adj = (P+1)*2
+#     -> start = 2 + (P+1)*2 = 2P + 4
+#   L1 NLE: media_time = (2P+4) - 0 + 1 = 2P + 5  (no effect)
+#   -> final frame = 2P + 5
+#
+# Without rate effects, cumulative inpoints would give 1+2+1 = 4. The extra 1
+# comes from L2's rate doubling the offset that L3's inpoint contributes past
+# L2's inpoint (offset=1 at P=0 becomes 2 after rate adjustment).
+#
+#   P=0 -> frame 5, P=1 -> frame 7, P=2 -> frame 9, P=3 -> frame 11
+
+set-globals, media_dir="$(test_dir)/../../medias/defaults"
+meta, seek=true, handles-states=true,
+    tool = "ges-launch-$(gst_api_version)",
+    ges = "uridecodepoolsrc=enabled",
+    args = {
+        --track-types, video,
+        --video-caps, "video/x-raw(ANY), format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1",
+        --videosink, "$(videosink) name=videosink",
+    }
+
+set-vars,
+    media_uri="file://$(media_dir)/matroska/timed_frames_video_only_1fps_with_qrcodes.mkv"
+
+# L1: inner subtimeline with media clip
+register-subtimeline-primary, primary-id="inner"
+add-track, project-uri="gessubtimeline:inner", track-type=video, caps="video/x-raw(ANY)"
+add-clip, project-uri="gessubtimeline:inner", name=inner_clip, asset-id="$(media_uri)", layer-priority=0, type=GESUriClip, inpoint=1.0, duration=15.0
+
+# L2: middle subtimeline referencing inner with inpoint=2 and rate=2.0
+register-subtimeline-primary, primary-id="middle"
+add-track, project-uri="gessubtimeline:middle", track-type=video, caps="video/x-raw(ANY)"
+add-clip, project-uri="gessubtimeline:middle", name=middle_clip, asset-id="gessubtimeline:inner", layer-priority=0, type=GESUriClip, inpoint=2.0, duration=13.0
+container-add-child, project-uri="gessubtimeline:middle", container-name=middle_clip, asset-id="videorate rate=2.0 name=rate-effect", child-type=GESEffect
+
+# L3: outer clip referencing middle with inpoint=1, no effects
+add-clip, name=outer_clip, asset-id="gessubtimeline:middle", layer-priority=0, type=GESUriClip, inpoint=1.0, duration=6.0
+
+commit;
+pause;
+
+# P=0: frame = 2 * 0 + 5 = 5
+seek, flags=accurate+flush, start=0.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)5000000000]
+
+# P=1: frame = 2 * 1 + 5 = 7
+seek, flags=accurate+flush, start=1.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)7000000000]
+
+# P=2: frame = 2 * 2 + 5 = 9
+seek, flags=accurate+flush, start=2.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)9000000000]
+
+# P=3: frame = 2 * 3 + 5 = 11
+seek, flags=accurate+flush, start=3.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)11000000000]
+
+# Clean up
+unregister-subtimeline-primary, primary-id="middle"
+unregister-subtimeline-primary, primary-id="inner"
+
+stop;

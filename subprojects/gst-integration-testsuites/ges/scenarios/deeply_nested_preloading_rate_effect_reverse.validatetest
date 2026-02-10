@@ -1,0 +1,57 @@
+# Test nested timeline preloading with rate effect and reverse playback
+#
+# Combines rate-changing effects with reverse playback. The rate adjustment
+# must work correctly when the pipeline rate is negative (start/stop
+# semantics change in reverse).
+#
+# Structure:
+#   - Inner: media clip with inpoint=2, duration=15
+#   - Outer: nested timeline clip with inpoint=3, videorate rate=2.0, duration=10
+#
+# In forward mode the formula is: frame = 5 + P*2 (see rate_effect test).
+# base = inner_inpoint(2) + outer_inpoint(3) = 5.
+#
+# In reverse with rate=-1.0 and seek stop=N, the NLE reverse translation
+# and rate effect combine: the rate=2.0 means each timeline second consumes
+# 2 media seconds, so the effective media range is N * rate. The preroll is
+# at the last frame in that range:
+#   frame = base + N * rate - 1 = 5 + N*2 - 1 = 4 + N*2
+#
+#   stop=6: frame = 4 + 12 = 16
+#   stop=3: frame = 4 + 6 = 10
+
+set-globals, media_dir="$(test_dir)/../../medias/defaults"
+meta, seek=true, handles-states=true,
+    tool = "ges-launch-$(gst_api_version)",
+    ges = "uridecodepoolsrc=enabled",
+    args = {
+        --track-types, video,
+        --video-caps, "video/x-raw(ANY), format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1",
+        --videosink, "$(videosink) name=videosink",
+    }
+
+set-vars,
+    media_uri="file://$(media_dir)/matroska/timed_frames_video_only_1fps_with_qrcodes.mkv",
+    nested_timeline_uri="file://$(logsdir)/ges/scenarios/$(test_name)/nested.xges"
+
+# Create the inner timeline: media clip with inpoint=2
+add-clip, name=inner_clip, asset-id="$(media_uri)", layer-priority=0, type=GESUriClip, inpoint=2.0, duration=15.0
+serialize-project, uri="$(nested_timeline_uri)"
+remove-clip, name=inner_clip
+
+# Add the nested timeline with inpoint=3 and rate=2.0 effect
+add-clip, name=nested_clip, asset-id="$(nested_timeline_uri)", layer-priority=0, type=GESUriClip, inpoint=3.0, duration=10.0
+container-add-child, container-name=nested_clip, asset-id="videorate rate=2.0 name=rate-effect", child-type=GESEffect
+
+commit;
+pause;
+
+# Reverse seek over range [0, 6): preroll frame = 16
+seek, flags=accurate+flush, start=0.0, stop=6.0, rate=-1.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)16000000000]
+
+# Reverse seek over range [0, 3): preroll frame = 10
+seek, flags=accurate+flush, start=0.0, stop=3.0, rate=-1.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)10000000000]
+
+stop;

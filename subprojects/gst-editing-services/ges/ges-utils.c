@@ -37,7 +37,6 @@
 #include "gstframepositioner.h"
 #include <gst/base/base.h>
 
-static GESConverterType __converter_type = GES_CONVERTER_SOFTWARE;
 static GstElement *compositor_pad_creator = NULL;
 static GstElementFactory *compositor_factory = NULL;
 static gboolean compositor_signals_connected = FALSE;
@@ -520,15 +519,7 @@ ges_nle_object_commit (GstElement * nlesource, gboolean recurse)
 GESConverterType
 ges_converter_type (void)
 {
-  static gboolean checked = FALSE;
-
-  if (checked)
-    return __converter_type;
-
-  checked = TRUE;
-
   const gchar *envvar = g_getenv ("GES_CONVERTER_TYPE");
-
 
   if (!envvar) {
     const gchar *autoconvert = g_getenv ("GST_USE_AUTOCONVERT");
@@ -542,18 +533,17 @@ ges_converter_type (void)
     }
   }
 
-  GST_INFO ("Video conversion type: %s", envvar);
   envvar = g_ascii_strdown (envvar, -1);
   if (!g_strcmp0 (envvar, "auto"))
-    __converter_type = GES_CONVERTER_AUTO;
+    return GES_CONVERTER_AUTO;
   else if (!g_strcmp0 (envvar, "software"))
-    __converter_type = GES_CONVERTER_SOFTWARE;
+    return GES_CONVERTER_SOFTWARE;
   else if (!g_strcmp0 (envvar, "gl"))
-    __converter_type = GES_CONVERTER_GL;
-  else
-    g_warning ("Unknown value for GST_USE_AUTOCONVERT: %s", envvar);
+    return GES_CONVERTER_GL;
 
-  return __converter_type;
+  g_warning ("Unknown value for GES_CONVERTER_TYPE: %s", envvar);
+
+  return GES_CONVERTER_SOFTWARE;
 }
 
 G_GNUC_INTERNAL const gchar *

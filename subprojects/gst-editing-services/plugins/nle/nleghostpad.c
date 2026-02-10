@@ -286,6 +286,20 @@ translate_outgoing_segment (NleObject * object, NlePadPrivate * priv,
   gst_segment_copy_into (orig, &segment);
 
   nle_media_to_object_time (object, orig->time, &segment.time);
+
+  /* Compensate for time effect seek adjustment on nested timelines.
+   * When the incoming seek was adjusted by seek_time_offset, the inner
+   * pipeline produces segments shifted by that amount. Subtract it so the
+   * parent composition sees the original (unadjusted) time. */
+  if (object->seek_time_offset > 0
+      && segment.time >= (guint64) object->seek_time_offset) {
+    GST_DEBUG_OBJECT (object,
+        "Compensating segment.time %" GST_TIME_FORMAT " for seek_time_offset %"
+        G_GINT64_FORMAT, GST_TIME_ARGS (segment.time),
+        object->seek_time_offset);
+    segment.time -= object->seek_time_offset;
+  }
+
   GST_DEBUG_OBJECT (object,
       "Adjusting segment time from %" GST_TIME_FORMAT " to %" GST_TIME_FORMAT,
       GST_TIME_ARGS (orig->time), GST_TIME_ARGS (segment.time));
@@ -420,6 +434,11 @@ translate_incoming_position_query (NleObject * object, GstQuery * query)
 
   nle_media_to_object_time (object, (guint64) cur, (guint64 *) & cur2);
 
+  /* Compensate for time effect seek adjustment on nested timelines */
+  if (object->seek_time_offset > 0
+      && cur2 >= (guint64) object->seek_time_offset)
+    cur2 -= object->seek_time_offset;
+
   GST_DEBUG_OBJECT (object,
       "Adjust position from %" GST_TIME_FORMAT " to %" GST_TIME_FORMAT,
       GST_TIME_ARGS (cur), GST_TIME_ARGS (cur2));
@@ -542,6 +561,31 @@ ghostpad_event_function (GstPad * ghostpad, GstObject * parent,
           GstPad *target;
 
           event = nle_object_translate_incoming_seek (object, event);
+
+          /* Give GES a chance to adjust the seek for time effects
+           * (e.g. pitch tempo on a nested timeline). */
+          {
+            GstEvent *adjusted = NULL;
+            gint64 orig_start, adj_start;
+
+            gst_event_parse_seek (event, NULL, NULL, NULL, NULL,
+                &orig_start, NULL, NULL);
+            g_signal_emit_by_name (object, "translate-composition-seek",
+                event, &adjusted);
+            if (adjusted) {
+              gst_event_parse_seek (adjusted, NULL, NULL, NULL, NULL,
+                  &adj_start, NULL, NULL);
+              object->seek_time_offset = adj_start - orig_start;
+              GST_DEBUG_OBJECT (object,
+                  "seek_time_offset set to %" G_GINT64_FORMAT,
+                  object->seek_time_offset);
+              gst_event_unref (event);
+              event = adjusted;
+            } else {
+              object->seek_time_offset = 0;
+            }
+          }
+
           if (!(target = gst_ghost_pad_get_target (GST_GHOST_PAD (ghostpad)))) {
             g_assert ("Seeked a pad with no target SHOULD NOT HAPPEN");
             ret = FALSE;

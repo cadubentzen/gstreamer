@@ -4624,21 +4624,28 @@ done:
 
 /* @clip: A #GESClip
  * @source_track_element: A #GESSource track element of @clip
- * @seek: The seek event to adjust
+ * @start: (inout): The seek start position in media coordinates
+ * @stop: (inout): The seek stop position in media coordinates
+ * @rate: The playback rate
+ * @nested_inpoint: For nested timelines, the clip's in-point used as
+ *   the base for rate-adjusting the start offset. When valid, the offset
+ *   (start - nested_inpoint) is transformed through the time effects and
+ *   start is recomputed as nested_inpoint + transformed_offset.
+ *   Pass %GST_CLOCK_TIME_NONE for non-nested clips to only transform
+ *   the duration (stop - start).
  *
- * Modifies the seek event from ges_uri_source_query_seek() to include
- * the global playback rate that will be applied to the source, taking into
- * account all time effects that will be applied to it inside that clip.
+ * Transforms @start and @stop to account for time effects on the clip.
+ * The duration (stop - start) is always transformed. When @nested_inpoint
+ * is valid, the start position is also transformed — this is needed for
+ * nested timelines where start is the seek position into the inner
+ * composition and the offset from the in-point must be rate-adjusted.
  *
- * This method examines all time effects applied to the specific source
- * based on priority and track, and transforms the start/stop values in the seek event accordingly.
- *
- * Returns: %TRUE if the seek event was modified %FALSE otherwise
+ * Returns: %TRUE if @start or @stop was modified, %FALSE otherwise
  */
 gboolean
 ges_clip_apply_time_effect_on_seek (GESClip * clip,
     GESSource * source_track_element, GstClockTime * start, GstClockTime * stop,
-    gfloat rate)
+    gfloat rate, GstClockTime nested_inpoint)
 {
   GList *tmp;
   GESTrack *track;
@@ -4675,6 +4682,17 @@ ges_clip_apply_time_effect_on_seek (GESClip * clip,
         *stop - *start, values);
 
     *stop = *start + nduration;
+
+    /* For nested timelines, also transform the start offset.
+     * start is the seek position sent to the inner composition,
+     * so the offset from nested_inpoint must also be rate-adjusted. */
+    if (GST_CLOCK_TIME_IS_VALID (nested_inpoint)) {
+      GstClockTime offset = *start - nested_inpoint;
+      offset = ges_base_effect_translate_source_to_sink_time (effect,
+          offset, values);
+      *start = nested_inpoint + offset;
+      *stop = *start + nduration;
+    }
 
     g_hash_table_unref (values);
   }

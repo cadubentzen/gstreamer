@@ -115,6 +115,7 @@ enum
 {
   COMMIT_SIGNAL,
   CAN_SEEK_IN_READY_SIGNAL,
+  TRANSLATE_COMPOSITION_SEEK_SIGNAL,
   LAST_SIGNAL
 };
 
@@ -138,6 +139,9 @@ static gboolean nle_object_cleanup_func (NleObject * object);
 static gboolean nle_object_commit_func (NleObject * object, gboolean recurse);
 static gboolean nle_object_can_seek_in_ready_func (NleObject * object);
 static gboolean nle_object_can_seek_in_ready_accumulator (GSignalInvocationHint
+    * ihint, GValue * return_accu, const GValue * handler_return,
+    gpointer data);
+static gboolean nle_object_translate_seek_accumulator (GSignalInvocationHint
     * ihint, GValue * return_accu, const GValue * handler_return,
     gpointer data);
 
@@ -399,6 +403,24 @@ nle_object_class_init (NleObjectClass * klass)
       G_TYPE_FROM_CLASS (klass), G_SIGNAL_RUN_FIRST,
       G_STRUCT_OFFSET (NleObjectClass, can_seek_in_ready),
       nle_object_can_seek_in_ready_accumulator, NULL, NULL, G_TYPE_BOOLEAN, 0);
+
+  /**
+   * NleObject::translate-composition-seek:
+   * @object: a #NleObject
+   * @event: the seek event after basic NLE translation
+   *
+   * Signal emitted when a composition-level seek has been translated to
+   * the object's media coordinates. Handlers can return a modified seek
+   * event to account for time effects.
+   *
+   * Returns: (nullable): a new seek event with adjusted values, or %NULL
+   *   to use the original event unchanged.
+   */
+  _signals[TRANSLATE_COMPOSITION_SEEK_SIGNAL] =
+      g_signal_new ("translate-composition-seek",
+      G_TYPE_FROM_CLASS (klass), G_SIGNAL_RUN_LAST,
+      0, nle_object_translate_seek_accumulator, NULL, NULL,
+      GST_TYPE_EVENT, 1, GST_TYPE_EVENT);
 
   gst_type_mark_as_plugin_api (NLE_TYPE_OBJECT, 0);
 
@@ -709,6 +731,20 @@ nle_object_can_seek_in_ready_accumulator (GSignalInvocationHint * ihint,
   return TRUE;
 }
 
+/* Accumulator for translate-composition-seek: keep the last non-NULL
+ * event returned by a handler. */
+static gboolean
+nle_object_translate_seek_accumulator (GSignalInvocationHint * ihint,
+    GValue * return_accu, const GValue * handler_return, gpointer data)
+{
+  gpointer event = g_value_get_boxed (handler_return);
+
+  if (event)
+    g_value_set_boxed (return_accu, event);
+
+  return TRUE;
+}
+
 GstStateChangeReturn
 nle_object_cleanup (NleObject * object)
 {
@@ -1013,6 +1049,7 @@ nle_object_reset (NleObject * object)
   object->priority = 0;
   object->active = TRUE;
   object->in_composition = FALSE;
+  object->seek_time_offset = 0;
 }
 
 GType

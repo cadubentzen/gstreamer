@@ -196,6 +196,62 @@ ges_source_uses_uridecodepoolsrc (GESSource * self)
   return _ges_enable_uridecodepoolsrc;
 }
 
+/* Callback for NleObject::translate-composition-seek signal.
+ * Applies time effect rate adjustment to the seek start position.
+ *
+ * Only adjusts for seeks in READY state (nle-seek-in-ready field set),
+ * where the seek bypasses effect elements like videorate and goes directly
+ * to the NleSource. On the ghost pad path, effects already transform the
+ * seek as it flows through the pipeline, so no additional adjustment is
+ * needed. */
+static GstEvent *
+ges_uri_source_translate_composition_seek_cb (GstElement * nlesource,
+    GstEvent * seek, GESUriSource * self)
+{
+  const GstStructure *s = gst_event_get_structure (seek);
+  gboolean from_composition =
+      s && gst_structure_has_field (s, "nle-seek-in-ready");
+
+  if (!from_composition)
+    return NULL;
+
+  GESClip *parent_clip =
+      GES_CLIP (ges_timeline_element_get_parent (GES_TIMELINE_ELEMENT
+          (self->element)));
+  if (!parent_clip)
+    return NULL;
+
+  gdouble rate;
+  gint64 start, stop;
+  GstSeekFlags flags;
+  GstSeekType start_type, stop_type;
+  gst_event_parse_seek (seek, &rate, NULL, &flags, &start_type, &start,
+      &stop_type, &stop);
+
+  GstClockTime inpoint = GES_TIMELINE_ELEMENT_INPOINT (self->element);
+  GstClockTime initial_start = start;
+
+  if (!ges_clip_apply_time_effect_on_seek (parent_clip,
+          GES_SOURCE (self->element), (GstClockTime *) & start,
+          (GstClockTime *) & stop, rate, inpoint)) {
+    gst_object_unref (parent_clip);
+    return NULL;
+  }
+
+  GstEvent *adjusted = NULL;
+  if (start != initial_start) {
+    GST_INFO_OBJECT (nlesource,
+        "Adjusted seek start for time effects: %" GST_TIME_FORMAT " -> %"
+        GST_TIME_FORMAT, GST_TIME_ARGS (initial_start), GST_TIME_ARGS (start));
+    adjusted = gst_event_new_seek (rate, GST_FORMAT_TIME,
+        flags, start_type, start, stop_type, stop);
+    GST_EVENT_SEQNUM (adjusted) = GST_EVENT_SEQNUM (seek);
+  }
+
+  gst_object_unref (parent_clip);
+  return adjusted;
+}
+
 static GstEvent *
 nle_source_query_seek (GstElement * nlesrc, GstEvent * seek)
 {
@@ -249,19 +305,13 @@ ges_uri_source_query_seek (GESUriSource * self, GstEvent * seek)
     stop = start + duration;
   }
 
+  GstClockTime inpoint = self->controls_nested_timeline
+      ? GES_TIMELINE_ELEMENT_INPOINT (self->element)
+      : GST_CLOCK_TIME_NONE;
+
   if (ges_clip_apply_time_effect_on_seek (parent_clip,
           GES_SOURCE (self->element), (GstClockTime *) & start,
-          (GstClockTime *) & stop, rate)) {
-    if (self->controls_nested_timeline) {
-      GST_FIXME_OBJECT (self->element,
-          "Initial seek with time effects on nested timelines "
-          "is DISABLED for now.");
-
-      gst_clear_event (&translated_seek);
-
-      goto done;
-    }
-
+          (GstClockTime *) & stop, rate, inpoint)) {
     /* Time effects expanded the range — update duration to match */
     if (GST_CLOCK_TIME_IS_VALID (stop))
       duration = stop - start;
@@ -274,7 +324,6 @@ ges_uri_source_query_seek (GESUriSource * self, GstEvent * seek)
   g_object_set (self->decodebin, "inpoint", start, "duration", duration,
       "reverse", rate < 0.0, NULL);
 
-done:
   gst_object_unref (parent_clip);
 
   return translated_seek;
@@ -692,6 +741,8 @@ ges_uri_source_create_uridecodepoolsrc (GESUriSource * self)
   GstElement *nle_source = ges_track_element_get_nleobject (self->element);
   g_signal_connect (nle_source, "can-seek-in-ready",
       G_CALLBACK (ges_uri_source_can_seek_in_ready_cb), self);
+  g_signal_connect (nle_source, "translate-composition-seek",
+      G_CALLBACK (ges_uri_source_translate_composition_seek_cb), self);
 
   if (clip_asset) {
     g_object_get (G_OBJECT (clip_asset), "is-nested-timeline",

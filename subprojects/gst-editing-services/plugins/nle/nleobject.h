@@ -128,6 +128,12 @@ struct _NleObject
   gint64 segment_stop;
 
   gboolean in_composition;
+
+  /* Offset applied by GES time effects to incoming seeks for nested
+   * timelines. Must be compensated in outgoing segment/position
+   * translation so the parent composition sees the original (unadjusted)
+   * time. */
+  GstClockTimeDiff seek_time_offset;
 };
 
 struct _NleObjectClass

@@ -431,7 +431,7 @@ compositor_sync_properties_with_meta (GstElement * compositor,
         sample, GES_SMART_MIXER_PAD (info->ghostpad));
     gst_sample_unref (sample);
   } else {
-    GST_INFO_OBJECT (sinkpad, "No sample set!");
+    GST_DEBUG_OBJECT (sinkpad, "No sample set, nothing to sync");
   }
   pad_infos_unref (info);
 

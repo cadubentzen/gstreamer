@@ -1783,11 +1783,20 @@ ghost_event_probe_handler (GstPad * ghostpad G_GNUC_UNUSED,
     if (is_buffer) {
       priv->got_buffer_for_stack = TRUE;
       if (GST_CLOCK_TIME_IS_VALID (priv->setup_new_stack_start_ts)) {
+        gchar *name =
+            g_strdup_printf ("%s-new-stack__%" GST_TIME_FORMAT "--%"
+            GST_TIME_FORMAT "", GST_OBJECT_NAME (comp),
+            GST_TIME_ARGS (priv->stack_playback_window_start),
+            GST_TIME_ARGS (priv->stack_playback_window_stop));
+
         GST_INFO_OBJECT (comp,
             "First buffer after setting up a new stack took: %"
             GST_TIME_FORMAT,
             GST_TIME_ARGS (gst_util_get_timestamp () -
                 priv->setup_new_stack_start_ts));
+        GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS (GST_BIN (comp),
+            GST_DEBUG_GRAPH_SHOW_ALL, name);
+        g_free (name);
         priv->setup_new_stack_start_ts = GST_CLOCK_TIME_NONE;
       }
     }
@@ -3533,6 +3542,38 @@ _relink_single_node (NleComposition * comp, GNode * node,
   if (toplevel_seek) {
     GstEvent *translated_seek = nle_object_translate_incoming_seek (newobj,
         gst_event_ref (toplevel_seek));
+
+    /* Give GES a chance to adjust the seek for time effects */
+    {
+      GstEvent *adjusted = NULL;
+      gint64 orig_start, adj_start;
+
+      gst_event_parse_seek (translated_seek, NULL, NULL, NULL, NULL,
+          &orig_start, NULL, NULL);
+      /* Mark this seek as happening in READY state (bypassing effect
+       * elements like videorate). The ghost pad path goes through the
+       * pipeline where effects already transform the seek, so GES uses
+       * this field to avoid double adjustment. */
+      translated_seek = gst_event_make_writable (translated_seek);
+      gst_structure_set (GST_STRUCTURE (gst_event_get_structure
+              (translated_seek)), "nle-seek-in-ready", G_TYPE_BOOLEAN,
+          TRUE, NULL);
+      g_signal_emit_by_name (newobj, "translate-composition-seek",
+          translated_seek, &adjusted);
+      if (adjusted) {
+        gst_event_parse_seek (adjusted, NULL, NULL, NULL, NULL,
+            &adj_start, NULL, NULL);
+        newobj->seek_time_offset = adj_start - orig_start;
+        GST_DEBUG_OBJECT (comp,
+            "seek_time_offset on %s set to %" G_GINT64_FORMAT,
+            GST_ELEMENT_NAME (newobj), newobj->seek_time_offset);
+        gst_event_unref (translated_seek);
+        translated_seek = adjusted;
+      } else {
+        newobj->seek_time_offset = 0;
+      }
+    }
+
     GST_DEBUG_OBJECT (comp, "Sending nlecomposition-seek with seqnum: %d",
         GST_EVENT_SEQNUM (toplevel_seek));
     gst_structure_set (GST_STRUCTURE (gst_event_get_structure

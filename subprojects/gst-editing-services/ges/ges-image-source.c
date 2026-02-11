@@ -96,26 +96,6 @@ ges_image_source_dispose (GObject * object)
   G_OBJECT_CLASS (ges_image_source_parent_class)->dispose (object);
 }
 
-static gboolean
-ges_image_source_create_filters (GESVideoSource * source, GPtrArray * elements,
-    gboolean needs_converters)
-{
-  GESVideoSourceClass *klass =
-      GES_VIDEO_SOURCE_CLASS (ges_image_source_parent_class);
-
-  if (ges_converter_type () == GES_CONVERTER_GL) {
-    GstElement *glupload = gst_element_factory_make ("glupload", NULL);
-    if (glupload) {
-      GST_DEBUG_OBJECT (source, "Adding glupload for GL converter mode");
-      g_ptr_array_add (elements, glupload);
-    } else {
-      GST_WARNING_OBJECT (source, "Could not create glupload element");
-    }
-  }
-
-  return klass->ABI.abi.create_filters (source, elements, needs_converters);
-}
-
 static void
 pad_added_cb (GstElement * source, GstPad * pad, GstElement * scale)
 {
@@ -197,7 +177,6 @@ ges_image_source_class_init (GESImageSourceClass * klass)
   source_class->create_source = ges_image_source_create_source;
   vsource_class->ABI.abi.get_natural_size =
       ges_video_uri_source_get_natural_size;
-  vsource_class->ABI.abi.create_filters = ges_image_source_create_filters;
 
   GES_TRACK_ELEMENT_CLASS_DEFAULT_HAS_INTERNAL_SOURCE (klass) = FALSE;
 }

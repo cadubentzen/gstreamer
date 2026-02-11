@@ -68,26 +68,6 @@ G_DEFINE_TYPE_WITH_CODE (GESVideoTestSource, ges_video_test_source,
 static GstElement *ges_video_test_source_create_source (GESSource * source);
 
 static gboolean
-ges_video_test_source_create_filters (GESVideoSource * source,
-    GPtrArray * elements, gboolean needs_converters)
-{
-  GESVideoSourceClass *klass =
-      GES_VIDEO_SOURCE_CLASS (ges_video_test_source_parent_class);
-
-  if (ges_converter_type () == GES_CONVERTER_GL) {
-    GstElement *glupload = gst_element_factory_make ("glupload", NULL);
-    if (glupload) {
-      GST_DEBUG_OBJECT (source, "Adding glupload for GL converter mode");
-      g_ptr_array_add (elements, glupload);
-    } else {
-      GST_WARNING_OBJECT (source, "Could not create glupload element");
-    }
-  }
-
-  return klass->ABI.abi.create_filters (source, elements, needs_converters);
-}
-
-static gboolean
 get_natural_size (GESVideoSource * source, gint * width, gint * height)
 {
   gboolean res = FALSE;
@@ -186,7 +166,6 @@ ges_video_test_source_class_init (GESVideoTestSourceClass * klass)
 
   source_class->create_source = ges_video_test_source_create_source;
   vsource_class->ABI.abi.get_natural_size = get_natural_size;
-  vsource_class->ABI.abi.create_filters = ges_video_test_source_create_filters;
 
   object_class->dispose = dispose;
 

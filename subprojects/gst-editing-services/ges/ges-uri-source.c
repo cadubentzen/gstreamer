@@ -483,6 +483,22 @@ ges_uri_source_get_toplevel_pipeline (GESUriSource * self)
 }
 
 static void
+ges_uri_source_disconnect_bus_sync (GESUriSource * self)
+{
+  GstElement *prev = g_weak_ref_get (&self->toplevel_pipeline);
+
+  if (prev) {
+    GstBus *bus = gst_element_get_bus (prev);
+    if (bus) {
+      g_signal_handlers_disconnect_by_func (bus,
+          uridecodepoolsrc_bus_sync_message_cb, self);
+      gst_object_unref (bus);
+    }
+    gst_object_unref (prev);
+  }
+}
+
+static void
 ges_uri_source_update_toplevel_pipeline (GESUriSource * self)
 {
   GESTimeline *timeline;
@@ -499,12 +515,14 @@ ges_uri_source_update_toplevel_pipeline (GESUriSource * self)
   }
 
   if (!timeline) {
+    ges_uri_source_disconnect_bus_sync (self);
     g_weak_ref_set (&self->toplevel_pipeline, NULL);
     return;
   }
 
   parent = GST_ELEMENT_PARENT (timeline);
   if (!GST_IS_PIPELINE (parent)) {
+    ges_uri_source_disconnect_bus_sync (self);
     g_weak_ref_set (&self->toplevel_pipeline, NULL);
     return;
   }
@@ -515,6 +533,8 @@ ges_uri_source_update_toplevel_pipeline (GESUriSource * self)
     return;
   }
   gst_clear_object (&prev_pipeline);
+
+  ges_uri_source_disconnect_bus_sync (self);
 
   g_weak_ref_set (&self->toplevel_pipeline, parent);
 
@@ -872,6 +892,8 @@ ges_uri_source_select_pad (GESSource * self, GstPad * pad)
 void
 ges_uri_source_dispose (GESUriSource * self)
 {
+  ges_uri_source_disconnect_bus_sync (self);
+  g_weak_ref_set (&self->toplevel_pipeline, NULL);
   gst_clear_object (&self->uridecodepool_pipeline);
 }
 

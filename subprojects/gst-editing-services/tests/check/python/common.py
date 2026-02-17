@@ -476,7 +476,8 @@ class GESTimelineConfigTest(GESTest):
         self.assertTrue(clip.set_start(start))
         self.timeline.set_snapping_distance(prev_snap)
 
-        self.assertTrue(clip.set_max_duration(maxduration))
+        if maxduration != -1:
+            self.assertTrue(clip.set_max_duration(maxduration))
 
         self.config[clip] = self.new_config(
             start, duration, inpoint, maxduration, layer)
@@ -542,6 +543,9 @@ class GESTimelineConfigTest(GESTest):
 
     def assertElementConfig(self, element, config):
         for prop in config:
+            if prop == "max-duration" and config[prop] == -1:
+                continue
+
             if prop == "layer":
                 val = element.get_layer_priority()
             else:

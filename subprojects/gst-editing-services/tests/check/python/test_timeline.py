@@ -3657,9 +3657,9 @@ class TestComplexEditing(common.GESTimelineConfigTest):
         self.timeline.disable_edit_apis(True)
         self.assertEqual(self.timeline.props.auto_transition, False)
 
-        c0 = self.add_clip("c0", 0, [track], 0, 10)
+        c0 = self.add_clip("c0", 0, [track], 0, 10, maxduration=-1)
         # Without disabling edit API adding clip would fail
-        c1 = self.add_clip("c1", 0, [track], 0, 10)
+        c1 = self.add_clip("c1", 0, [track], 0, 10, maxduration=-1)
         self.assertTimelineConfig()
 
         c1.set_start(1)

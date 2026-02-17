@@ -88,7 +88,7 @@ class TestTransitionClip(unittest.TestCase):
         vtransition.set_inverted(True)
         self.assertEqual(vtransition.props.invert, True)
 
-        with tempfile.NamedTemporaryFile() as tmpxges:
+        with tempfile.NamedTemporaryFile(suffix=".xges") as tmpxges:
             uri = Gst.filename_to_uri(tmpxges.name)
             timeline.save_to_uri(uri, None, True)
 

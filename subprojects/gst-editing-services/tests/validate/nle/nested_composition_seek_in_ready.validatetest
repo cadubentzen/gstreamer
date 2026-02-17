@@ -1,0 +1,23 @@
+# Verify that nested compositions use seek-in-ready to pre-position sources.
+# Builds a 2-level nested composition (compo → source_L0 → compo_L1 → source_L1)
+# and checks that both compositions used the seek-in-ready path.
+meta,
+    handles-states=true,
+    ignore-eos=true,
+    args={
+        "nlecomposition name=compo ! $(videosink)",
+    }
+
+nle-add-child, object-name="compo", desc="nlesource name=source_L0 inpoint=0 duration=200000000"
+nle-add-child, object-name="source_L0", desc="nlecomposition name=compo_L1"
+nle-add-child, object-name="compo_L1", desc="nlesource name=source_L1 inpoint=0 duration=200000000"
+nle-add-child, object-name="source_L1", desc="videotestsrc"
+
+play
+
+nle-check-seek-in-ready, object-name=compo, seek-in-ready=1, seek-after-preroll=0
+nle-check-seek-in-ready, object-name=compo_L1, seek-in-ready=1, seek-after-preroll=0
+
+check-position, on-message=eos, expected-position=0.2
+
+stop

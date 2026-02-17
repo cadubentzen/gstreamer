@@ -76,10 +76,9 @@ done:                                                                          \
 }
 
 static gboolean
-_nle_source_wrapping_composition_can_seek_in_ready_cb (GstElement * nleobject,
-    gpointer user_data)
+_nle_source_can_seek_in_ready_cb (GstElement * nleobject, gpointer user_data)
 {
-  return FALSE;
+  return TRUE;
 }
 
 NLE_START_VALIDATE_ACTION (_add_object)
@@ -104,12 +103,11 @@ NLE_START_VALIDATE_ACTION (_add_object)
   gboolean is_operation = NLE_IS_OPERATION (nleobj);
   gboolean is_src = NLE_IS_SOURCE (nleobj);
 
-  /* When adding a composition as child of an NleSource, disable
-   * seek-in-ready to avoid EOS seqnum mismatches in nested compositions */
-  if (is_src && NLE_IS_COMPOSITION (child)) {
+  /* Opt all NLE sources into seek-in-ready in test scenarios, mirroring
+   * what GESUriSource does for video sources in real pipelines. */
+  if (is_src) {
     g_signal_connect (nleobj, "can-seek-in-ready",
-        G_CALLBACK (_nle_source_wrapping_composition_can_seek_in_ready_cb),
-        NULL);
+        G_CALLBACK (_nle_source_can_seek_in_ready_cb), NULL);
   }
 
   if (GST_IS_BIN (child) && (is_src || is_operation)) {
@@ -148,6 +146,45 @@ clean:
 
 NLE_END_VALIDATE_ACTION;
 
+NLE_START_VALIDATE_ACTION (_check_seek_in_ready)
+{
+  const gchar *objname =
+      gst_structure_get_string (action->structure, "object-name");
+  gint expected_seek_in_ready = -1;
+  gint expected_seek_after_preroll = -1;
+
+  gst_structure_get_int (action->structure, "seek-in-ready",
+      &expected_seek_in_ready);
+  gst_structure_get_int (action->structure, "seek-after-preroll",
+      &expected_seek_after_preroll);
+
+  GstElement *comp =
+      nle_find_object_in_bin_recurse (GST_BIN (pipeline), objname);
+  REPORT_UNLESS (comp, done, "Could not find `%s`", objname);
+  REPORT_UNLESS (NLE_IS_COMPOSITION (comp), clean, "`%s` is not a composition",
+      objname);
+
+  if (expected_seek_in_ready >= 0) {
+    guint count = nle_composition_get_seek_in_ready_count (
+        NLE_COMPOSITION (comp));
+    REPORT_UNLESS ((gint) count == expected_seek_in_ready, clean,
+        "seek-in-ready: expected %d, got %u", expected_seek_in_ready, count);
+  }
+  if (expected_seek_after_preroll >= 0) {
+    guint count = nle_composition_get_seek_after_preroll_count (
+        NLE_COMPOSITION (comp));
+    REPORT_UNLESS ((gint) count == expected_seek_after_preroll, clean,
+        "seek-after-preroll: expected %d, got %u",
+        expected_seek_after_preroll, count);
+  }
+
+clean:
+  gst_clear_object (&comp);
+  goto done;
+}
+
+NLE_END_VALIDATE_ACTION;
+
 static void
 register_action_types (void)
 {
@@ -174,6 +211,32 @@ register_action_types (void)
         {NULL}
        },
        "Add a child to a NleObject\n",
+       GST_VALIDATE_ACTION_TYPE_NONE);
+
+  gst_validate_register_action_type ("nle-check-seek-in-ready", "nle",
+    _check_seek_in_ready,
+      (GstValidateActionParameter [])  {
+        {
+         .name = "object-name",
+         .description = "The name of the NleComposition to check",
+         .mandatory = TRUE,
+         .types = "string",
+        },
+        {
+         .name = "seek-in-ready",
+         .description = "Expected number of seek-in-ready occurrences (-1 to skip check)",
+         .mandatory = FALSE,
+         .types = "int",
+        },
+        {
+         .name = "seek-after-preroll",
+         .description = "Expected number of seek-after-preroll occurrences (-1 to skip check)",
+         .mandatory = FALSE,
+         .types = "int",
+        },
+        {NULL}
+       },
+       "Check seek-in-ready and seek-after-preroll counters on a NleComposition\n",
        GST_VALIDATE_ACTION_TYPE_NONE);
 /* *INDENT-ON* */
 }

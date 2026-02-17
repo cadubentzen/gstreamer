@@ -72,6 +72,11 @@ struct _NleSourcePrivate
   guint32 flush_seqnum;
   gulong probeid;
 
+  /* Seqnum from the outer composition's seek during seek-in-ready relinking.
+   * When the inner composition produces EOS with its own internal seqnum,
+   * we replace it with this one so the outer composition can match it. */
+  guint32 seek_in_ready_seqnum;
+  gboolean wraps_composition;    /* TRUE when this source wraps a child NleComposition */
 
   /* Identity automatically created to handle reverse playback */
   GstElement *identity;
@@ -160,29 +165,27 @@ nle_source_handle_message (GstBin * bin, GstMessage * message)
           NLE_TYPE_OBJECT_QUERY_INITIALIZATION_SEEK, &q, NULL);
       g_assert (q);
 
+      ((NleSource *) bin)->priv->wraps_composition = TRUE;
+
       g_mutex_lock (&q->lock);
 
-      GstEvent *event;
       if (q->initialization_seek) {
-        event = gst_event_copy (q->initialization_seek);
+        /* Parent answered with a seek — translate it into this source's
+         * coordinate space so the inner composition gets the right position. */
+        GstEvent *event = gst_event_copy (q->initialization_seek);
+
+        q->initialization_seek =
+            nle_object_translate_incoming_seek (NLE_OBJECT (bin), event);
+        GST_DEBUG_OBJECT (bin, "Translated to %" GST_PTR_FORMAT,
+            q->initialization_seek);
       } else {
-        GstObject *parent = gst_object_get_parent (GST_OBJECT (bin));
-
-        GstClockTime stop =
-            NLE_IS_COMPOSITION (parent) ? NLE_OBJECT_STOP (parent) :
-            NLE_OBJECT_STOP (bin);
-        gst_clear_object (&parent);
-
-        event = gst_event_new_seek (1.0,
-            GST_FORMAT_TIME,
-            GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
-            GST_SEEK_TYPE_SET, 0, GST_SEEK_TYPE_SET, stop);
+        /* Parent answered NULL — this means the parent composition used
+         * seek-in-ready and already pre-positioned this source during
+         * relinking.  Leave initialization_seek as NULL so the inner
+         * composition can also use seek-in-ready for its own sources. */
+        GST_DEBUG_OBJECT (bin, "Parent answered NULL, inner composition "
+            "will use seek-in-ready");
       }
-
-      q->initialization_seek =
-          nle_object_translate_incoming_seek (NLE_OBJECT (bin), event);
-      GST_DEBUG_OBJECT (bin, "Translated to %" GST_PTR_FORMAT,
-          q->initialization_seek);
 
       g_mutex_unlock (&q->lock);
 
@@ -275,6 +278,33 @@ srcpad_probe_cb (GstPad * pad, GstPadProbeInfo * info, NleSource * source)
   return GST_PAD_PROBE_OK;
 }
 
+/* When a source wraps a nested composition, the inner composition uses
+ * seek-in-ready with its own seqnum.  The resulting EOS carries that
+ * internal seqnum, which the outer composition cannot match.  Fix the
+ * EOS seqnum on the way out so the outer composition can track it. */
+static GstPadProbeReturn
+srcpad_downstream_probe_cb (GstPad * pad, GstPadProbeInfo * info,
+    NleSource * source)
+{
+  GstEvent *event = info->data;
+
+  if (GST_EVENT_TYPE (event) == GST_EVENT_EOS) {
+    guint32 seqnum = source->priv->seek_in_ready_seqnum;
+
+    if (seqnum) {
+      GST_DEBUG_OBJECT (source,
+          "Replacing inner-composition EOS seqnum %u with outer seqnum %u",
+          gst_event_get_seqnum (event), seqnum);
+      event = gst_event_make_writable (event);
+      gst_event_set_seqnum (event, seqnum);
+      GST_PAD_PROBE_INFO_DATA (info) = event;
+      source->priv->seek_in_ready_seqnum = 0;
+    }
+  }
+
+  return GST_PAD_PROBE_OK;
+}
+
 static void
 nle_source_init (NleSource * source)
 {
@@ -295,6 +325,9 @@ nle_source_init (NleSource * source)
   gst_pad_add_probe (NLE_OBJECT_SRC (source),
       GST_PAD_PROBE_TYPE_EVENT_UPSTREAM, (GstPadProbeCallback) srcpad_probe_cb,
       source, NULL);
+  gst_pad_add_probe (NLE_OBJECT_SRC (source),
+      GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
+      (GstPadProbeCallback) srcpad_downstream_probe_cb, source, NULL);
 
   GST_DEBUG_OBJECT (source, "Setting GstBin async-handling to TRUE");
   g_object_set (G_OBJECT (source), "async-handling", TRUE, NULL);
@@ -601,6 +634,11 @@ nle_source_send_event (GstElement * element, GstEvent * event)
     case GST_EVENT_SEEK:
       if (gst_structure_has_field (gst_event_get_structure (event),
               "nlecomposition-seek")) {
+        /* For sources wrapping a nested composition: remember the outer
+         * composition's seqnum so we can fix up EOS coming from the inner
+         * composition that used seek-in-ready with its own seqnum. */
+        if (source->priv->wraps_composition)
+          source->priv->seek_in_ready_seqnum = gst_event_get_seqnum (event);
         nle_object_seek_all_children (NLE_OBJECT (element), event);
       } else {
         g_mutex_lock (&source->priv->seek_lock);

@@ -39,7 +39,25 @@ struct _GESUriSource
 
   GList *parent_ges_uri_sources;
   gboolean controls_nested_timeline;
-   gboolean disable_seek_in_ready;
+  gboolean disable_seek_in_ready;
+
+  /* Seek event for positioning nested timeline sources during seek-in-ready.
+   *
+   * Flow: During _relink_single_node, the NLE composition sends a
+   * translate-composition-seek signal BEFORE sync_state_with_parent.
+   * For nested timeline sources (controls_nested_timeline=TRUE), the
+   * translate callback stores the NLE-translated + time-effect-adjusted seek
+   * here. Then when sync_state triggers start(), the get-initial-seek callback
+   * returns this event to position the inner composition at the exact
+   * sub-segment needed (e.g., [parent_inpoint, parent_inpoint+stack_duration]).
+   *
+   * Why we need this: Without it, the inner composition would start from
+   * position 0, requiring a seek round-trip. With it, the inner composition
+   * starts pre-positioned, avoiding the extra seek.
+   *
+   * Only used for nested timelines. Regular sources leave this NULL and use
+   * the fallback path which computes the full clip range for pool reuse. */
+  GstEvent *pending_seek_in_ready;
 };
 
 G_GNUC_INTERNAL gboolean      ges_uri_source_select_pad   (GESSource *self, GstPad *pad);

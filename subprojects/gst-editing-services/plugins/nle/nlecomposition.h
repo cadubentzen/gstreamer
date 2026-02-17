@@ -62,6 +62,8 @@ struct _NleCompositionClass
 
 GType nle_composition_get_type (void) G_GNUC_INTERNAL;
 GstElement * nle_find_object_in_bin_recurse (GstBin * object, const gchar *name);
+guint nle_composition_get_seek_in_ready_count (NleComposition * comp);
+guint nle_composition_get_seek_after_preroll_count (NleComposition * comp);
 
 G_END_DECLS
 #endif /* __NLE_COMPOSITION_H__ */

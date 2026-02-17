@@ -244,6 +244,9 @@ struct _NleCompositionPrivate
   gboolean drop_tags;
 
   GstClockTime setup_new_stack_start_ts;
+
+  guint seek_in_ready_count;
+  guint seek_after_preroll_count;
 };
 
 #define ACTION_CALLBACK(__action) (((GCClosure*) (__action))->callback)
@@ -3536,13 +3539,23 @@ _relink_single_node (NleComposition * comp, GNode * node,
   srcpad = NLE_OBJECT_SRC (newobj);
 
   gst_bin_add (GST_BIN (comp->priv->current_bin), GST_ELEMENT (newobj));
-  gst_element_sync_state_with_parent (GST_ELEMENT_CAST (newobj));
 
+  GstEvent *translated_seek = NULL;
   if (toplevel_seek) {
-    GstEvent *translated_seek = nle_object_translate_incoming_seek (newobj,
+    translated_seek = nle_object_translate_incoming_seek (newobj,
         gst_event_ref (toplevel_seek));
 
-    /* Give GES a chance to adjust the seek for time effects */
+    /* Give GES a chance to adjust the seek for time effects.
+     *
+     * This must happen BEFORE gst_element_sync_state_with_parent() so that
+     * GES can set pending_seek_in_ready on the source (for nested timelines).
+     * When sync_state triggers start() -> get-initial-seek, the callback can
+     * use pending_seek_in_ready to position nested compositions immediately at
+     * the correct sub-segment, avoiding a seek round-trip.
+     *
+     * For pre-prepared pool pipelines, this ensures the nlecomposition-seek
+     * (sent below) will match the position expected by handle_nlecomposition_seek,
+     * allowing it to classify the seek as Expected rather than Unexpected. */
     {
       GstEvent *adjusted = NULL;
       gint64 orig_start, adj_start;
@@ -3572,7 +3585,11 @@ _relink_single_node (NleComposition * comp, GNode * node,
         newobj->seek_time_offset = 0;
       }
     }
+  }
 
+  gst_element_sync_state_with_parent (GST_ELEMENT_CAST (newobj));
+
+  if (translated_seek) {
     GST_DEBUG_OBJECT (comp, "Sending nlecomposition-seek with seqnum: %d",
         GST_EVENT_SEQNUM (toplevel_seek));
     gst_structure_set (GST_STRUCTURE (gst_event_get_structure
@@ -3959,11 +3976,23 @@ update_pipeline (NleComposition * comp, GstClockTime currenttime,
       get_clean_toplevel_stack (comp, &currenttime, &new_start, &new_stop,
       &can_seek_in_ready);
 
-  /* Sub-compositions should not seek in ready: the parent will send an
-   * initializing seek that cascades down, so seeking here would just
-   * create a redundant flush cycle. */
+  /* Sub-compositions (inside pool pipelines) should not seek in ready
+   * during their own INITIALIZE phase: at this point, the inner composition
+   * is initializing its own sources in response to the parent's initialization
+   * seek. The inner sources haven't received translate-composition-seek yet
+   * (that happens during the parent's _relink_single_node, not during the
+   * inner composition's initialization). The awaited_toplevel_seek provides
+   * [parent_inpoint, parent_inpoint + parent_duration] which is the range,
+   * but the inner composition will receive a proper nlecomposition-seek after
+   * initialization that positions it correctly.
+   *
+   * NOTE: This does NOT prevent seek-in-ready for the parent's source wrapping
+   * the nested timeline - that uses pending_seek_in_ready set by the parent's
+   * translate-composition-seek. This only affects the inner composition's own
+   * stack initialization. */
   if (priv->awaited_toplevel_seek)
     can_seek_in_ready = FALSE;
+
   is_new_stack = !are_same_stacks (priv->current, stack);
   tear_down = is_new_stack
       || nle_composition_query_needs_teardown (comp, update_reason);
@@ -4034,6 +4063,11 @@ update_pipeline (NleComposition * comp, GstClockTime currenttime,
           priv->awaited_toplevel_seek, can_seek_in_ready);
       gst_clear_event (&toplevel_seek);
     }
+
+    if (can_seek_in_ready)
+      priv->seek_in_ready_count++;
+    else if (toplevel_seek)
+      priv->seek_after_preroll_count++;
   }
 
   /* Unlock all elements in new stack */
@@ -4366,4 +4400,16 @@ nle_composition_get_nle_object_by_name (NleComposition * comp,
 
 done:
   return res;
+}
+
+guint
+nle_composition_get_seek_in_ready_count (NleComposition * comp)
+{
+  return comp->priv->seek_in_ready_count;
+}
+
+guint
+nle_composition_get_seek_after_preroll_count (NleComposition * comp)
+{
+  return comp->priv->seek_after_preroll_count;
 }

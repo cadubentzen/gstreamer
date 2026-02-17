@@ -137,6 +137,13 @@ ges_init_post (GOptionContext * context, GOptionGroup * group,
 
     goto failed;
   }
+  {
+    /* Force-load the NLE plugin so its validate action types (registered
+     * during class init) are available before scenario parsing */
+    GstElement *tmp =
+        gst_element_factory_create (nlecomposition_factory, NULL);
+    gst_object_unref (tmp);
+  }
   gst_object_unref (nlecomposition_factory);
 
   /* register clip classes with the system */

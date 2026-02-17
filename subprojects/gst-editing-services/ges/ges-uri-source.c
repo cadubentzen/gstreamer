@@ -248,6 +248,24 @@ ges_uri_source_translate_composition_seek_cb (GstElement * nlesource,
     GST_EVENT_SEQNUM (adjusted) = GST_EVENT_SEQNUM (seek);
   }
 
+  /* For nested timeline sources, store the seek so
+   * uridecodepoolsrc_get_initial_seek_cb can pass it to the inner
+   * composition.  The inner composition needs the exact sub-segment
+   * (e.g. [parent_inpoint, parent_inpoint+stack_duration]) to position
+   * itself correctly for the current parent stack.
+   *
+   * For regular (non-nested) sources we must NOT store this: their pool
+   * pipeline (the media decoder) needs the full clip range (e.g.
+   * [inpoint, inpoint+clip_duration]) to enable reuse across multiple
+   * parent stack changes via the faking-eos mechanism. The fallback path
+   * in uridecodepoolsrc_get_initial_seek_cb computes this correctly by
+   * starting from timeline position 0 and translating through all parent
+   * NLE objects, which gives the full media range. */
+  if (self->controls_nested_timeline) {
+    gst_clear_event (&self->pending_seek_in_ready);
+    self->pending_seek_in_ready = gst_event_copy (adjusted ? adjusted : seek);
+  }
+
   gst_object_unref (parent_clip);
   return adjusted;
 }
@@ -321,9 +339,6 @@ ges_uri_source_query_seek (GESUriSource * self, GstEvent * seek)
   translated_seek = gst_event_new_seek (rate, GST_FORMAT_TIME,
       seek_flags, GST_SEEK_TYPE_SET, start, GST_SEEK_TYPE_SET, stop);
 
-  g_object_set (self->decodebin, "inpoint", start, "duration", duration,
-      "reverse", rate < 0.0, NULL);
-
   gst_object_unref (parent_clip);
 
   return translated_seek;
@@ -336,11 +351,27 @@ uridecodepoolsrc_get_initial_seek_cb (GstElement * uridecodepoolsrc,
   GST_DEBUG_OBJECT (uridecodepoolsrc,
       "Getting initial seek for %" GST_PTR_FORMAT, self->element);
 
-  if (self->controls_nested_timeline) {
-    GST_INFO_OBJECT (uridecodepoolsrc,
-        "Controls a nested timeline not sending initial seek as the deepest timeline will do it itself");
+  /* During seek-in-ready, translate-composition-seek already computed the
+   * correct position for this source.  Use it directly instead of starting
+   * from toplevel position 0 (which gives the wrong result for sources that
+   * don't start at position 0 in their composition). */
+  if (self->pending_seek_in_ready) {
+    GstEvent *seek = g_steal_pointer (&self->pending_seek_in_ready);
 
-    return NULL;
+    gdouble rate;
+    gint64 start, stop;
+    gst_event_parse_seek (seek, &rate, NULL, NULL, NULL, &start, NULL, &stop);
+
+    GstClockTime duration =
+        GST_CLOCK_TIME_IS_VALID (stop) ? stop - start : GST_CLOCK_TIME_NONE;
+    g_object_set (self->decodebin, "inpoint", start, "duration", duration,
+        "reverse", rate < 0.0, NULL);
+
+    GST_DEBUG_OBJECT (self->element,
+        "%s initial seek from pending seek-in-ready: %" GST_PTR_FORMAT,
+        GES_TIMELINE_ELEMENT_NAME (self->element), seek);
+
+    return seek;
   }
 
   GESTimeline *timeline = GES_TIMELINE_ELEMENT_TIMELINE (self->element);
@@ -380,6 +411,17 @@ uridecodepoolsrc_get_initial_seek_cb (GstElement * uridecodepoolsrc,
   }
 
   seek = ges_uri_source_query_seek (self, seek);
+
+  {
+    gdouble rate;
+    gint64 start, stop;
+    gst_event_parse_seek (seek, &rate, NULL, NULL, NULL, &start, NULL, &stop);
+    GstClockTime duration =
+        GST_CLOCK_TIME_IS_VALID (stop) ? stop - start : GST_CLOCK_TIME_NONE;
+    g_object_set (self->decodebin, "inpoint", start, "duration", duration,
+        "reverse", rate < 0.0, NULL);
+  }
+
   GST_DEBUG_OBJECT (self->element, "%s initial seek: %" GST_PTR_FORMAT,
       GES_TIMELINE_ELEMENT_NAME (self->element), seek);
 
@@ -667,12 +709,6 @@ ges_uri_source_can_seek_in_ready_cb (GstElement * nleobject,
     return FALSE;
   }
 
-  if (self->controls_nested_timeline) {
-    GST_DEBUG_OBJECT (self->element,
-        "Controls a nested timeline, not seeking in READY");
-    return FALSE;
-  }
-
   return TRUE;
 }
 
@@ -895,6 +931,7 @@ ges_uri_source_dispose (GESUriSource * self)
   ges_uri_source_disconnect_bus_sync (self);
   g_weak_ref_set (&self->toplevel_pipeline, NULL);
   gst_clear_object (&self->uridecodepool_pipeline);
+  gst_clear_event (&self->pending_seek_in_ready);
 }
 
 

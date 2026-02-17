@@ -1001,7 +1001,9 @@ gst_validate_pad_monitor_reset (GstValidatePadMonitor * pad_monitor)
    * it here and keep in the same order as the GstValidatePadMonitor
    * structure */
 
-  pad_monitor->pending_flush_stop = FALSE;
+  /* Do NOT reset pending_flush_stop here: flush-stop can arrive after
+   * pad deactivation (e.g., during state change to NULL). The flush-stop
+   * handler will reset it when the flush-stop actually arrives. */
   pad_monitor->pending_newsegment_seqnum = GST_SEQNUM_INVALID;
   pad_monitor->pending_eos_seqnum = GST_SEQNUM_INVALID;
 

@@ -72,12 +72,6 @@ struct _NleSourcePrivate
   guint32 flush_seqnum;
   gulong probeid;
 
-  /* Seqnum from the outer composition's seek during seek-in-ready relinking.
-   * When the inner composition produces EOS with its own internal seqnum,
-   * we replace it with this one so the outer composition can match it. */
-  guint32 seek_in_ready_seqnum;
-  gboolean wraps_composition;    /* TRUE when this source wraps a child NleComposition */
-
   /* Identity automatically created to handle reverse playback */
   GstElement *identity;
 };

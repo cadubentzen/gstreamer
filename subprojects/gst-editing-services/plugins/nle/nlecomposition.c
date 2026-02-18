@@ -1939,7 +1939,11 @@ ghost_event_probe_handler (GstPad * ghostpad G_GNUC_UNUSED,
           segment->start);
       rstop =
           gst_segment_to_running_time (segment, GST_FORMAT_TIME, segment->stop);
-      GstClockTime rdiff = segment->rate > 0 ? rstop - rstart : rstart - rstop;
+      GstClockTime rdiff;
+      if (GST_CLOCK_TIME_IS_VALID (rstop) && GST_CLOCK_TIME_IS_VALID (rstart))
+        rdiff = segment->rate > 0 ? rstop - rstart : rstart - rstop;
+      else
+        rdiff = 0;
       copy.base = comp->priv->next_base_time;
       GST_DEBUG_OBJECT (comp,
           "Updating base time to %" GST_TIME_FORMAT ", next:%" GST_TIME_FORMAT,
@@ -4080,13 +4084,21 @@ update_pipeline (NleComposition * comp, GstClockTime currenttime,
      * This avoid seeking round trips (otherwise we get 1 extra seek
      * per level of nesting)
      *
-     * And when seeking on ready, no initial seek will be sent ever
+     * When seeking in ready, we already sent the seek during relink,
+     * so clear toplevel_seek to avoid waiting for it on the ghost pad.
      */
     if ((update_reason == COMP_UPDATE_STACK_INITIALIZE
             && priv->awaited_toplevel_seek) || can_seek_in_ready) {
       GST_DEBUG_OBJECT (comp, "Do not plan pushing a toplevel seek event: "
           "awaited_toplevel_seek: %p, can_seek_in_ready: %d",
           priv->awaited_toplevel_seek, can_seek_in_ready);
+      if (can_seek_in_ready) {
+        g_atomic_int_set (&priv->stack_initialization_seek_sent, TRUE);
+        /* Children have been seeked in READY so they already queried
+         * stack_initialization_seek. Clear it now so the ghost probe
+         * does not gate CAPS/BUFFERS coming from these sources. */
+        gst_clear_event (&priv->stack_initialization_seek);
+      }
       gst_clear_event (&toplevel_seek);
     }
 

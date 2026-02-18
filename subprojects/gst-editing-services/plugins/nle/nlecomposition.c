@@ -337,7 +337,7 @@ _add_action (NleComposition * comp, GCallback func, gpointer data,
 static gboolean
 _is_ready_to_restart_task (NleComposition * comp, GstEvent * event);
 static GstEvent *
-nle_composition_query_topelevel_initializing_seek (NleComposition * comp);
+nle_composition_query_topelevel_initializing_seek (NleComposition * comp, gint *seqnum);
 
 static void
 _update_after_eos_while_scrubbing (NleComposition * comp, UpdateAfterTimeoutData * data);
@@ -870,9 +870,11 @@ static gboolean
 _initialize_stack_func (NleComposition * comp, UpdateCompositionData * ucompo)
 {
   NleCompositionPrivate *priv = comp->priv;
+  gint toplevel_seqnum = GST_SEQNUM_INVALID;
 
   priv->awaited_toplevel_seek =
-      nle_composition_query_topelevel_initializing_seek (comp);
+      nle_composition_query_topelevel_initializing_seek (comp,
+      &toplevel_seqnum);
 
   _post_start_composition_update (comp, ucompo->seqnum, ucompo->reason);
   _commit_all_values (comp, ucompo->reason);
@@ -896,6 +898,9 @@ _initialize_stack_func (NleComposition * comp, UpdateCompositionData * ucompo)
     return TRUE;
   } else {
     comp->priv->next_base_time = 0;
+    if (toplevel_seqnum != GST_SEQNUM_INVALID) {
+      ucompo->seqnum = toplevel_seqnum;
+    }
     /* set ghostpad target */
     if (!(update_pipeline (comp, COMP_REAL_START (comp),
                 ucompo->seqnum, COMP_UPDATE_STACK_INITIALIZE))) {
@@ -1252,9 +1257,11 @@ nle_composition_translate_initialization_seek_to_current_stack (NleComposition *
   start = MAX (start, priv->stack_playback_window_start);
   stop = MIN (stop, priv->stack_playback_window_stop);
 
+  guint32 original_seqnum = gst_event_get_seqnum (q->initialization_seek);
   GstEvent *new_seek =
       gst_event_new_seek (rate, format, flags, start_type, start, stop_type,
       stop);
+  gst_event_set_seqnum (new_seek, original_seqnum);
   gst_event_replace (&q->initialization_seek, new_seek);
   GST_INFO_OBJECT (comp, "Translated seek to %" GST_PTR_FORMAT, new_seek);
   gst_event_unref (new_seek);
@@ -1298,6 +1305,10 @@ nle_composition_handle_message (GstBin * bin, GstMessage * message)
             priv->stack_initialization_seek ?
             gst_event_ref (priv->stack_initialization_seek) : NULL;
       }
+      if (comp->priv->next_eos_seqnum != GST_SEQNUM_INVALID) {
+        q->seqnum = comp->priv->next_eos_seqnum;
+      }
+
       nle_composition_translate_initialization_seek_to_current_stack (comp, q);
       g_mutex_unlock (&q->lock);
 
@@ -1748,6 +1759,21 @@ ghost_event_probe_handler (GstPad * ghostpad G_GNUC_UNUSED,
   if (is_buffer || (is_query && GST_QUERY_IS_SERIALIZED (info->data))
       || query_nlecomposition_initialization_seek || is_eos_to_init) {
     if (priv->stack_initialization_seek) {
+      /* If we already received a SEGMENT with the expected seqnum (set by
+       * _is_ready_to_restart_task in the SEGMENT handler), the task is waiting
+       * for a buffer to confirm the stack is ready. Restart the task now so it
+       * can continue. This handles the case where _seek_pipeline_func with
+       * initializing_stack=TRUE sends a non-flushing seek: the SEGMENT passes
+       * through (because stack_initialization_seek_sent=TRUE), sets
+       * waiting_serialized_query_or_buffer=TRUE, but the subsequent buffer
+       * would be dropped here — causing a deadlock without this check. */
+      if (priv->waiting_serialized_query_or_buffer) {
+        GST_INFO_OBJECT (comp,
+            "update_pipeline DONE (seek-after-preroll path)");
+        _restart_task (comp);
+        return GST_PAD_PROBE_OK;
+      }
+
       if (g_atomic_int_compare_and_exchange
           (&priv->stack_initialization_seek_sent, FALSE, TRUE)) {
 
@@ -1815,12 +1841,6 @@ ghost_event_probe_handler (GstPad * ghostpad G_GNUC_UNUSED,
       if (_is_ready_to_restart_task (comp, event))
         _restart_task (comp);
 
-      if (g_atomic_int_compare_and_exchange
-          (&priv->stack_initialization_seek_sent, TRUE, FALSE)) {
-        GST_INFO_OBJECT (comp, "Done seeking initialization stack.");
-        gst_clear_event (&priv->stack_initialization_seek);
-      }
-
       g_mutex_lock (&priv->seek_in_paused_lock);
       priv->got_buffer_for_stack = FALSE;
       g_mutex_unlock (&priv->seek_in_paused_lock);
@@ -1830,6 +1850,11 @@ ghost_event_probe_handler (GstPad * ghostpad G_GNUC_UNUSED,
             gst_event_get_seqnum (event), priv->flush_seqnum);
         retval = GST_PAD_PROBE_DROP;
       } else {
+        if (g_atomic_int_compare_and_exchange
+            (&priv->stack_initialization_seek_sent, TRUE, FALSE)) {
+          GST_INFO_OBJECT (comp, "Done seeking initialization stack.");
+          gst_clear_event (&priv->stack_initialization_seek);
+        }
         GST_INFO_OBJECT (comp, "Forwarding FLUSH_STOP with seqnum %i",
             comp->priv->flush_seqnum);
         gst_event_unref (event);
@@ -1881,7 +1906,8 @@ ghost_event_probe_handler (GstPad * ghostpad G_GNUC_UNUSED,
       break;
     case GST_EVENT_CAPS:
     {
-      if (priv->stack_initialization_seek) {
+      if (priv->stack_initialization_seek &&
+          !g_atomic_int_get (&priv->stack_initialization_seek_sent)) {
         GST_INFO_OBJECT (comp,
             "Waiting for preroll to send initializing seek, dropping caps.");
         return GST_PAD_PROBE_DROP;
@@ -1896,7 +1922,8 @@ ghost_event_probe_handler (GstPad * ghostpad G_GNUC_UNUSED,
       GstEvent *event2;
       /* next_base_time */
 
-      if (priv->stack_initialization_seek) {
+      if (priv->stack_initialization_seek &&
+          !g_atomic_int_get (&priv->stack_initialization_seek_sent)) {
         GST_INFO_OBJECT (comp, "Waiting for preroll to send initializing seek");
         return GST_PAD_PROBE_DROP;
       }
@@ -2136,7 +2163,8 @@ get_new_seek_event (NleComposition * comp, gboolean updatestoponly,
 }
 
 static GstEvent *
-nle_composition_query_topelevel_initializing_seek (NleComposition * comp)
+nle_composition_query_topelevel_initializing_seek (NleComposition * comp,
+    gint * seqnum)
 {
   NleObjectQueryInitializationSeek *q =
       g_atomic_rc_box_new0 (NleObjectQueryInitializationSeek);
@@ -2156,6 +2184,7 @@ nle_composition_query_topelevel_initializing_seek (NleComposition * comp)
   g_mutex_lock (&q->lock);
   GstEvent *res =
       q->initialization_seek ? gst_event_ref (q->initialization_seek) : NULL;
+  *seqnum = q->seqnum;
   g_mutex_unlock (&q->lock);
   g_atomic_rc_box_release_full (q,
       (GDestroyNotify) nle_object_query_needs_initialization_seek_free);
@@ -3763,7 +3792,7 @@ _activate_new_stack (NleComposition * comp, GstEvent * toplevel_seek)
         "we are in a subtimeline");
   } else {
     GST_INFO_OBJECT (comp, "Needs seeking to initialize stack");
-    comp->priv->stack_initialization_seek = toplevel_seek;
+    gst_event_replace (&comp->priv->stack_initialization_seek, toplevel_seek);
   }
 
   topelement = GST_ELEMENT (priv->current->data);
@@ -3976,22 +4005,6 @@ update_pipeline (NleComposition * comp, GstClockTime currenttime,
       get_clean_toplevel_stack (comp, &currenttime, &new_start, &new_stop,
       &can_seek_in_ready);
 
-  /* Sub-compositions (inside pool pipelines) should not seek in ready
-   * during their own INITIALIZE phase: at this point, the inner composition
-   * is initializing its own sources in response to the parent's initialization
-   * seek. The inner sources haven't received translate-composition-seek yet
-   * (that happens during the parent's _relink_single_node, not during the
-   * inner composition's initialization). The awaited_toplevel_seek provides
-   * [parent_inpoint, parent_inpoint + parent_duration] which is the range,
-   * but the inner composition will receive a proper nlecomposition-seek after
-   * initialization that positions it correctly.
-   *
-   * NOTE: This does NOT prevent seek-in-ready for the parent's source wrapping
-   * the nested timeline - that uses pending_seek_in_ready set by the parent's
-   * translate-composition-seek. This only affects the inner composition's own
-   * stack initialization. */
-  if (priv->awaited_toplevel_seek)
-    can_seek_in_ready = FALSE;
 
   is_new_stack = !are_same_stacks (priv->current, stack);
   tear_down = is_new_stack
@@ -4045,6 +4058,19 @@ update_pipeline (NleComposition * comp, GstClockTime currenttime,
     _deactivate_stack (comp, update_reason);
     comp->priv->setup_new_stack_start_ts = gst_util_get_timestamp ();
     _dump_stack (comp, update_reason, stack);
+
+    /* Store the seek for children to query before we potentially clear it.
+     * Children need this to get the correct seqnum for nested composition
+     * initialization. Only do this when not seeking in ready: when
+     * can_seek_in_ready=TRUE, children are seeked directly during relink and
+     * don't need to query it. Pre-storing it in that case causes a race where
+     * sources start streaming during _relink_new_stack and their CAPS/SEGMENT
+     * get dropped by the ghost probe (stack_initialization_seek set but not
+     * yet sent), which breaks the pipeline initialization. */
+    if (toplevel_seek && !priv->stack_initialization_seek && can_seek_in_ready) {
+      priv->stack_initialization_seek = gst_event_ref (toplevel_seek);
+    }
+
     _relink_new_stack (comp, stack,
         can_seek_in_ready ? gst_event_ref (toplevel_seek) : NULL);
 
@@ -4059,7 +4085,7 @@ update_pipeline (NleComposition * comp, GstClockTime currenttime,
     if ((update_reason == COMP_UPDATE_STACK_INITIALIZE
             && priv->awaited_toplevel_seek) || can_seek_in_ready) {
       GST_DEBUG_OBJECT (comp, "Do not plan pushing a toplevel seek event: "
-          "awaited_toplevel_seek: %p - can seek in ready %d",
+          "awaited_toplevel_seek: %p, can_seek_in_ready: %d",
           priv->awaited_toplevel_seek, can_seek_in_ready);
       gst_clear_event (&toplevel_seek);
     }

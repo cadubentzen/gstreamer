@@ -43,6 +43,7 @@ typedef struct
 {
   GMutex lock;
   GstEvent *initialization_seek;
+  gint seqnum;
 } NleObjectQueryInitializationSeek;
 
 /* *INDENT-OFF* */

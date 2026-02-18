@@ -283,9 +283,6 @@ nle_source_init (NleSource * source)
   gst_pad_add_probe (NLE_OBJECT_SRC (source),
       GST_PAD_PROBE_TYPE_EVENT_UPSTREAM, (GstPadProbeCallback) srcpad_probe_cb,
       source, NULL);
-  gst_pad_add_probe (NLE_OBJECT_SRC (source),
-      GST_PAD_PROBE_TYPE_EVENT_DOWNSTREAM,
-      (GstPadProbeCallback) srcpad_downstream_probe_cb, source, NULL);
 
   GST_DEBUG_OBJECT (source, "Setting GstBin async-handling to TRUE");
   g_object_set (G_OBJECT (source), "async-handling", TRUE, NULL);

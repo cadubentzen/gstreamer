@@ -159,8 +159,6 @@ nle_source_handle_message (GstBin * bin, GstMessage * message)
           NLE_TYPE_OBJECT_QUERY_INITIALIZATION_SEEK, &q, NULL);
       g_assert (q);
 
-      ((NleSource *) bin)->priv->wraps_composition = TRUE;
-
       g_mutex_lock (&q->lock);
 
       if (q->initialization_seek) {

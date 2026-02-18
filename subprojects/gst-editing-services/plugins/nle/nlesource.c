@@ -170,13 +170,6 @@ nle_source_handle_message (GstBin * bin, GstMessage * message)
             nle_object_translate_incoming_seek (NLE_OBJECT (bin), event);
         GST_DEBUG_OBJECT (bin, "Translated to %" GST_PTR_FORMAT,
             q->initialization_seek);
-      } else {
-        /* Parent answered NULL — this means the parent composition used
-         * seek-in-ready and already pre-positioned this source during
-         * relinking.  Leave initialization_seek as NULL so the inner
-         * composition can also use seek-in-ready for its own sources. */
-        GST_DEBUG_OBJECT (bin, "Parent answered NULL, inner composition "
-            "will use seek-in-ready");
       }
 
       g_mutex_unlock (&q->lock);

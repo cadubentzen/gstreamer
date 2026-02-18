@@ -19,6 +19,7 @@ tests = [
     'nle/ensure_no_unnecessary_stack_init_seeks',
     'nle/uridecodepoolsrc_new_stack_no_seek',
     'nle/no_update_for_1sec_paused_scrubing',
+    'nle/nested_composition_seek_in_ready',
 ]
 
 env = environment()

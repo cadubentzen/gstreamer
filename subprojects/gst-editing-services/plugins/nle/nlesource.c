@@ -263,33 +263,6 @@ srcpad_probe_cb (GstPad * pad, GstPadProbeInfo * info, NleSource * source)
   return GST_PAD_PROBE_OK;
 }
 
-/* When a source wraps a nested composition, the inner composition uses
- * seek-in-ready with its own seqnum.  The resulting EOS carries that
- * internal seqnum, which the outer composition cannot match.  Fix the
- * EOS seqnum on the way out so the outer composition can track it. */
-static GstPadProbeReturn
-srcpad_downstream_probe_cb (GstPad * pad, GstPadProbeInfo * info,
-    NleSource * source)
-{
-  GstEvent *event = info->data;
-
-  if (GST_EVENT_TYPE (event) == GST_EVENT_EOS) {
-    guint32 seqnum = source->priv->seek_in_ready_seqnum;
-
-    if (seqnum) {
-      GST_DEBUG_OBJECT (source,
-          "Replacing inner-composition EOS seqnum %u with outer seqnum %u",
-          gst_event_get_seqnum (event), seqnum);
-      event = gst_event_make_writable (event);
-      gst_event_set_seqnum (event, seqnum);
-      GST_PAD_PROBE_INFO_DATA (info) = event;
-      source->priv->seek_in_ready_seqnum = 0;
-    }
-  }
-
-  return GST_PAD_PROBE_OK;
-}
-
 static void
 nle_source_init (NleSource * source)
 {

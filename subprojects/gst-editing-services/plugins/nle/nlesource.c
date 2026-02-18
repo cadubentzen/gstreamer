@@ -589,11 +589,6 @@ nle_source_send_event (GstElement * element, GstEvent * event)
     case GST_EVENT_SEEK:
       if (gst_structure_has_field (gst_event_get_structure (event),
               "nlecomposition-seek")) {
-        /* For sources wrapping a nested composition: remember the outer
-         * composition's seqnum so we can fix up EOS coming from the inner
-         * composition that used seek-in-ready with its own seqnum. */
-        if (source->priv->wraps_composition)
-          source->priv->seek_in_ready_seqnum = gst_event_get_seqnum (event);
         nle_object_seek_all_children (NLE_OBJECT (element), event);
       } else {
         g_mutex_lock (&source->priv->seek_lock);

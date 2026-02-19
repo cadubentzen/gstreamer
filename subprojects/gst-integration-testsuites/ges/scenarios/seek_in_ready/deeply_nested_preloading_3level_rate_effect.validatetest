@@ -30,6 +30,7 @@ meta, seek=true, handles-states=true,
     args = {
         --video-caps, "video/x-raw(ANY), format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1",
         --videosink, "$(videosink) name=videosink",
+        --track-types, video,
     }
 
 set-vars,

@@ -251,6 +251,14 @@ struct _NleCompositionPrivate
 
 #define ACTION_CALLBACK(__action) (((GCClosure*) (__action))->callback)
 
+typedef enum
+{
+  NLE_COMPOSITION_UPDATE_FAILURE,
+  NLE_COMPOSITION_UPDATE_SEEK_AFTER_PREROLL,
+  NLE_COMPOSITION_UPDATE_SEEK_IN_READY,
+  NLE_COMPOSITION_UPDATE_SEEK_FROM_PARENT,
+} NleCompositionUpdateResult;
+
 #define QUERY_PIPELINE_POSITION_STRUCT_NAME "nlecomposition-query-pipeline-position"
 typedef struct
 {
@@ -296,14 +304,14 @@ nle_composition_change_state (GstElement * element, GstStateChange transition);
 
 static inline void nle_composition_reset_target_pad (NleComposition * comp);
 
-static gboolean
+static NleCompositionUpdateResult
 seek_handling (NleComposition * comp, gint32 seqnum,
     NleUpdateStackReason update_reason, gboolean force_update);
 static gint objects_start_compare (NleObject * a, NleObject * b);
 static gint objects_stop_compare (NleObject * a, NleObject * b);
 static GstClockTime get_current_position (NleComposition * comp);
 
-static gboolean update_pipeline (NleComposition * comp,
+static NleCompositionUpdateResult update_pipeline (NleComposition * comp,
     GstClockTime currenttime, gint32 seqnum,
     NleUpdateStackReason update_stack_reason);
 static gboolean nle_composition_commit_func (NleObject * object,
@@ -672,7 +680,7 @@ _free_seek_data (SeekData * seekd)
   g_free (seekd);
 }
 
-static void
+static NleCompositionUpdateResult
 _seek_pipeline_func (NleComposition * comp, SeekData * seekd)
 {
   gdouble rate;
@@ -784,12 +792,15 @@ _seek_pipeline_func (NleComposition * comp, SeekData * seekd)
         gst_event_get_seqnum (seekd->event);
   }
 
-  seek_handling (seekd->comp, gst_event_get_seqnum (seekd->event),
+  NleCompositionUpdateResult res =
+      seek_handling (seekd->comp, gst_event_get_seqnum (seekd->event),
       reason, force_update);
 
   if (!initializing_stack && !preparing_toplevel_seek)
     _post_start_composition_update_done (seekd->comp,
         gst_event_get_seqnum (seekd->event), COMP_UPDATE_STACK_ON_SEEK);
+
+  return res;
 }
 
 /*  Must be called with OBJECTS_LOCK taken */
@@ -890,9 +901,12 @@ _initialize_stack_func (NleComposition * comp, UpdateCompositionData * ucompo)
      * reason is correctly set to COMP_UPDATE_STACK_INITIALIZE */
     gst_event_replace (&priv->awaited_toplevel_seek, stack_setup_seek);
 
-    _seek_pipeline_func (comp, seekd);
+    NleCompositionUpdateResult res = _seek_pipeline_func (comp, seekd);
     _free_seek_data (seekd);
-    gst_clear_event (&priv->awaited_toplevel_seek);
+
+    if (res != NLE_COMPOSITION_UPDATE_SEEK_FROM_PARENT) {
+      gst_clear_event (&priv->awaited_toplevel_seek);
+    }
 
     GST_FIXME_OBJECT (comp, "Handle result?");
     return TRUE;
@@ -1994,7 +2008,13 @@ ghost_event_probe_handler (GstPad * ghostpad G_GNUC_UNUSED,
         return GST_PAD_PROBE_OK;
       }
 
-      if (priv->next_eos_seqnum == seqnum) {
+
+
+      if (priv->awaited_toplevel_seek) {
+        GST_INFO_OBJECT (comp,
+            "---> Forwarding EOS as we are waiting for toplevel_seek");
+        return GST_PAD_PROBE_OK;
+      } else if (priv->next_eos_seqnum == seqnum) {
         GstClockTime now = gst_util_get_timestamp ();
 
         g_mutex_lock (&priv->seek_in_paused_lock);
@@ -2024,10 +2044,7 @@ ghost_event_probe_handler (GstPad * ghostpad G_GNUC_UNUSED,
               COMP_UPDATE_STACK_ON_EOS, FALSE);
         }
         g_mutex_unlock (&priv->seek_in_paused_lock);
-      } else if (priv->awaited_toplevel_seek) {
-        GST_INFO_OBJECT (comp,
-            "---> Forwarding EOS as we are waiting for toplevel_seek");
-        return GST_PAD_PROBE_OK;
+
       } else {
         GST_INFO_OBJECT (comp,
             "Got an EOS but it seqnum %i != next eos seqnum %i", seqnum,
@@ -2309,7 +2326,7 @@ query_ancestors_position (NleComposition * comp)
 }
 
 /* WITH OBJECTS LOCK TAKEN */
-static gboolean
+static NleCompositionUpdateResult
 _seek_current_stack (NleComposition * comp, GstEvent * event,
     gboolean flush_downstream)
 {
@@ -2324,7 +2341,7 @@ _seek_current_stack (NleComposition * comp, GstEvent * event,
     GST_ERROR_OBJECT (comp, "Can't seek because no pad available - "
         "no children in the composition ready to be used, the duration is 0, "
         "or not committed yet");
-    return FALSE;
+    return NLE_COMPOSITION_UPDATE_FAILURE;
   }
 
   if (flush_downstream) {
@@ -2340,7 +2357,8 @@ _seek_current_stack (NleComposition * comp, GstEvent * event,
 
   GST_DEBUG_OBJECT (comp, "Done seeking");
 
-  return res;
+  return res ? NLE_COMPOSITION_UPDATE_SEEK_AFTER_PREROLL :
+      NLE_COMPOSITION_UPDATE_FAILURE;
 }
 
 /*
@@ -2352,19 +2370,20 @@ _seek_current_stack (NleComposition * comp, GstEvent * event,
   update_stack_reason: The reason for which we need to handle 'seek'
 */
 
-static gboolean
+static NleCompositionUpdateResult
 seek_handling (NleComposition * comp, gint32 seqnum,
     NleUpdateStackReason update_stack_reason, gboolean force_update)
 {
+  NleCompositionUpdateResult res;
   GST_DEBUG_OBJECT (comp, "Seek handling update pipeline reason: %s",
       UPDATE_PIPELINE_REASONS[update_stack_reason]);
 
   if (force_update || have_to_update_pipeline (comp, update_stack_reason)) {
     if (comp->priv->segment->rate >= 0.0)
-      update_pipeline (comp, comp->priv->segment->start, seqnum,
+      res = update_pipeline (comp, comp->priv->segment->start, seqnum,
           update_stack_reason);
     else
-      update_pipeline (comp, comp->priv->segment->stop, seqnum,
+      res = update_pipeline (comp, comp->priv->segment->stop, seqnum,
           update_stack_reason);
   } else {
     GstEvent *toplevel_seek =
@@ -2374,11 +2393,11 @@ seek_handling (NleComposition * comp, gint32 seqnum,
     _set_real_eos_seqnum_from_seek (comp, toplevel_seek);
 
     _remove_update_actions (comp);
-    _seek_current_stack (comp, toplevel_seek,
+    res = _seek_current_stack (comp, toplevel_seek,
         _have_to_flush_downstream (update_stack_reason));
   }
 
-  return TRUE;
+  return res;
 }
 
 static gboolean
@@ -3958,12 +3977,13 @@ nle_composition_query_needs_teardown (NleComposition * comp,
  *
  * WITH OBJECTS LOCK TAKEN
  */
-static gboolean
+static NleCompositionUpdateResult
 update_pipeline (NleComposition * comp, GstClockTime currenttime,
     gint32 seqnum, NleUpdateStackReason update_reason)
 {
 
   GstEvent *toplevel_seek;
+  NleCompositionUpdateResult res = NLE_COMPOSITION_UPDATE_FAILURE;
 
   GNode *stack = NULL;
   gboolean tear_down = FALSE;
@@ -3993,11 +4013,11 @@ update_pipeline (NleComposition * comp, GstClockTime currenttime,
       priv->awaited_toplevel_seek);
 
   if (!GST_CLOCK_TIME_IS_VALID (currenttime))
-    return FALSE;
+    return res;
 
   if (state == GST_STATE_NULL && nextstate == GST_STATE_NULL) {
     GST_DEBUG_OBJECT (comp, "STATE_NULL: not updating pipeline");
-    return FALSE;
+    return res;
   }
 
   GST_DEBUG_OBJECT (comp,
@@ -4063,16 +4083,17 @@ update_pipeline (NleComposition * comp, GstClockTime currenttime,
     comp->priv->setup_new_stack_start_ts = gst_util_get_timestamp ();
     _dump_stack (comp, update_reason, stack);
 
-    /* Store the seek for children to query before we potentially clear it.
-     * Children need this to get the correct seqnum for nested composition
-     * initialization. Only do this when not seeking in ready: when
-     * can_seek_in_ready=TRUE, children are seeked directly during relink and
-     * don't need to query it. Pre-storing it in that case causes a race where
-     * sources start streaming during _relink_new_stack and their CAPS/SEGMENT
-     * get dropped by the ghost probe (stack_initialization_seek set but not
-     * yet sent), which breaks the pipeline initialization. */
-    if (toplevel_seek && !priv->stack_initialization_seek && can_seek_in_ready) {
-      priv->stack_initialization_seek = gst_event_ref (toplevel_seek);
+    if (can_seek_in_ready) {
+      /* When seeking in ready Store the seek for children to query before we
+       * potentially clear it.
+       * Children need this to get the correct seqnum for nested composition
+       * initialization. */
+      gst_event_replace (&priv->stack_initialization_seek, toplevel_seek);
+      res = NLE_COMPOSITION_UPDATE_SEEK_IN_READY;
+    } else if (priv->awaited_toplevel_seek) {
+      res = NLE_COMPOSITION_UPDATE_SEEK_FROM_PARENT;
+    } else {
+      res = NLE_COMPOSITION_UPDATE_SEEK_AFTER_PREROLL;
     }
 
     _relink_new_stack (comp, stack,
@@ -4093,11 +4114,17 @@ update_pipeline (NleComposition * comp, GstClockTime currenttime,
           "awaited_toplevel_seek: %p, can_seek_in_ready: %d",
           priv->awaited_toplevel_seek, can_seek_in_ready);
       if (can_seek_in_ready) {
-        g_atomic_int_set (&priv->stack_initialization_seek_sent, TRUE);
         /* Children have been seeked in READY so they already queried
          * stack_initialization_seek. Clear it now so the ghost probe
          * does not gate CAPS/BUFFERS coming from these sources. */
+        g_atomic_int_set (&priv->stack_initialization_seek_sent, TRUE);
         gst_clear_event (&priv->stack_initialization_seek);
+      } else {
+        /* preparing_toplevel_seek=TRUE, can_seek_in_ready=FALSE: reset the
+         * flag so that a stale TRUE from a previous init does not cause
+         * "Done seeking initialization stack" to fire prematurely when a
+         * deactivation or unrelated flush arrives. */
+        g_atomic_int_set (&priv->stack_initialization_seek_sent, FALSE);
       }
       gst_clear_event (&toplevel_seek);
     }
@@ -4131,7 +4158,7 @@ update_pipeline (NleComposition * comp, GstClockTime currenttime,
       comp->priv->seqnum_to_restart_task = seqnum;
       if (!_pause_task (comp)) {
         gst_event_unref (toplevel_seek);
-        return FALSE;
+        return NLE_COMPOSITION_UPDATE_FAILURE;
       }
       task_paused = TRUE;
     } else {
@@ -4150,7 +4177,7 @@ update_pipeline (NleComposition * comp, GstClockTime currenttime,
   }
 
   if (!_activate_new_stack (comp, toplevel_seek)) {
-    return FALSE;
+    return NLE_COMPOSITION_UPDATE_FAILURE;
   }
 
   if (!task_paused && update_reason == COMP_UPDATE_STACK_ON_COMMIT) {
@@ -4160,7 +4187,7 @@ update_pipeline (NleComposition * comp, GstClockTime currenttime,
     _emit_commited_signal_func (comp, NULL);
   }
 
-  return TRUE;
+  return res;
 }
 
 static gboolean

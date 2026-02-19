@@ -1,0 +1,54 @@
+# Verify seek-in-ready behaviour when a flush seek causes a stack change at level 3,
+# and confirm the correct frame is produced by checking QR codes.
+# compo_L3 has two sources:
+#   - source_L3a [0, 100ms)  → compo_L4 → source_L4  (qroverlay: LEVEL4_SOURCE)
+#   - source_L3b [100ms, 200ms)              (qroverlay: LEVEL3B_SOURCE)
+# At t=0 source_L4 is active → QR code is LEVEL4_SOURCE.
+# After seeking to 150ms the stack changes in compo_L3 → QR code is LEVEL3B_SOURCE.
+# Only compo_L3's seek-in-ready count increments; outer compositions are unchanged.
+meta,
+    handles-states=true,
+    seek=true,
+    args={
+        "nlecomposition name=compo ! video/x-raw,format=I420,width=320,height=240,framerate=30/1 ! $(videosink)",
+    }
+
+nle-add-child, object-name="compo", desc="nlesource name=source_L0 inpoint=0 duration=200000000"
+nle-add-child, object-name="source_L0", desc="nlecomposition name=compo_L1"
+nle-add-child, object-name="compo_L1", desc="nlesource name=source_L1 inpoint=0 duration=200000000"
+nle-add-child, object-name="source_L1", desc="nlecomposition name=compo_L2"
+nle-add-child, object-name="compo_L2", desc="nlesource name=source_L2 inpoint=0 duration=200000000"
+nle-add-child, object-name="source_L2", desc="nlecomposition name=compo_L3"
+# compo_L3: two sources at different time ranges to trigger a stack change at 100ms
+nle-add-child, object-name="compo_L3", desc="nlesource name=source_L3a start=0 inpoint=0 duration=100000000"
+nle-add-child, object-name="source_L3a", desc="nlecomposition name=compo_L4"
+nle-add-child, object-name="compo_L3", desc="nlesource name=source_L3b start=100000000 inpoint=0 duration=100000000"
+nle-add-child, object-name="source_L3b", desc="videotestsrc ! video/x-raw,format=I420,width=320,height=240,framerate=30/1 ! qroverlay data=LEVEL3B_SOURCE"
+nle-add-child, object-name="compo_L4", desc="nlesource name=source_L4 inpoint=0 duration=100000000"
+nle-add-child, object-name="source_L4", desc="videotestsrc ! video/x-raw,format=I420,width=320,height=240,framerate=30/1 ! qroverlay data=LEVEL4_SOURCE"
+
+pause
+
+# At t=0 source_L3a is active, so compo_L4 / source_L4 is the live stack
+nle-check-seek-in-ready, object-name=compo, seek-in-ready=1, seek-after-preroll=0
+nle-check-seek-in-ready, object-name=compo_L1, seek-in-ready=1, seek-after-preroll=0
+nle-check-seek-in-ready, object-name=compo_L2, seek-in-ready=1, seek-after-preroll=0
+nle-check-seek-in-ready, object-name=compo_L3, seek-in-ready=1, seek-after-preroll=0
+nle-check-seek-in-ready, object-name=compo_L4, seek-in-ready=1, seek-after-preroll=0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-data="LEVEL4_SOURCE"
+
+# Seek to 150ms: triggers stack change in compo_L3 (source_L3a → source_L3b)
+seek, flags=accurate+flush, start=0.15
+
+# After the seek source_L3b is active → the frame must carry its QR code
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-data="LEVEL3B_SOURCE"
+
+# Only compo_L3 changed its stack, so only its count increments
+nle-check-seek-in-ready, object-name=compo, seek-in-ready=1, seek-after-preroll=0
+nle-check-seek-in-ready, object-name=compo_L1, seek-in-ready=1, seek-after-preroll=0
+nle-check-seek-in-ready, object-name=compo_L2, seek-in-ready=1, seek-after-preroll=0
+nle-check-seek-in-ready, object-name=compo_L3, seek-in-ready=2, seek-after-preroll=0
+# compo_L4 is deactivated after the seek, its count must not have changed
+nle-check-seek-in-ready, object-name=compo_L4, seek-in-ready=1, seek-after-preroll=0
+
+stop

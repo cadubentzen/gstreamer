@@ -1,0 +1,33 @@
+# Verify that deeply nested compositions use seek-in-ready to pre-position sources.
+# Builds a 6-level nested composition (compo → source_L0 → compo_L1 → source_L1
+# → compo_L2 → source_L2 → compo_L3 → source_L3 → compo_L4 → source_L4)
+# and checks that all 5 compositions used the seek-in-ready path.
+meta,
+    handles-states=true,
+    ignore-eos=true,
+    args={
+        "nlecomposition name=compo ! $(videosink)",
+    }
+
+nle-add-child, object-name="compo", desc="nlesource name=source_L0 inpoint=0 duration=200000000"
+nle-add-child, object-name="source_L0", desc="nlecomposition name=compo_L1"
+nle-add-child, object-name="compo_L1", desc="nlesource name=source_L1 inpoint=0 duration=200000000"
+nle-add-child, object-name="source_L1", desc="nlecomposition name=compo_L2"
+nle-add-child, object-name="compo_L2", desc="nlesource name=source_L2 inpoint=0 duration=200000000"
+nle-add-child, object-name="source_L2", desc="nlecomposition name=compo_L3"
+nle-add-child, object-name="compo_L3", desc="nlesource name=source_L3 inpoint=0 duration=200000000"
+nle-add-child, object-name="source_L3", desc="nlecomposition name=compo_L4"
+nle-add-child, object-name="compo_L4", desc="nlesource name=source_L4 inpoint=0 duration=200000000"
+nle-add-child, object-name="source_L4", desc="videotestsrc"
+
+play
+
+nle-check-seek-in-ready, object-name=compo, seek-in-ready=1, seek-after-preroll=0
+nle-check-seek-in-ready, object-name=compo_L1, seek-in-ready=1, seek-after-preroll=0
+nle-check-seek-in-ready, object-name=compo_L2, seek-in-ready=1, seek-after-preroll=0
+nle-check-seek-in-ready, object-name=compo_L3, seek-in-ready=1, seek-after-preroll=0
+nle-check-seek-in-ready, object-name=compo_L4, seek-in-ready=1, seek-after-preroll=0
+
+check-position, on-message=eos, expected-position=0.2
+
+stop

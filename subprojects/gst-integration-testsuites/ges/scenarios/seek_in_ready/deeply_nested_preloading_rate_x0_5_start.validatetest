@@ -1,0 +1,59 @@
+# Test nested timeline preloading with half-speed rate effect and non-zero outer start
+#
+# Same as deeply_nested_preloading_rate_x0_5 but seeks start at position 2.
+# With rate=0.5 and outer start=2, the formula becomes:
+#   frame = inner_inpoint(2) + outer_inpoint(3) + (position - 2) * 0.5
+#
+# Structure:
+#   - Inner: media clip with inpoint=2 (starts at frame 2)
+#   - Outer: nested timeline clip with inpoint=3, effect videorate rate=0.5
+#   - At position 2: frame = 2 + 3 + 0 = 5
+#   - At position 4: frame = 2 + 3 + 1 = 6
+#   - At position 6: frame = 2 + 3 + 2 = 7
+#   - At position 8: frame = 2 + 3 + 3 = 8
+
+set-globals, media_dir="$(test_dir)/../../../medias/defaults"
+meta, seek=true, handles-states=true,
+    tool = "ges-launch-$(gst_api_version)",
+    ges = "uridecodepoolsrc=enabled",
+    args = {
+        --track-types, video,
+        --video-caps, "video/x-raw(ANY), format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1",
+        --videosink, "$(videosink) name=videosink",
+    }
+
+set-vars,
+    media_uri="file://$(media_dir)/matroska/timed_frames_video_only_1fps_with_qrcodes.mkv",
+    nested_timeline_uri="file://$(logsdir)/ges/scenarios/$(test_name)/nested.xges"
+
+# Create the inner timeline: media clip with inpoint=2
+add-clip, name=inner_clip, asset-id="$(media_uri)", layer-priority=0, type=GESUriClip, inpoint=2.0, duration=15.0
+serialize-project, uri="$(nested_timeline_uri)"
+remove-clip, name=inner_clip
+
+# Add the nested timeline to the main timeline with inpoint=3, start=2
+add-clip, name=nested_clip, asset-id="$(nested_timeline_uri)", layer-priority=0, type=GESUriClip, inpoint=3.0, start=2.0, duration=15.0
+
+# Add videorate effect with rate=0.5 to the nested clip
+container-add-child, container-name=nested_clip, asset-id="videorate rate=0.5 name=rate-effect", child-type=GESEffect
+
+commit;
+pause;
+
+# At position 2: source frame = 2 + 3 + (2-2)*0.5 = 5
+seek, flags=accurate+flush, start=2.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)5000000000]
+
+# At position 4: source frame = 2 + 3 + (4-2)*0.5 = 6
+seek, flags=accurate+flush, start=4.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)6000000000]
+
+# At position 6: source frame = 2 + 3 + (6-2)*0.5 = 7
+seek, flags=accurate+flush, start=6.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)7000000000]
+
+# At position 8: source frame = 2 + 3 + (8-2)*0.5 = 8
+seek, flags=accurate+flush, start=8.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)8000000000]
+
+stop;

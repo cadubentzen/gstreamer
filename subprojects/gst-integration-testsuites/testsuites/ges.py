@@ -34,7 +34,7 @@ BLACKLIST = [
     # This test expects seek-in-ready behavior for nested timelines, but commit
     # 3ed47fb5c7 disabled seek-in-ready for sub-compositions. The internal decoder
     # pipeline (vsrc1) outputs a buffer at PTS=0 before the NLE seek arrives.
-    ('ges.test.uridecodepoolsrc_nested_no_extra_seek',
+    ('ges.test.seek_in_ready.uridecodepoolsrc_nested_no_extra_seek',
      'Disabled until seek-in-ready is re-enabled for uridecodepoolsrc internal pipelines'),
 ]
 

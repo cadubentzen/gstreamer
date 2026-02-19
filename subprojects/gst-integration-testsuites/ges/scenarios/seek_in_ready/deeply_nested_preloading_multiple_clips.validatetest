@@ -1,0 +1,65 @@
+# Test nested timeline preloading with multiple clips at different positions
+#
+# This test verifies preloading works correctly when there are multiple clips
+# at the innermost level with different start positions and inpoints.
+#
+# Structure:
+#   - Inner timeline: 2 clips
+#       - Clip 1: inpoint=2, duration=5 (at position 0-5, shows frames 2-6)
+#       - Clip 2: start=5, inpoint=4, duration=3 (at position 5-8, shows frames 4-6)
+#   - Outer: nested timeline with inpoint=1
+#
+# At outer position 0 -> inner position 1 -> clip1 position 1 -> frame 1+2=3
+# At outer position 4 -> inner position 5 -> clip2 position 0 -> frame 0+4=4
+
+set-globals, media_dir="$(test_dir)/../../../medias/defaults"
+meta, seek=true, handles-states=true,
+    tool = "ges-launch-$(gst_api_version)",
+    ges = "uridecodepoolsrc=enabled",
+    args = {
+        --track-types, video,
+        --video-caps, "video/x-raw(ANY), format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1",
+        --videosink, "$(videosink) name=videosink",
+    }
+
+set-vars,
+    media_uri="file://$(media_dir)/matroska/timed_frames_video_only_1fps_with_qrcodes.mkv",
+    nested_timeline_uri="file://$(logsdir)/ges/scenarios/$(test_name)/inner.xges"
+
+# Create the inner timeline with 2 clips
+# Clip 1: plays from frame 2 (inpoint=2) for 5 seconds
+add-clip, name=clip1, asset-id="$(media_uri)", layer-priority=0, type=GESUriClip, inpoint=2.0, duration=5.0
+# Clip 2: starts at 5s, plays from frame 4 (inpoint=4) for 3 seconds
+add-clip, name=clip2, asset-id="$(media_uri)", layer-priority=0, type=GESUriClip, start=5.0, inpoint=4.0, duration=3.0
+
+serialize-project, uri="$(nested_timeline_uri)"
+remove-clip, name=clip1
+remove-clip, name=clip2
+
+# Add the nested timeline with inpoint=1
+add-clip, name=nested_clip, asset-id="$(nested_timeline_uri)", layer-priority=0, type=GESUriClip, inpoint=1.0, duration=7.0
+
+commit;
+pause;
+
+# At outer position 0: inner position = 1 (inpoint=1)
+#                      clip1 position = 1, so source frame = 1 + 2 = 3
+seek, flags=accurate+flush, start=0.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)3000000000]
+
+# At outer position 3: inner position = 4
+#                      clip1 position = 4, so source frame = 4 + 2 = 6
+seek, flags=accurate+flush, start=3.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)6000000000]
+
+# At outer position 4: inner position = 5
+#                      clip2 at start=5, so clip2 position = 0, source frame = 0 + 4 = 4
+seek, flags=accurate+flush, start=4.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)4000000000]
+
+# At outer position 5: inner position = 6
+#                      clip2 position = 1, so source frame = 1 + 4 = 5
+seek, flags=accurate+flush, start=5.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)5000000000]
+
+stop;

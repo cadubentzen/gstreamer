@@ -1,0 +1,47 @@
+# Test nested timeline preloading with application seek rate
+#
+# This test verifies that a pipeline-level rate=2.0 seek works correctly with
+# deeply nested subtimeline preloading via uridecodepoolsrc. The initialization
+# seek handler passes this rate through to the inner composition.
+#
+# Structure:
+#   - Inner: media clip with inpoint=2 (starts at frame 2)
+#   - Outer: nested timeline clip with inpoint=3 (skips first 3 seconds of nested timeline)
+#   - Combined effect: at position 0 in outer, we see frame 2 + 3 = 5
+
+set-globals, media_dir="$(test_dir)/../../../medias/defaults"
+meta, seek=true, handles-states=true,
+    tool = "ges-launch-$(gst_api_version)",
+    ges = "uridecodepoolsrc=enabled",
+    args = {
+        --track-types, video,
+        --video-caps, "video/x-raw(ANY), format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1",
+        --videosink, "$(videosink) name=videosink",
+    }
+
+set-vars,
+    media_uri="file://$(media_dir)/matroska/timed_frames_video_only_1fps_with_qrcodes.mkv",
+    nested_timeline_uri="file://$(logsdir)/ges/scenarios/$(test_name)/nested.xges"
+
+# Create the inner timeline: media clip with inpoint=2
+add-clip, name=inner_clip, asset-id="$(media_uri)", layer-priority=0, type=GESUriClip, inpoint=2.0, duration=15.0
+serialize-project, uri="$(nested_timeline_uri)"
+remove-clip, name=inner_clip
+
+# Add the nested timeline to the main timeline with inpoint=3
+add-clip, name=nested_clip, asset-id="$(nested_timeline_uri)", layer-priority=0, type=GESUriClip, inpoint=3.0, duration=10.0
+
+commit;
+pause;
+
+# Seek at rate=2.0
+seek, flags=accurate+flush+trickmode, start=0.0, stop=10.0, rate=2.0
+
+# At position 0: source frame = 5 (inner_inpoint 2 + outer_inpoint 3)
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)5000000000]
+
+# At position 4: source frame = 9
+seek, flags=accurate+flush+trickmode, start=4.0, stop=10.0, rate=2.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)9000000000]
+
+stop;

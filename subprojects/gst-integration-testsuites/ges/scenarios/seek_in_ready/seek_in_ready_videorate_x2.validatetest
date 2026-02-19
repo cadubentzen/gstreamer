@@ -1,0 +1,43 @@
+# Test seek-in-ready with videorate rate=2.0 time effect
+#
+# Verifies that seek-in-ready works correctly when a time effect is present
+# on a non-nested clip. With rate=2.0 and inpoint=2, the seek position maps
+# to media_time = inpoint + position * rate:
+#   - position 0: media_time = 2 + 0*2 = 2
+#   - seek to 1: media_time = 2 + 1*2 = 4
+#   - seek to 3: media_time = 2 + 3*2 = 8
+#   - seek to 5: media_time = 2 + 5*2 = 12
+
+set-globals, media_dir="$(test_dir)/../../../medias/defaults"
+meta, seek=true, handles-states=true,
+    tool = "ges-launch-$(gst_api_version)",
+    ges = "uridecodepoolsrc=enabled",
+    args = {
+        --track-types, video,
+        --video-caps, "video/x-raw(ANY), format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1",
+        --videosink, "$(videosink) name=videosink",
+    },
+    configs = {
+        "$(validateflow), pad=rate-effect:src, ignored-event-types={tag,stream-start,caps,stream-group-done,flush-start,flush-stop,eos}, logged-fields=\"segment={start,stop}\"",
+    }
+
+add-clip, name=clip, asset-id="file://$(media_dir)/matroska/timed_frames_video_only_1fps_with_qrcodes.mkv", layer-priority=0, type=GESUriClip, inpoint=2.0, duration=10.0
+container-add-child, container-name=clip, asset-id="videorate rate=2.0 name=rate-effect", child-type=GESEffect
+
+commit;
+pause;
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)2000000000]
+
+checkpoint, text="seek to position 1s";
+seek, flags=accurate+flush, start=1.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)4000000000]
+
+checkpoint, text="seek to position 3s";
+seek, flags=accurate+flush, start=3.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)8000000000]
+
+checkpoint, text="seek to position 5s";
+seek, flags=accurate+flush, start=5.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)12000000000]
+
+stop;

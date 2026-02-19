@@ -1,0 +1,35 @@
+set-globals, media_file="$(test_dir)/../../../medias/defaults/matroska/"
+meta,
+    tool = "ges-launch-$(gst_api_version)",
+    ges = "uridecodepoolsrc=enabled",
+    handles-states=true,
+    needs_preroll=true,
+    clock-source=test,
+    args = {
+        "--track-types=video",
+        "--video-caps=video/x-raw,width=320,height=240,framerate=1/1,format=I420",
+    }
+
+remove-feature, name="queue"
+
+# Timeline: 0━━━━━━━1━━━━━━━2━━━━━━━3━━━━━━━4━━━━━━━5━━━━━━━6
+# Layer 0:                  ┌────front──────┐
+# Layer 1:  └───────────────────background──────────────────┘
+add-clip, name=fg, asset-id="file://$(media_file)/timed_frames_video_only_1fps.mkv?v=front", layer-priority=0, type=GESUriClip, start=2.0, duration=2.0
+add-clip, name=bg, asset-id="file://$(media_file)/timed_frames_video_only_1fps.mkv?v=background", layer-priority=1, type=GESUriClip, start=0.0, duration=6.0
+commit;
+
+# Start playback
+play
+
+check-uridecodepool-pipeline-use-count, uri="file://$(media_file)/timed_frames_video_only_1fps.mkv?v=background", expected-use-count=1
+crank-clock, repeat=3
+
+check-uridecodepool-pipeline-use-count, uri="file://$(media_file)/timed_frames_video_only_1fps.mkv?v=background", expected-use-count=2
+
+# Crank clock to start second clip
+crank-clock, repeat=2
+
+check-uridecodepool-pipeline-use-count, uri="file://$(media_file)/timed_frames_video_only_1fps.mkv?v=background", expected-use-count=3
+
+stop

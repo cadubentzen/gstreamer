@@ -1,0 +1,65 @@
+# Test nested timeline preloading with rate effect on the INNER clip
+#
+# All existing rate-effect tests put videorate on the outer clip. This test
+# places the rate=2.0 effect on the inner clip, exercising the inner
+# composition's translate_composition_seek_cb rate adjustment path.
+#
+# Structure:
+#   - Inner: media clip with inpoint=2, videorate rate=2.0, duration=15
+#   - Outer: nested timeline clip with inpoint=3, no effects, duration=10
+#
+# P is the seek position in the main timeline. Seek translation at each level:
+#
+#   Outer NLE: media_time = P - 0 + 3 = P + 3  (no effect)
+#   Inner NLE: media_time = (P+3) - 0 + 2 = P + 5
+#   Inner rate (inpoint=2): offset = (P+5) - 2 = P+3, adj = (P+3)*2
+#     -> final = 2 + (P+3)*2 = 2P + 8
+#
+# Without rate effects, cumulative inpoints would give 3+2 = 5. The extra 3 at
+# P=0 comes from the inner rate doubling the offset of 3 (from the outer
+# inpoint passing through) to 6, giving 2+6 = 8 instead of 2+3 = 5.
+#
+#   P=0 -> frame 8, P=1 -> frame 10, P=2 -> frame 12
+
+set-globals, media_dir="$(test_dir)/../../../medias/defaults"
+meta, seek=true, handles-states=true,
+    tool = "ges-launch-$(gst_api_version)",
+    ges = "uridecodepoolsrc=enabled",
+    args = {
+        --track-types, video,
+        --video-caps, "video/x-raw(ANY), format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1",
+        --videosink, "$(videosink) name=videosink",
+    }
+
+set-vars,
+    media_uri="file://$(media_dir)/matroska/timed_frames_video_only_1fps_with_qrcodes.mkv"
+
+# Register the inner subtimeline with a rate effect on the inner clip
+register-subtimeline-primary, primary-id="inner"
+add-track, project-uri="gessubtimeline:inner", track-type=video, caps="video/x-raw(ANY)"
+
+add-clip, project-uri="gessubtimeline:inner", name=inner_clip, asset-id="$(media_uri)", layer-priority=0, type=GESUriClip, inpoint=2.0, duration=15.0
+container-add-child, project-uri="gessubtimeline:inner", container-name=inner_clip, asset-id="videorate rate=2.0 name=rate-effect", child-type=GESEffect
+
+# Main timeline: nested timeline referencing inner with inpoint=3
+add-clip, name=outer_clip, asset-id="gessubtimeline:inner", layer-priority=0, type=GESUriClip, inpoint=3.0, duration=10.0
+
+commit;
+pause;
+
+# P=0: frame = 2 + (0 + 3) * 2 = 8
+seek, flags=accurate+flush, start=0.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)8000000000]
+
+# P=1: frame = 2 + (1 + 3) * 2 = 10
+seek, flags=accurate+flush, start=1.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)10000000000]
+
+# P=2: frame = 2 + (2 + 3) * 2 = 12
+seek, flags=accurate+flush, start=2.0
+check-last-frame-qrcode, sinkpad-caps="video/x-raw", expected-json-fields=[expected, TIMESTAMP=(gint64)12000000000]
+
+# Clean up
+unregister-subtimeline-primary, primary-id="inner"
+
+stop;

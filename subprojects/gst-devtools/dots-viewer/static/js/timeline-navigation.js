@@ -62,57 +62,54 @@ class TimelineNavigationManager {
     }
 
     /**
-     * Makes a cluster group visually interactive and clickable
+     * Makes the GESTimeline label texts inside a cluster into a visible link
+     * that opens the timeline viewer. Only the type/name text labels are
+     * interactive — not the entire cluster background — so the intent is clear.
      * @param {Element} cluster - Cluster group element
      * @param {string} elementName - GESTimeline element name (for display)
      * @param {string} xgesKey - Full key to look up xges content
      */
     makeClusterClickable(cluster, elementName, xgesKey) {
-        const shape = cluster.querySelector('path, polygon, rect');
+        /* The cluster's first two direct <text> children are the type label
+         * ("GESTimeline") and the instance name. Only those are interactive —
+         * any further texts (properties, state) are left alone. */
+        const allTexts = Array.from(cluster.children).filter(el => el.tagName === 'text');
+        const labels = allTexts.slice(0, 2);
+        if (!labels.length) return;
 
-        cluster.style.cursor = 'pointer';
+        labels.forEach(label => {
+            label.style.cursor = 'pointer';
+            label.style.fill = '#1a73e8';
+            label.style.textDecoration = 'underline';
+            label.style.fontWeight = 'bold';
 
-        const origStroke = shape ? (shape.getAttribute('stroke') || '') : '';
-        const origStrokeWidth = shape ? (shape.getAttribute('stroke-width') || '') : '';
+            label.addEventListener('mouseenter', (evt) => {
+                label.style.fill = '#0d47a1';
+                if (this.tooltipManager && !this.tooltipManager.isInteractive()) {
+                    this.tooltipManager.tooltipEl.textContent = `Open GES timeline viewer for "${elementName}"`;
+                    const rect = label.getBoundingClientRect();
+                    this.tooltipManager.tooltipEl.style.left = (rect.left + window.scrollX) + 'px';
+                    this.tooltipManager.tooltipEl.style.top = (rect.bottom + window.scrollY + 6) + 'px';
+                    this.tooltipManager.tooltipEl.classList.remove('interactive');
+                    this.tooltipManager.tooltipEl.classList.add('show');
+                }
+            });
 
-        cluster.addEventListener('mouseenter', () => {
-            if (shape) {
-                shape.setAttribute('stroke', '#00bcd4');
-                shape.setAttribute('stroke-width', '3');
-                shape.setAttribute('stroke-dasharray', '6,3');
-            }
+            label.addEventListener('mouseleave', () => {
+                label.style.fill = '#1a73e8';
+                if (this.tooltipManager && !this.tooltipManager.isInteractive()) {
+                    this.tooltipManager.hideTooltip();
+                }
+            });
 
-            if (this.tooltipManager && !this.tooltipManager.isInteractive()) {
-                this.tooltipManager.tooltipEl.textContent = 'Click to open timeline viewer';
-                const clusterRect = cluster.getBoundingClientRect();
-                this.tooltipManager.tooltipEl.style.left = (clusterRect.left + window.scrollX + 20) + 'px';
-                this.tooltipManager.tooltipEl.style.top = (clusterRect.top + window.scrollY - 30) + 'px';
-                this.tooltipManager.tooltipEl.classList.remove('interactive');
-                this.tooltipManager.tooltipEl.classList.add('show');
-            }
-        });
-
-        cluster.addEventListener('mouseleave', () => {
-            if (shape) {
-                shape.setAttribute('stroke', origStroke);
-                shape.setAttribute('stroke-width', origStrokeWidth);
-                shape.removeAttribute('stroke-dasharray');
-            }
-
-            if (this.tooltipManager && !this.tooltipManager.isInteractive()) {
-                this.tooltipManager.hideTooltip();
-            }
-        });
-
-        cluster.addEventListener('click', (evt) => {
-            evt.preventDefault();
-            evt.stopPropagation();
-
-            if (this.tooltipManager) {
-                this.tooltipManager.hideTooltip();
-            }
-
-            this.navigateToTimeline(elementName, xgesKey);
+            label.addEventListener('click', (evt) => {
+                evt.preventDefault();
+                evt.stopPropagation();
+                if (this.tooltipManager) {
+                    this.tooltipManager.hideTooltip();
+                }
+                this.navigateToTimeline(elementName, xgesKey);
+            });
         });
     }
 

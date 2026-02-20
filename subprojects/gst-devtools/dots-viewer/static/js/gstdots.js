@@ -1,6 +1,13 @@
 import "/dist/bundle.js";
 
 let ws = null;
+const xgesFiles = new Map();
+
+function xgesKey(filename) {
+    // Use the full relative path without extension as the key
+    // e.g. "0/0:00:07.852877646-pipeline-snapshot-my-custom-timeline"
+    return filename.replace(/\.xges$/, '');
+}
 
 async function createOverlayElement(img, fname) {
     let overlay = document.getElementById("overlay");
@@ -194,6 +201,7 @@ export function connectWs() {
         let pipelines_div = document.getElementById("pipelines");
 
         console.log(`WebSocket connected, removing all children from ${pipelines_div}`);
+        xgesFiles.clear();
         while (pipelines_div.firstChild) {
             console.debug(`Removing ${pipelines_div.firstChild}`);
             pipelines_div.removeChild(pipelines_div.firstChild);
@@ -233,6 +241,10 @@ export function connectWs() {
                 }
 
                 updateSearch();
+            } else if (obj.type == "NewXges") {
+                xgesFiles.set(xgesKey(obj.name), obj.content);
+            } else if (obj.type == "XgesRemoved") {
+                xgesFiles.delete(xgesKey(obj.name));
             } else {
                 console.warn(`Unknown message type: ${obj.type}`);
             }
@@ -353,5 +365,9 @@ export function dumpPipelines() {
     if (ws) {
         ws.send(JSON.stringify({ type: "Snapshot" }));
     }
+}
+
+export function getXgesContent(key) {
+    return xgesFiles.get(key);
 }
 

@@ -9,6 +9,7 @@ class SvgOverlayManager {
     constructor() {
         this.tooltipManager = null;
         this.pipelineNavigationManager = null;
+        this.timelineNavigationManager = null;
         this.textEllipsizerManager = null;
         this.gv = null;
     }
@@ -20,6 +21,7 @@ class SvgOverlayManager {
         // Initialize managers
         this.tooltipManager = new TooltipManager();
         this.pipelineNavigationManager = new PipelineNavigationManager(this.tooltipManager);
+        this.timelineNavigationManager = new TimelineNavigationManager(this.tooltipManager);
         this.textEllipsizerManager = new TextEllipsizerManager(this.tooltipManager, this.pipelineNavigationManager);
 
         // Set up GraphViz SVG functionality
@@ -69,6 +71,12 @@ class SvgOverlayManager {
         // Set up pipeline-dot navigation
         this.pipelineNavigationManager.setupPipelineDotNavigation($svg);
 
+        // Set up GES timeline navigation using the current pipeline title
+        // to resolve xges files from the same snapshot
+        const urlParams = new URLSearchParams(window.location.search);
+        const pipelineTitle = urlParams.get('title') || '';
+        this.timelineNavigationManager.setupTimelineNavigation($svg, pipelineTitle);
+
         // Process text ellipsizing (this must come after pipeline navigation setup)
         this.textEllipsizerManager.ellipsizeLongText($svg);
     }
@@ -96,6 +104,12 @@ class SvgOverlayManager {
 
         // Intercept mousedown events to prevent dragscroll on text elements
         graphDiv.addEventListener('mousedown', (e) => {
+            // Check if click is inside a GESTimeline cluster (let timeline-nav handle it)
+            const clusterEl = e.target.closest && e.target.closest('.cluster');
+            if (clusterEl && clusterEl.style.cursor === 'pointer') {
+                return; // Let timeline navigation click handler take precedence
+            }
+
             if (e.target.tagName === 'text' || e.target.tagName === 'tspan') {
                 if (e.target.textContent &&
                     e.target.textContent.startsWith("pipeline-dot=") &&

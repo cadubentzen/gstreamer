@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GES Timeline Viewer</title>
+  <link rel="stylesheet" href="/css/timeline.css">
+  <link rel="icon" type="image/png" href="/images/favicon-32.png" sizes="32x32">
+  <script type="importmap">
+  {
+    "imports": {
+      "d3": "https://cdn.jsdelivr.net/npm/d3@7/+esm"
+    }
+  }
+  </script>
+</head>
+<body>
+
+  <!-- ── Drop zone (initial state) ──────────────────────────────── -->
+  <div id="drop-zone" class="drop-zone">
+    <div class="drop-content">
+      <h1>GES Timeline Viewer</h1>
+      <p>Drop a .xges file here or choose one below</p>
+      <input type="file" id="file-input" accept=".xges,.xml">
+      <label for="file-input" class="file-label">Choose .xges file</label>
+      <div class="paste-toggle">
+        <button id="paste-btn">Or paste XML content</button>
+      </div>
+      <textarea id="xml-input" class="xml-input" placeholder="Paste .xges XML content here..."></textarea>
+      <button id="load-xml-btn" class="hidden">Load from pasted XML</button>
+      <div id="error-msg" class="error-msg hidden"></div>
+    </div>
+  </div>
+
+  <!-- ── Timeline view (shown after loading) ────────────────────── -->
+  <div id="timeline-view" class="timeline-view hidden">
+    <header class="header">
+      <h1>GES Timeline Viewer</h1>
+      <div class="header-actions">
+        <span id="filename" class="filename"></span>
+        <button id="load-another">Load another file</button>
+        <a class="btn" href="/">Pipeline viewer</a>
+      </div>
+    </header>
+    <nav id="breadcrumb" class="breadcrumb hidden"></nav>
+    <div class="main-layout">
+      <aside id="info-panel" class="sidebar info-panel"></aside>
+      <main  id="timeline-container" class="timeline-container"></main>
+      <div id="detail-resize-handle" class="detail-resize-handle"></div>
+      <aside id="detail-panel" class="sidebar detail-panel"></aside>
+    </div>
+  </div>
+
+  <script type="module">
+    import { parseXges } from '/js/xges-parser.js';
+    import { TimelineViewer } from '/js/timeline-viewer.js';
+
+    const dropZone     = document.getElementById('drop-zone');
+    const timelineView = document.getElementById('timeline-view');
+    const fileInput    = document.getElementById('file-input');
+    const pasteBtn     = document.getElementById('paste-btn');
+    const xmlInput     = document.getElementById('xml-input');
+    const loadXmlBtn   = document.getElementById('load-xml-btn');
+    const errorMsg     = document.getElementById('error-msg');
+    const filenameEl   = document.getElementById('filename');
+    const loadAnother  = document.getElementById('load-another');
+
+    const viewer = new TimelineViewer({
+      timelineEl:    document.getElementById('timeline-container'),
+      detailEl:      document.getElementById('detail-panel'),
+      infoEl:        document.getElementById('info-panel'),
+      breadcrumbEl:  document.getElementById('breadcrumb'),
+    });
+
+    /* ── file input ───────────────────────────────────────────────── */
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (file) loadFile(file);
+    });
+
+    /* ── drag & drop ──────────────────────────────────────────────── */
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file) loadFile(file);
+    });
+
+    /* ── paste toggle ─────────────────────────────────────────────── */
+    pasteBtn.addEventListener('click', () => {
+      const visible = xmlInput.classList.toggle('visible');
+      loadXmlBtn.classList.toggle('hidden', !visible);
+    });
+
+    loadXmlBtn.addEventListener('click', () => {
+      const text = xmlInput.value.trim();
+      if (!text) { showError('Please paste XML content first'); return; }
+      loadXml(text, 'pasted content');
+    });
+
+    /* ── load another ─────────────────────────────────────────────── */
+    loadAnother.addEventListener('click', () => {
+      timelineView.classList.add('hidden');
+      dropZone.classList.remove('hidden');
+      fileInput.value = '';
+    });
+
+    /* ── core ──────────────────────────────────────────────────────── */
+    function loadFile(file) {
+      const reader = new FileReader();
+      reader.onload = () => loadXml(reader.result, file.name);
+      reader.onerror = () => showError('Failed to read file');
+      reader.readAsText(file);
+    }
+
+    function loadXml(xmlString, name) {
+      hideError();
+      try {
+        const data = parseXges(xmlString);
+        dropZone.classList.add('hidden');
+        timelineView.classList.remove('hidden');
+        filenameEl.textContent = name || '';
+        viewer.render(data);
+      } catch (e) {
+        showError(e.message);
+        console.error(e);
+      }
+    }
+
+    function showError(msg) { errorMsg.textContent = msg; errorMsg.classList.remove('hidden'); }
+    function hideError()    { errorMsg.classList.add('hidden'); }
+
+    /* ── resizable detail panel ─────────────────────────────────────── */
+    {
+      const handle = document.getElementById('detail-resize-handle');
+      const panel  = document.getElementById('detail-panel');
+      let startX, startW;
+
+      handle.addEventListener('mousedown', e => {
+        e.preventDefault();
+        startX = e.clientX;
+        startW = panel.getBoundingClientRect().width;
+        handle.classList.add('active');
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('mouseup', onUp);
+      });
+
+      function onDrag(e) {
+        panel.style.width = Math.max(200, Math.min(window.innerWidth * 0.6, startW + (startX - e.clientX))) + 'px';
+      }
+      function onUp() {
+        handle.classList.remove('active');
+        document.removeEventListener('mousemove', onDrag);
+        document.removeEventListener('mouseup', onUp);
+      }
+    }
+
+    /* ── auto-load from URL parameter (linked from pipeline SVG view) ── */
+    const urlParams = new URLSearchParams(window.location.search);
+    const timelineParam = urlParams.get('timeline');
+    if (timelineParam) {
+      const storageKey = `xges-${timelineParam}`;
+      const xgesContent = sessionStorage.getItem(storageKey);
+      if (xgesContent) {
+        loadXml(xgesContent, timelineParam);
+        sessionStorage.removeItem(storageKey);
+      } else {
+        showError(`No timeline data found for "${timelineParam}". Navigate from a pipeline view to load timeline data.`);
+      }
+    }
+  </script>
+</body>
+</html>

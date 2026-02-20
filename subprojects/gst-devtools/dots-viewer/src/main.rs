@@ -198,7 +198,8 @@ impl GstDots {
                     Self::collect_dot_files(&dot_path, entries);
                 } else {
                     // Process only `.dot` files
-                    if dot_path.extension().and_then(|e| e.to_str()) == Some("dot") {
+                    let ext = dot_path.extension().and_then(|e| e.to_str());
+                    if ext == Some("dot") || ext == Some("xges") {
                         if let Ok(metadata) = dot_path.metadata() {
                             if let Ok(modified) = metadata.modified() {
                                 entries.push((dot_path, modified));
@@ -233,10 +234,15 @@ impl GstDots {
             }
 
             let name = self.relative_dot_path(&dot_path);
-            debug!("Sending `{name}` to client: {client:?}");
+            let msg_type = if dot_path.extension().and_then(|e| e.to_str()) == Some("xges") {
+                "NewXges"
+            } else {
+                "NewDot"
+            };
+            debug!("Sending `{name}` ({msg_type}) to client: {client:?}");
             client.do_send(TextMessage(
                 json!({
-                    "type": "NewDot",
+                    "type": msg_type,
                     "name": name,
                     "content": content,
                     "creation_time": self.modify_time(&dot_path),
@@ -264,23 +270,29 @@ impl GstDots {
             notify::recommended_watcher(move |event: Result<notify::Event, notify::Error>| {
                 match event {
                     Ok(event) => {
-                        let wanted = event.paths .iter().any(|p| p.extension().map(|e| e == "dot").unwrap_or(false));
+                        let wanted = event.paths.iter().any(|p| {
+                            let ext = p.extension().and_then(|e| e.to_str());
+                            ext == Some("dot") || ext == Some("xges")
+                        });
                         if wanted
                         {
                             match event.kind {
-                                notify::event::EventKind::Modify(notify::event::ModifyKind::Name(_)) => {
+                                notify::event::EventKind::Modify(notify::event::ModifyKind::Name(_)) |
+                                        notify::event::EventKind::Access(notify::event::AccessKind::Close(notify::event::AccessMode::Write))=> {
                                     for path in event.paths.iter() {
                                         debug!("File created: {:?}", path);
-                                        if path.extension().map(|e| e == "dot").unwrap_or(false) {
+                                        let ext = path.extension().and_then(|e| e.to_str());
+                                        if ext == Some("dot") || ext == Some("xges") {
                                             let path = path.to_path_buf();
                                             let name = app_clone.relative_dot_path(&path);
+                                            let msg_type = if ext == Some("xges") { "NewXges" } else { "NewDot" };
 
-                                            debug!("Sending {name}");
+                                            debug!("Sending {name} ({msg_type})");
                                             match std::fs::read_to_string(&path) {
                                                 Ok(content) => {
                                                     app_clone.send(
                                                         json!({
-                                                            "type": "NewDot",
+                                                            "type": msg_type,
                                                             "name": name,
                                                             "content": content,
                                                             "creation_time": app_clone.modify_time(&event.paths[0]),
@@ -300,15 +312,17 @@ impl GstDots {
                                     debug!("File removed: {:?}", event.paths);
                                     for path in event.paths.iter() {
                                         debug!("File removed: {:?}", path);
-                                        if path.extension().map(|e| e == "dot").unwrap_or(false) {
+                                        let ext = path.extension().and_then(|e| e.to_str());
+                                        if ext == Some("dot") || ext == Some("xges") {
                                             let path = path.to_path_buf();
                                             let clients = app_clone.viewer_clients.lock().unwrap();
                                             let clients = clients.clone();
                                             let path = path.to_path_buf();
                                             let name = app_clone.relative_dot_path(&path);
+                                            let msg_type = if ext == Some("xges") { "XgesRemoved" } else { "DotRemoved" };
                                             let value =
                                                     json!({
-                                                        "type": "DotRemoved",
+                                                        "type": msg_type,
                                                         "name": name,
                                                         "creation_time": app_clone.modify_time(&path),
                                                     });

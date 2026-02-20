@@ -12,56 +12,41 @@ class TimelineNavigationManager {
 
     /**
      * Finds GESTimeline clusters in the SVG and makes them clickable.
-     * Detection is based on the cluster's label text: GESTimeline elements
-     * have "GESTimeline" as their first text line (the GObject type name)
-     * and the element name as the second line.
      *
-     * @param {jQuery} $svg - jQuery object containing the SVG element
-     * @param {string} pipelineTitle - Title of the current pipeline dot file,
-     *   e.g. "0/0:00:07.852877646-pipeline-snapshot-gespipeline0".
-     *   Used to derive the snapshot prefix so we look up xges files from
-     *   the same snapshot.
+     * @param {Element} svg - SVG element
+     * @param {string} pipelineTitle - Title of the current pipeline dot file
      */
-    setupTimelineNavigation($svg, pipelineTitle) {
-        // Extract the snapshot prefix from the pipeline title
-        // e.g. "0/0:00:07.852877646-pipeline-snapshot-gespipeline0"
-        //   -> "0/0:00:07.852877646-pipeline-snapshot-"
+    setupTimelineNavigation(svg, pipelineTitle) {
         const prefixMatch = pipelineTitle.match(/^(.*pipeline-snapshot-)/);
         if (!prefixMatch) return;
         const snapshotPrefix = prefixMatch[1];
 
-        $svg.find(".cluster").each((index, cluster) => {
-            const $cluster = $(cluster);
-
-            const elementName = this.getTimelineElementName($cluster);
+        svg.querySelectorAll('.cluster').forEach(cluster => {
+            const elementName = this.getTimelineElementName(cluster);
             if (!elementName) return;
 
-            // Build the full xges key: same prefix + element name
             const xgesKey = snapshotPrefix + elementName;
 
-            // Only make clickable if xges data is available
             if (!this.hasXgesContent(xgesKey)) return;
 
-            this.makeClusterClickable($cluster, elementName, xgesKey);
+            this.makeClusterClickable(cluster, elementName, xgesKey);
         });
     }
 
     /**
      * Checks whether a cluster represents a GESTimeline element and returns
-     * its element name.  In Graphviz SVG output the cluster label is rendered
-     * as <text> elements directly inside the cluster <g>.  The first text line
-     * is the GObject type ("GESTimeline") and the second is the element name.
-     * @param {jQuery} $cluster - jQuery cluster group element
+     * its element name.
+     * @param {Element} cluster - Cluster group element
      * @returns {string|null} Element name, or null if not a GESTimeline
      */
-    getTimelineElementName($cluster) {
-        const texts = $cluster.children("text");
+    getTimelineElementName(cluster) {
+        const texts = Array.from(cluster.children).filter(el => el.tagName === 'text');
         if (texts.length < 2) return null;
 
-        const typeName = $(texts[0]).text().trim();
+        const typeName = texts[0].textContent.trim();
         if (typeName !== "GESTimeline") return null;
 
-        const elementName = $(texts[1]).text().trim();
+        const elementName = texts[1].textContent.trim();
         return elementName || null;
     }
 
@@ -78,44 +63,48 @@ class TimelineNavigationManager {
 
     /**
      * Makes a cluster group visually interactive and clickable
-     * @param {jQuery} $cluster - jQuery cluster group element
+     * @param {Element} cluster - Cluster group element
      * @param {string} elementName - GESTimeline element name (for display)
      * @param {string} xgesKey - Full key to look up xges content
      */
-    makeClusterClickable($cluster, elementName, xgesKey) {
-        const $shapes = $cluster.children("path, polygon, rect").first();
+    makeClusterClickable(cluster, elementName, xgesKey) {
+        const shape = cluster.querySelector('path, polygon, rect');
 
-        $cluster.css('cursor', 'pointer');
+        cluster.style.cursor = 'pointer';
 
-        // Store original stroke for hover restore
-        const origStroke = $shapes.length ? $shapes.attr('stroke') || '' : '';
-        const origStrokeWidth = $shapes.length ? $shapes.attr('stroke-width') || '' : '';
+        const origStroke = shape ? (shape.getAttribute('stroke') || '') : '';
+        const origStrokeWidth = shape ? (shape.getAttribute('stroke-width') || '') : '';
 
-        $cluster.on('mouseenter.timeline-nav', () => {
-            $shapes.attr('stroke', '#00bcd4');
-            $shapes.attr('stroke-width', '3');
-            $shapes.attr('stroke-dasharray', '6,3');
+        cluster.addEventListener('mouseenter', () => {
+            if (shape) {
+                shape.setAttribute('stroke', '#00bcd4');
+                shape.setAttribute('stroke-width', '3');
+                shape.setAttribute('stroke-dasharray', '6,3');
+            }
 
             if (this.tooltipManager && !this.tooltipManager.isInteractive()) {
-                this.tooltipManager.$tooltip.text('Click to open timeline viewer');
-                this.tooltipManager.$tooltip.css({
-                    left: ($cluster.offset().left + 20) + 'px',
-                    top: ($cluster.offset().top - 30) + 'px'
-                }).removeClass('interactive').addClass('show');
+                this.tooltipManager.tooltipEl.textContent = 'Click to open timeline viewer';
+                const clusterRect = cluster.getBoundingClientRect();
+                this.tooltipManager.tooltipEl.style.left = (clusterRect.left + window.scrollX + 20) + 'px';
+                this.tooltipManager.tooltipEl.style.top = (clusterRect.top + window.scrollY - 30) + 'px';
+                this.tooltipManager.tooltipEl.classList.remove('interactive');
+                this.tooltipManager.tooltipEl.classList.add('show');
             }
         });
 
-        $cluster.on('mouseleave.timeline-nav', () => {
-            $shapes.attr('stroke', origStroke);
-            $shapes.attr('stroke-width', origStrokeWidth);
-            $shapes.removeAttr('stroke-dasharray');
+        cluster.addEventListener('mouseleave', () => {
+            if (shape) {
+                shape.setAttribute('stroke', origStroke);
+                shape.setAttribute('stroke-width', origStrokeWidth);
+                shape.removeAttribute('stroke-dasharray');
+            }
 
             if (this.tooltipManager && !this.tooltipManager.isInteractive()) {
                 this.tooltipManager.hideTooltip();
             }
         });
 
-        $cluster.on('click.timeline-nav', (evt) => {
+        cluster.addEventListener('click', (evt) => {
             evt.preventDefault();
             evt.stopPropagation();
 
@@ -133,7 +122,6 @@ class TimelineNavigationManager {
      * @param {string} xgesKey - Full key to look up xges content
      */
     navigateToTimeline(elementName, xgesKey) {
-        // Get the xges content from the parent window (index.html)
         const topWindow = window.parent !== window ? window.parent : window;
         const getXges = topWindow.getXgesContent;
 
@@ -148,7 +136,6 @@ class TimelineNavigationManager {
             return;
         }
 
-        // Store in sessionStorage and navigate
         const storageKey = `xges-${elementName}`;
         sessionStorage.setItem(storageKey, xgesContent);
 

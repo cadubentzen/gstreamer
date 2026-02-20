@@ -2,7 +2,7 @@
  * D3.js-based timeline renderer for parsed .xges data.
  * Supports nested timeline drill-down and per-layer height resizing.
  */
-import * as d3 from 'd3';
+const d3 = window.d3;
 import {
   formatTimecode, nsToSeconds, trackTypeToString,
   TRACK_TYPE_AUDIO, TRACK_TYPE_VIDEO,

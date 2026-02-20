@@ -1,6 +1,7 @@
-import "/dist/bundle.js";
-
 let ws = null;
+let pendingObservers = [];
+let observerDebounceTimer = null;
+const OBSERVER_DEBOUNCE_MS = 300;
 const xgesFiles = new Map();
 
 function xgesKey(filename) {
@@ -9,10 +10,24 @@ function xgesKey(filename) {
     return filename.replace(/\.xges$/, '');
 }
 
-async function createOverlayElement(img, fname) {
+function activatePendingObservers() {
+    for (const {observer, target} of pendingObservers) {
+        observer.observe(target);
+    }
+    pendingObservers = [];
+}
+
+function scheduleObserverActivation() {
+    if (observerDebounceTimer) {
+        clearTimeout(observerDebounceTimer);
+    }
+    observerDebounceTimer = setTimeout(activatePendingObservers, OBSERVER_DEBOUNCE_MS);
+}
+
+function createOverlayElement(dot_info, fname) {
     let overlay = document.getElementById("overlay");
-    if (overlay || img.creating_svg) {
-        console.warn(`Overlay already exists`);
+    if (overlay) {
+        console.warn('Overlay already exists');
         return;
     }
 
@@ -20,30 +35,57 @@ async function createOverlayElement(img, fname) {
     overlayDiv.id = "overlay";
     overlayDiv.className = 'overlay';
 
-    document.getElementById('pipelines').appendChild(overlayDiv);
-    await generateSvg(img);
+    // Header with title and close button
+    const header = document.createElement('div');
+    header.className = 'overlay-header';
+
+    const title = document.createElement('h2');
+    title.id = 'title';
+    title.textContent = fname.replace('.dot', '');
+    header.appendChild(title);
 
     const closeButton = document.createElement('a');
-    closeButton.href = 'javascript:void(0)';
     closeButton.className = 'closebtn';
     closeButton.innerHTML = '&times;';
     closeButton.onclick = (event) => {
         removePipelineOverlay();
-
         event.stopPropagation();
-    }
-    overlayDiv.appendChild(closeButton);
+    };
+    header.appendChild(closeButton);
+    overlayDiv.appendChild(header);
 
+    // Content area with graph
     const contentDiv = document.createElement('div');
     contentDiv.className = 'overlay-content';
 
-    const iframe = document.createElement('iframe');
-    iframe.loading = 'lazy';
-    iframe.src = '/overlay.html?svg=' + img.src + '&title=' + fname;
-    iframe.className = 'internalframe';
-    contentDiv.appendChild(iframe);
+    const graphDiv = document.createElement('div');
+    graphDiv.id = 'graph';
+    graphDiv.style.width = '100%';
+    graphDiv.style.height = '100%';
+    contentDiv.appendChild(graphDiv);
 
     overlayDiv.appendChild(contentDiv);
+
+    // Instructions
+    const instructions = document.createElement('div');
+    instructions.className = 'overlay-instructions';
+    instructions.innerHTML = 'Click node to highlight | Esc to unhighlight | Scroll to zoom | Double-click text to copy';
+    overlayDiv.appendChild(instructions);
+
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'overlay-actions';
+    const saveBtn = document.createElement('button');
+    saveBtn.id = 'save-svg';
+    saveBtn.textContent = 'Save SVG';
+    actions.appendChild(saveBtn);
+    overlayDiv.appendChild(actions);
+
+    document.body.appendChild(overlayDiv);
+
+    // Render with d3-graphviz via SvgOverlayManager
+    const manager = new window.SvgOverlayManager();
+    manager.init(dot_info.content, fname);
 
     return overlayDiv;
 }
@@ -52,20 +94,19 @@ function dotId(dot_info) {
     return `${dot_info.name}`;
 }
 
-async function generateSvg(img) {
-    if (img.src != "" || img.creating_svg) {
-        console.debug('Image already generated');
+function generateSvg(container) {
+    if (container.rendered) {
         return;
     }
+    container.rendered = true;
 
-    img.creating_svg = true;
     try {
-        let viz = await window.instance();
-        const svg = viz.renderSVGElement(img.dot_info.content);
-        img.src = URL.createObjectURL(new Blob([svg.outerHTML], { type: 'image/svg+xml' }));
-        img.creating_svg = false;
+        d3.select(container).graphviz()
+            .zoom(false)
+            .fit(true)
+            .renderDot(container.dot_info.content);
     } catch (error) {
-        console.error(`Fail rendering SVG for '${img.dot_info.content}' failed: ${error}`, error);
+        console.error(`Failed rendering SVG: ${error}`, error);
     }
 }
 
@@ -106,35 +147,34 @@ async function createNewDotDiv(pipelines_div, dot_info) {
     div.setAttribute("data_score", "0");
     div.setAttribute("creation_time", dot_info.creation_time);
 
-    let title = document.createElement("h2");
-    title.textContent = dot_info.name.replace(".dot", "");
+    let titleEl = document.createElement("h2");
+    titleEl.textContent = dot_info.name.replace(".dot", "");
 
-    let img = document.createElement("img");
-    img.alt = "image";
-    img.className = "preview";
-    img.loading = "lazy";
-    img.dot_info = dot_info;
+    let previewDiv = document.createElement("div");
+    previewDiv.className = "preview";
+    previewDiv.dot_info = dot_info;
+
     const observer = new IntersectionObserver((entries, observer) => {
         for (const entry of entries) {
             if (entry.isIntersecting) {
-                console.debug(`Image ${div.id} is visible`);
-                generateSvg(img);
+                console.debug(`Preview ${div.id} is visible`);
+                generateSvg(previewDiv);
                 observer.unobserve(entry.target);
             }
         }
     }, {
         rootMargin: '100px'
     });
-    observer.observe(img);
+    pendingObservers.push({observer, target: previewDiv});
+    scheduleObserverActivation();
 
-    div.appendChild(title);
-    div.appendChild(img);
+    div.appendChild(titleEl);
+    div.appendChild(previewDiv);
 
     div.onclick = function () {
-        createOverlayElement(img, title.textContent).then(_ => {
-            setUrlVariable('pipeline', div.id);
-        });
-    }
+        setUrlVariable('pipeline', div.id);
+        createOverlayElement(previewDiv.dot_info, dot_info.name);
+    };
 
 
     if (parent_div.firstChild) {
@@ -169,20 +209,17 @@ export function updateFromUrl(noHistoryUpdate) {
         const url = new URL(window.location.href);
         const pipeline = url.searchParams.get('pipeline');
         if (pipeline) {
-            console.log(`Creating overlay for ${pipeline}`);
+            console.log(`Opening overlay for ${pipeline}`);
             let div = document.getElementById(pipeline);
             if (!div) {
                 console.info(`Pipeline ${pipeline} not found`);
                 return;
             }
-            let img = div.querySelector('img');
-            let title = div.querySelector('h2');
-            createOverlayElement(img, title.textContent).then(_ => {
-                console.debug(`Overlay created for ${pipeline}`);
-            });
+            let previewDiv = div.querySelector('.preview');
+            if (previewDiv && previewDiv.dot_info) {
+                createOverlayElement(previewDiv.dot_info, pipeline);
+            }
         }
-    } else {
-        removePipelineOverlay(noHistoryUpdate);
     }
 }
 
@@ -370,4 +407,3 @@ export function dumpPipelines() {
 export function getXgesContent(key) {
     return xgesFiles.get(key);
 }
-

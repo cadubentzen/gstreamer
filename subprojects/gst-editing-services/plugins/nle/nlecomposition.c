@@ -2010,11 +2010,7 @@ ghost_event_probe_handler (GstPad * ghostpad G_GNUC_UNUSED,
 
 
 
-      if (priv->awaited_toplevel_seek) {
-        GST_INFO_OBJECT (comp,
-            "---> Forwarding EOS as we are waiting for toplevel_seek");
-        return GST_PAD_PROBE_OK;
-      } else if (priv->next_eos_seqnum == seqnum) {
+      if (priv->next_eos_seqnum == seqnum) {
         GstClockTime now = gst_util_get_timestamp ();
 
         g_mutex_lock (&priv->seek_in_paused_lock);
@@ -2045,6 +2041,10 @@ ghost_event_probe_handler (GstPad * ghostpad G_GNUC_UNUSED,
         }
         g_mutex_unlock (&priv->seek_in_paused_lock);
 
+      } else if (priv->awaited_toplevel_seek) {
+        GST_INFO_OBJECT (comp,
+            "---> Forwarding EOS as we are waiting for toplevel_seek");
+        return GST_PAD_PROBE_OK;
       } else {
         GST_INFO_OBJECT (comp,
             "Got an EOS but it seqnum %i != next eos seqnum %i", seqnum,

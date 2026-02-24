@@ -1,0 +1,101 @@
+set-globals,
+  media_dir="$(test_dir)/../../../medias/defaults",
+  audio_caps="audio/x-raw, format=(string)S16LE, rate=(int)48000, channels=(int)1, layout=(string)interleaved",
+  video_caps="video/x-raw, format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1"
+
+meta,
+    tool = "ges-launch-$(gst_api_version)",
+    seek=true,
+    handles-states=true,
+    needs_preroll=true,
+    monitor-all-pipelines=true,
+    ges = "uridecodepoolsrc=enabled,compositor-factory=compositor,converter-type=software",
+    ges-options={
+        "--track-types=video+audio",
+        "--video-caps=$(video_caps)",
+        "--audio-caps=$(audio_caps)",
+        "--videosink=capsfilter caps=\"$(video_caps)\" ! videoconvert ! $(videosink) name=videosink",
+        "--audiosink=audiobuffersplit output-buffer-duration=1/1 ! capsfilter caps=\"$(audio_caps)\" ! audioconvert ! audioresample ! $(audiosink) name=audiosink",
+    },
+    configs = {
+        "$(validateflow), pad=audiosink:sink, record-buffers=true, ignored-fields=\"stream-start={stream-id,group-id,stream}, segment={position,}, buffer={dur,}\", ignored-event-types={gap}",
+        "$(validateflow), pad=videosink:sink, buffers-checksum=sha256, ignored-fields=\"stream-start={stream-id,group-id,stream}, segment={position,}\", ignored-event-types={gap}",
+    }
+
+set-property, on-all-instances=true, property-name=qos, property-value=false, target-element-klass=Sink
+
+set-vars,
+    media_uri0="file://$(media_dir)/matroska/timed_frames_av_1fps.mkv",
+    media_uri1="file://$(media_dir)/matroska/red_timed_frames_av_1fps.mkv"
+
+# Level 3 (leaf): subtimelines containing the actual file clips
+foreach, subtimeline_id=<"leaf0", "leaf1", "leaf2">,
+  actions = {
+    [register-subtimeline-primary, primary-id="$(subtimeline_id)"],
+    [add-track, project-uri="gessubtimeline:$(subtimeline_id)", track-type=video, caps="video/x-raw", name="$(subtimeline_id)_video_track"],
+    [add-track, project-uri="gessubtimeline:$(subtimeline_id)", track-type=audio, caps="audio/x-raw", name="$(subtimeline_id)_audio_track"],
+  }
+
+add-clip, project-uri="gessubtimeline:leaf0", name=leaf0_clip0, asset-id="$(media_uri0)?id=leaf0_clip0", duration=2.0
+add-clip, project-uri="gessubtimeline:leaf0", name=leaf0_clip1, asset-id="$(media_uri1)?id=leaf0_clip1", start=2.0, duration=2.0
+
+add-clip, project-uri="gessubtimeline:leaf1", name=leaf1_clip0, asset-id="$(media_uri1)?id=leaf1_clip0", duration=2.0
+add-clip, project-uri="gessubtimeline:leaf1", name=leaf1_clip1, asset-id="$(media_uri0)?id=leaf1_clip1", start=2.0, duration=2.0
+
+add-clip, project-uri="gessubtimeline:leaf2", name=leaf2_clip0, asset-id="$(media_uri0)?id=leaf2_clip0", duration=2.0
+add-clip, project-uri="gessubtimeline:leaf2", name=leaf2_clip1, asset-id="$(media_uri1)?id=leaf2_clip1", start=2.0, duration=2.0
+
+# Level 2: subtimelines containing leaf subtimelines
+foreach, subtimeline_id=<"mid0", "mid1">,
+  actions = {
+    [register-subtimeline-primary, primary-id="$(subtimeline_id)"],
+    [add-track, project-uri="gessubtimeline:$(subtimeline_id)", track-type=video, caps="video/x-raw", name="$(subtimeline_id)_video_track"],
+    [add-track, project-uri="gessubtimeline:$(subtimeline_id)", track-type=audio, caps="audio/x-raw", name="$(subtimeline_id)_audio_track"],
+  }
+
+add-clip, project-uri="gessubtimeline:mid0", name=mid0_leaf0, asset-id="gessubtimeline:leaf0", duration=4.0
+add-clip, project-uri="gessubtimeline:mid0", name=mid0_leaf1, asset-id="gessubtimeline:leaf1", start=4.0, duration=4.0
+
+add-clip, project-uri="gessubtimeline:mid1", name=mid1_leaf2, asset-id="gessubtimeline:leaf2", duration=4.0
+
+# Level 1: top subtimeline containing mid subtimelines
+register-subtimeline-primary, primary-id="top"
+add-track, project-uri="gessubtimeline:top", track-type=video, caps="video/x-raw", name="top_video_track"
+add-track, project-uri="gessubtimeline:top", track-type=audio, caps="audio/x-raw", name="top_audio_track"
+
+add-clip, project-uri="gessubtimeline:top", name=top_mid0, asset-id="gessubtimeline:mid0", duration=8.0
+add-clip, project-uri="gessubtimeline:top", name=top_mid1, asset-id="gessubtimeline:mid1", start=8.0, duration=4.0
+
+# Level 0 (main timeline): contains the top subtimeline
+add-clip, name=top_clip, asset-id="gessubtimeline:top"
+
+# Timeline structure (4 levels of nesting):
+#
+# MAIN TIMELINE (level 0)
+#   top_clip (gessubtimeline:top)
+#     |
+#     v
+# TOP (level 1)
+#   0s                  8s            12s
+#   |-------------------|-------------|
+#   [top_mid0]          [top_mid1]
+#     |                   |
+#     v                   v
+# MID0 (level 2)       MID1 (level 2)
+#   0s        4s   8s    0s        4s
+#   |---------|---|      |---------|
+#   [leaf0]  [leaf1]     [leaf2]
+#     |         |          |
+#     v         v          v
+# LEAF0 (l3) LEAF1 (l3) LEAF2 (l3)
+#  0  2  4    0  2  4    0  2  4
+#  [b][r]     [r][b]     [b][r]
+#
+# b=blue (timed_frames), r=red (red_timed_frames)
+# Each leaf has 2x2s clips, total duration: 12s
+# Audio and video must flow through all 4 nesting levels.
+
+pause
+
+wait, duration=0.1
+play

@@ -1,4 +1,4 @@
-event segment: start=0:00:02.000000000, stop=0:00:12.000000000
+event segment: start=0:00:02.000000000, stop=0:00:07.000000000
 
 CHECKPOINT: seek to position 2s
 

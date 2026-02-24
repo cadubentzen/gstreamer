@@ -13,8 +13,8 @@ meta,
         "--track-types=video+audio",
         "--video-caps=$(video_caps)",
         "--audio-caps=$(audio_caps)",
-        "--videosink=capsfilter caps=\"$(video_caps)\" ! videoconvert ! $(videosink) name=videosink qos=false",
-        "--audiosink=audiobuffersplit output-buffer-duration=1/10 ! capsfilter caps=\"$(audio_caps)\" ! audioconvert ! audioresample ! $(audiosink) name=audiosink qos=false",
+        "--videosink=capsfilter caps=\"$(video_caps)\" ! videoconvert ! $(videosink) name=videosink",
+        "--audiosink=audiobuffersplit output-buffer-duration=1/10 ! capsfilter caps=\"$(audio_caps)\" ! audioconvert ! audioresample ! $(audiosink) name=audiosink",
     },
     configs = {
         # Checksum for audio buffers are unstable, and the duration of the last
@@ -28,10 +28,9 @@ set-vars,
     media_uri0="file://$(media_dir)/matroska/timed_frames_av_1fps.mkv",
     media_uri1="file://$(media_dir)/matroska/red_timed_frames_av_1fps.mkv"
 
-# Create a subtimeline with 2 clips back-to-back using different
-# audio+video sources (voice counting seconds + timed video frames)
-# so clip transitions are clearly distinguishable both visually
-# and audibly
+# Create a subtimeline with 3 clips back-to-back using different
+# audio+video sources (blue/red/blue timed video frames)
+# so clip transitions are clearly distinguishable
 register-subtimeline-primary, primary-id="sub0"
 add-track, project-uri="gessubtimeline:sub0", track-type=video, caps="video/x-raw", name="sub0_video_track"
 add-track, project-uri="gessubtimeline:sub0", track-type=audio, caps="audio/x-raw", name="sub0_audio_track"
@@ -40,16 +39,19 @@ add-clip, project-uri="gessubtimeline:sub0", name=clip0, asset-id="$(media_uri0)
 add-clip, project-uri="gessubtimeline:sub0", name=clip1, asset-id="$(media_uri1)", start=2.0, duration=2.0
 add-clip, project-uri="gessubtimeline:sub0", name=clip2, asset-id="$(media_uri0)", start=4.0, duration=2.0
 
-# Add the subtimeline to the main timeline
-add-clip, name=sub0_clip, asset-id="gessubtimeline:sub0"
+# Add the subtimeline twice back to back on the main timeline
+add-clip, name=sub0_clip1, asset-id="gessubtimeline:sub0", duration=6.0
+add-clip, name=sub0_clip2, asset-id="gessubtimeline:sub0", start=6.0, duration=6.0
 
 # Timeline structure:
 #
 # MAIN TIMELINE
-#   sub0_clip (gessubtimeline:sub0)
-#     |
-#     v
-# SUBTIMELINE: sub0
+#   0s                  6s                  12s
+#   |-------------------|-------------------|
+#   [sub0_clip1]        [sub0_clip2]
+#     |                   |
+#     v                   v
+# SUBTIMELINE: sub0    SUBTIMELINE: sub0 (same content, played again)
 #   0s        2s        4s        6s
 #   |---------|---------|---------|
 #   [clip0]   [clip1]   [clip2]
@@ -57,9 +59,9 @@ add-clip, name=sub0_clip, asset-id="gessubtimeline:sub0"
 #   (a+v)     (a+v)     (a+v)
 #   2s        2s        2s
 #
-# Clips alternate blue/red/blue so transitions are clearly
-# visible. Voice counts seconds, video has distinct backgrounds.
-# Audio and video must continue playing across all clip transitions.
+# The same nested timeline is played twice back to back.
+# Audio and video must continue playing across all transitions,
+# including the transition between the two subtimeline instances.
 
 pause
 

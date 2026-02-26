@@ -25,8 +25,8 @@ meta,
 set-property, on-all-instances=true, property-name=qos, property-value=false, target-element-klass=Sink
 
 set-vars,
-    media_uri0="file://$(media_dir)/matroska/timed_frames_av_1fps.mkv",
-    media_uri1="file://$(media_dir)/matroska/red_timed_frames_av_1fps.mkv"
+    media_uri0="file://$(media_dir)/mp4/blue_timed_frames_av_1fps.mp4",
+    media_uri1="file://$(media_dir)/mp4/red_timed_frames_av_1fps.mp4"
 
 # Level 3 (leaf): subtimelines containing the actual file clips
 foreach, subtimeline_id=<"leaf0", "leaf1", "leaf2">,

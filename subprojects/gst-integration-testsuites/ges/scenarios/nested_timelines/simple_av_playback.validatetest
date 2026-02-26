@@ -25,8 +25,8 @@ meta,
 
 
 set-vars,
-    media_uri0="file://$(media_dir)/matroska/timed_frames_av_1fps.mkv",
-    media_uri1="file://$(media_dir)/matroska/red_timed_frames_av_1fps.mkv"
+    media_uri0="file://$(media_dir)/mp4/blue_timed_frames_av_1fps.mp4",
+    media_uri1="file://$(media_dir)/mp4/red_timed_frames_av_1fps.mp4"
 
 # Create a subtimeline with 2 clips back-to-back using different
 # audio+video sources (voice counting seconds + timed video frames)

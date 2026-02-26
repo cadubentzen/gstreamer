@@ -10,23 +10,22 @@ meta,
     needs_preroll=true,
     ges = "uridecodepoolsrc=enabled,compositor-factory=compositor,converter-type=software",
     ges-options={
-        "--track-types=video+audio",
+        "--track-types=audio+video",
         "--video-caps=$(video_caps)",
         "--audio-caps=$(audio_caps)",
         "--videosink=capsfilter caps=\"$(video_caps)\" ! videoconvert ! $(videosink) name=videosink",
         "--audiosink=audiobuffersplit output-buffer-duration=1/10 ! capsfilter caps=\"$(audio_caps)\" ! audioconvert ! audioresample ! $(audiosink) name=audiosink",
     },
     configs = {
-        # Checksum for audio buffers are unstable, and the duration of the last
-        # buffer varies a bit sometimes, we should check why.
         "$(validateflow), pad=audiosink:sink, record-buffers=true, ignored-fields=\"stream-start={stream-id,group-id,stream}, segment={position,}, buffer={dur,}\", ignored-event-types={gap}",
-        "$(validateflow), pad=videosink:sink, buffers-checksum=sha256, ignored-fields=\"stream-start={stream-id,group-id,stream}, segment={position,}\", ignored-event-types={gap}",
+        "$(validateflow), pad=videosink:sink, buffers-checksum=sha256, ignored-fields=\"stream-start={stream-id,group-id,stream}, segment={position,}, buffer={meta,}\", ignored-event-types={gap}",
     }
 
 
 set-vars,
-    media_uri0="file://$(media_dir)/matroska/timed_frames_av_1fps.mkv",
-    media_uri1="file://$(media_dir)/matroska/red_timed_frames_av_1fps.mkv"
+    media_uri0="file://$(media_dir)/mp4/blue_timed_frames_av_1fps.mp4",
+    media_uri1="file://$(media_dir)/mp4/red_timed_frames_av_1fps.mp4",
+    media_uri2="file://$(media_dir)/mp4/green_timed_frames_av_1fps.mp4"
 
 # Create a subtimeline with 3 clips back-to-back using different
 # audio+video sources (blue/red/blue timed video frames)
@@ -37,7 +36,7 @@ add-track, project-uri="gessubtimeline:sub0", track-type=audio, caps="audio/x-ra
 
 add-clip, project-uri="gessubtimeline:sub0", name=clip0, asset-id="$(media_uri0)", duration=2.0
 add-clip, project-uri="gessubtimeline:sub0", name=clip1, asset-id="$(media_uri1)", start=2.0, duration=2.0
-add-clip, project-uri="gessubtimeline:sub0", name=clip2, asset-id="$(media_uri0)", start=4.0, duration=2.0
+add-clip, project-uri="gessubtimeline:sub0", name=clip2, asset-id="$(media_uri2)", start=4.0, duration=2.0
 
 # Add the subtimeline twice back to back on the main timeline
 add-clip, name=sub0_clip1, asset-id="gessubtimeline:sub0", duration=6.0

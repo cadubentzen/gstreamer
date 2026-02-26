@@ -773,6 +773,7 @@ ges.test.nested_timelines.play_deeply_nested_back_to_back
 ges.test.nested_timelines.play_two_nested_back_to_back
 ges.test.nested_timelines.seek_on_stack_change_on_internal_subtimeline
 ges.test.nested_timelines.simple_av_playback
+ges.test.nested_timelines.simple_av_playback_back_to_back
 ges.test.seek.uridecodepoolsrc_initial_seek_rate
 ges.test.seek_in_ready.deeply_nested_preloading_3level_rate_effect
 ges.test.seek_in_ready.deeply_nested_preloading_3level_rate_effect_both

@@ -1,12 +1,12 @@
 event stream-start: GstEventStreamStart, flags=(GstStreamFlags)GST_STREAM_FLAG_NONE;
 event caps: video/x-raw, colorimetry=(string)2:3:0:0, format=(string)I420, framerate=(fraction)1/1, height=(int)720, width=(int)1080;
 event segment: format=TIME, start=0:00:00.000000000, offset=0:00:00.000000000, stop=0:00:06.000000000, flags=0x01, time=0:00:00.000000000, base=0:00:00.000000000
-buffer: checksum=446cfca478b1e7b358688b572bef63cf939eb07381073894ae1828c7ce7946d7, pts=0:00:00.000000000, dur=0:00:01.000000000, meta=GstVideoMeta
-buffer: checksum=f9f1440e3baae1025ebbbedd21cfd381cff47a4784d002f90ef6eec9866dea90, pts=0:00:01.000000000, dur=0:00:01.000000000, meta=GstVideoMeta
-buffer: checksum=7f8079ff9a8994590f824354ac4481cc9939f027e5ace8b1168d065b5778f8ab, pts=0:00:02.000000000, dur=0:00:01.000000000, meta=GstVideoMeta
-buffer: checksum=9174c38479f17a3709b6678452ad12abeb238778b085ca101a51a2c0c34c6d7f, pts=0:00:03.000000000, dur=0:00:01.000000000, meta=GstVideoMeta
-buffer: checksum=446cfca478b1e7b358688b572bef63cf939eb07381073894ae1828c7ce7946d7, pts=0:00:04.000000000, dur=0:00:01.000000000, meta=GstVideoMeta
-buffer: checksum=f9f1440e3baae1025ebbbedd21cfd381cff47a4784d002f90ef6eec9866dea90, pts=0:00:05.000000000, dur=0:00:01.000000000, meta=GstVideoMeta
+buffer: checksum=504a9357b14491a35976fc39fd673dfbcbc44f305bd935e94aead4901cd7097d, pts=0:00:00.000000000, dur=0:00:01.000000000, meta=GstVideoMeta
+buffer: checksum=d856e558efb4549c9cc4138a942aa1ba288e4ad849fa9c1ac4b8e6443ed7d1e9, pts=0:00:01.000000000, dur=0:00:01.000000000, meta=GstVideoMeta
+buffer: checksum=2287e5b87855b96e7f2d5f739b4bc6e72834b1ca274e1118b4d4be2f480949f7, pts=0:00:02.000000000, dur=0:00:01.000000000, meta=GstVideoMeta
+buffer: checksum=5933f5d2e0267464f868f4bad6588448b11c09edaf0efc0d0215547f7a063313, pts=0:00:03.000000000, dur=0:00:01.000000000, meta=GstVideoMeta
+buffer: checksum=504a9357b14491a35976fc39fd673dfbcbc44f305bd935e94aead4901cd7097d, pts=0:00:04.000000000, dur=0:00:01.000000000, meta=GstVideoMeta
+buffer: checksum=d856e558efb4549c9cc4138a942aa1ba288e4ad849fa9c1ac4b8e6443ed7d1e9, pts=0:00:05.000000000, dur=0:00:01.000000000, meta=GstVideoMeta
 event caps: video/x-raw, colorimetry=(string)bt601, format=(string)I420, framerate=(fraction)1/1, height=(int)720, width=(int)1080;
 event segment: format=TIME, start=0:00:06.000000000, offset=0:00:00.000000000, stop=0:00:06.000000001, flags=0x01, time=0:00:06.000000000, base=0:00:06.000000000
 buffer: checksum=2945182d8e4f237a29144ab979a42e8fb30d20eed6b8ffe27e717cd67b2e33b5, pts=0:00:06.000000000, dur=0:00:00.000000001, meta=GstVideoMeta

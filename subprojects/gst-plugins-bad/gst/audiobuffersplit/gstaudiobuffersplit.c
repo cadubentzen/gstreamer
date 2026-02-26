@@ -361,6 +361,7 @@ gst_audio_buffer_split_change_state (GstElement * element,
       gst_segment_init (&self->in_segment, GST_FORMAT_TIME);
       gst_segment_init (&self->out_segment, GST_FORMAT_UNDEFINED);
       self->segment_pending = FALSE;
+      self->segment_needs_discont = FALSE;
       GST_OBJECT_LOCK (self);
       gst_audio_stream_align_mark_discont (self->stream_align);
       GST_OBJECT_UNLOCK (self);
@@ -513,6 +514,12 @@ gst_audio_buffer_split_handle_discont (GstAudioBufferSplit * self,
   /* If this is the very first buffer we also have a discontinuity */
   discont = discont || self->current_offset == -1;
 
+  /* If we have a pending segment that was not preceded by a flush,
+   * treat it as a discontinuity so the new segment gets forwarded
+   * immediately. After a flush, we wait for a real DISCONT buffer. */
+  discont = discont
+      || (self->segment_pending && !self->segment_needs_discont);
+
   discont =
       gst_audio_stream_align_process (self->stream_align,
       discont, input_rt, input_duration, NULL, NULL, NULL);
@@ -653,6 +660,7 @@ gst_audio_buffer_split_handle_discont (GstAudioBufferSplit * self,
       gst_event_set_seqnum (event, self->segment_seqnum);
       gst_pad_push_event (self->srcpad, event);
       self->segment_pending = FALSE;
+      self->segment_needs_discont = FALSE;
     }
   }
 
@@ -810,6 +818,7 @@ gst_audio_buffer_split_sink_event (GstPad * pad, GstObject * parent,
       gst_segment_init (&self->in_segment, GST_FORMAT_TIME);
       gst_segment_init (&self->out_segment, GST_FORMAT_UNDEFINED);
       self->segment_pending = FALSE;
+      self->segment_needs_discont = TRUE;
       GST_OBJECT_LOCK (self);
       gst_audio_stream_align_mark_discont (self->stream_align);
       GST_OBJECT_UNLOCK (self);

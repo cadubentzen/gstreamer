@@ -51,6 +51,7 @@ struct _GstAudioBufferSplit {
   GstSegment in_segment, out_segment;
   guint32 segment_seqnum;
   gboolean segment_pending;
+  gboolean segment_needs_discont; /* segment only forwarded on DISCONT (after flush) */
   GstAudioInfo info;
 
   GstAdapter *adapter;

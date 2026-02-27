@@ -692,20 +692,26 @@ ges_pipeline_pool_manager_init (GESPipelinePoolManager * self,
     GESTimeline * timeline)
 {
   static gsize init = 0;
+  static gboolean has_uridecodepoolsrc = FALSE;
 
   if (g_once_init_enter ((gsize *) & init)) {
+    GstElement *tmp = gst_element_factory_make ("uridecodepoolsrc", NULL);
+
     GST_DEBUG_CATEGORY_INIT (GST_CAT_DEFAULT, "gespipelinepoolmanager", 0,
         "gespipelinepoolmanager");
+
+    has_uridecodepoolsrc = tmp != NULL;
+    gst_clear_object (&tmp);
 
     g_once_init_leave ((gsize *) & init, 1);
   }
 
+  g_rec_mutex_init (&self->lock);
+  if (!has_uridecodepoolsrc)
+    return;
+
   GstElement *uridecodepoolsrc =
       gst_element_factory_make ("uridecodepoolsrc", NULL);
-
-  g_rec_mutex_init (&self->lock);
-  if (!uridecodepoolsrc)
-    return;
 
   self->timeline = timeline;
   self->pooled_sources = g_array_new (100, TRUE, sizeof (PooledSource));

@@ -30,6 +30,7 @@
 #include <gst/validate/gst-validate-utils.h>
 #include "ges-internal.h"
 #include "ges-structured-interface.h"
+#include "ges-pipeline-pool-manager.h"
 
 #define MONITOR_ON_PIPELINE "validate-monitor"
 #define RUNNER_ON_PIPELINE "runner-monitor"
@@ -1299,6 +1300,94 @@ done:
   return res;
 }
 
+static gint
+_check_pool_manager (GstValidateScenario * scenario, GstValidateAction * action)
+{
+  GstValidateActionReturn res = GST_VALIDATE_EXECUTE_ACTION_OK;
+  GESPipelinePoolManager *pool_manager;
+  guint n_pooled, n_prepared, n_nested;
+  gint min_pooled = -1, max_pooled = -1;
+  gint min_prepared = -1, max_prepared = -1;
+  gint expected_nested = -1;
+  GstElement *pipeline = gst_validate_scenario_get_pipeline (scenario);
+  GESTimeline *timeline;
+
+  g_return_val_if_fail (GES_IS_PIPELINE (pipeline),
+      GST_VALIDATE_EXECUTE_ACTION_ERROR_REPORTED);
+
+  g_object_get (pipeline, "timeline", &timeline, NULL);
+  gst_object_unref (pipeline);
+  g_return_val_if_fail (timeline != NULL,
+      GST_VALIDATE_EXECUTE_ACTION_ERROR_REPORTED);
+
+  pool_manager = ges_timeline_get_pool_manager (timeline);
+  if (!pool_manager) {
+    GST_VALIDATE_REPORT_ACTION (GST_VALIDATE_REPORTER (scenario), action,
+        SCENARIO_ACTION_EXECUTION_ERROR,
+        "No pool manager on timeline (uridecodepoolsrc not available?)");
+    gst_object_unref (timeline);
+    return GST_VALIDATE_EXECUTE_ACTION_ERROR_REPORTED;
+  }
+
+  n_pooled = ges_pipeline_pool_manager_get_n_pooled_sources (pool_manager);
+  n_prepared = ges_pipeline_pool_manager_get_n_prepared_sources (pool_manager);
+  n_nested = ges_pipeline_pool_manager_get_n_registered_nested (pool_manager);
+
+  gst_structure_get_int (action->structure, "min-pooled-sources", &min_pooled);
+  gst_structure_get_int (action->structure, "max-pooled-sources", &max_pooled);
+  gst_structure_get_int (action->structure, "min-prepared-sources",
+      &min_prepared);
+  gst_structure_get_int (action->structure, "max-prepared-sources",
+      &max_prepared);
+  gst_structure_get_int (action->structure, "n-registered-nested-timelines",
+      &expected_nested);
+
+  if (min_pooled >= 0 && n_pooled < (guint) min_pooled) {
+    GST_VALIDATE_REPORT_ACTION (GST_VALIDATE_REPORTER (scenario), action,
+        SCENARIO_ACTION_CHECK_ERROR,
+        "Expected at least %d pooled sources, got %u", min_pooled, n_pooled);
+    res = GST_VALIDATE_EXECUTE_ACTION_ERROR_REPORTED;
+  }
+
+  if (max_pooled >= 0 && n_pooled > (guint) max_pooled) {
+    GST_VALIDATE_REPORT_ACTION (GST_VALIDATE_REPORTER (scenario), action,
+        SCENARIO_ACTION_CHECK_ERROR,
+        "Expected at most %d pooled sources, got %u", max_pooled, n_pooled);
+    res = GST_VALIDATE_EXECUTE_ACTION_ERROR_REPORTED;
+  }
+
+  if (min_prepared >= 0 && n_prepared < (guint) min_prepared) {
+    GST_VALIDATE_REPORT_ACTION (GST_VALIDATE_REPORTER (scenario), action,
+        SCENARIO_ACTION_CHECK_ERROR,
+        "Expected at least %d prepared sources, got %u", min_prepared,
+        n_prepared);
+    res = GST_VALIDATE_EXECUTE_ACTION_ERROR_REPORTED;
+  }
+
+  if (max_prepared >= 0 && n_prepared > (guint) max_prepared) {
+    GST_VALIDATE_REPORT_ACTION (GST_VALIDATE_REPORTER (scenario), action,
+        SCENARIO_ACTION_CHECK_ERROR,
+        "Expected at most %d prepared sources, got %u", max_prepared,
+        n_prepared);
+    res = GST_VALIDATE_EXECUTE_ACTION_ERROR_REPORTED;
+  }
+
+  if (expected_nested >= 0 && n_nested != (guint) expected_nested) {
+    GST_VALIDATE_REPORT_ACTION (GST_VALIDATE_REPORTER (scenario), action,
+        SCENARIO_ACTION_CHECK_ERROR,
+        "Expected %d registered nested timelines, got %u", expected_nested,
+        n_nested);
+    res = GST_VALIDATE_EXECUTE_ACTION_ERROR_REPORTED;
+  }
+
+  GST_INFO_OBJECT (timeline,
+      "check-pool-manager: pooled=%u prepared=%u nested=%u", n_pooled,
+      n_prepared, n_nested);
+
+  gst_object_unref (timeline);
+  return res;
+}
+
 #endif
 
 gboolean
@@ -2134,6 +2223,42 @@ ges_validate_register_action_types (void)
 
   gst_validate_register_action_type ("commit", "ges", _commit, NULL,
        "Commit the timeline.", GST_VALIDATE_ACTION_TYPE_ASYNC);
+
+  gst_validate_register_action_type ("check-pool-manager", "ges", _check_pool_manager,
+      (GstValidateActionParameter []) {
+        {
+          .name = "min-pooled-sources",
+          .description = "Minimum number of pooled sources expected",
+          .types = "int",
+          .mandatory = FALSE,
+        },
+        {
+          .name = "max-pooled-sources",
+          .description = "Maximum number of pooled sources expected",
+          .types = "int",
+          .mandatory = FALSE,
+        },
+        {
+          .name = "min-prepared-sources",
+          .description = "Minimum number of prepared sources expected",
+          .types = "int",
+          .mandatory = FALSE,
+        },
+        {
+          .name = "max-prepared-sources",
+          .description = "Maximum number of prepared sources expected",
+          .types = "int",
+          .mandatory = FALSE,
+        },
+        {
+          .name = "n-registered-nested-timelines",
+          .description = "Expected number of registered nested timelines (exact match)",
+          .types = "int",
+          .mandatory = FALSE,
+        },
+        {NULL}
+      }, "Check the pool manager state (pooled sources, prepared sources, nested timelines).",
+      GST_VALIDATE_ACTION_TYPE_CHECK);
   /*  *INDENT-ON* */
 
   return TRUE;

@@ -98,4 +98,5 @@ add-clip, name=top_clip, asset-id="gessubtimeline:top"
 pause
 
 wait, duration=0.1
+check-pool-manager, min-pooled-sources=4
 play

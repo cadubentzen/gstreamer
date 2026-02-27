@@ -734,6 +734,44 @@ ges_pipeline_pool_manager_get_max_preloaded_sources (GESPipelinePoolManager *
   return self->max_preloaded_sources;
 }
 
+guint
+ges_pipeline_pool_manager_get_n_pooled_sources (GESPipelinePoolManager * self)
+{
+  guint n;
+
+  g_rec_mutex_lock (&self->lock);
+  n = self->pooled_sources ? self->pooled_sources->len : 0;
+  g_rec_mutex_unlock (&self->lock);
+
+  return n;
+}
+
+guint
+ges_pipeline_pool_manager_get_n_prepared_sources (GESPipelinePoolManager * self)
+{
+  guint n;
+
+  g_rec_mutex_lock (&self->lock);
+  n = self->prepared_sources ? self->prepared_sources->len : 0;
+  g_rec_mutex_unlock (&self->lock);
+
+  return n;
+}
+
+guint
+ges_pipeline_pool_manager_get_n_registered_nested (GESPipelinePoolManager *
+    self)
+{
+  guint n;
+
+  g_rec_mutex_lock (&self->lock);
+  n = self->registered_nested_timelines ?
+      self->registered_nested_timelines->len : 0;
+  g_rec_mutex_unlock (&self->lock);
+
+  return n;
+}
+
 GESPipelinePoolManager *
 ges_pipeline_pool_manager_new (GESTimeline * timeline)
 {

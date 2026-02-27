@@ -46,6 +46,7 @@ G_BEGIN_DECLS
 #include "ges-asset.h"
 #include "ges-base-xml-formatter.h"
 #include "ges-timeline-tree.h"
+#include "ges-pipeline-pool-manager.h"
 
 G_GNUC_INTERNAL
 GstDebugCategory * _ges_debug (void);
@@ -185,6 +186,9 @@ timeline_create_transitions (GESTimeline * timeline, GESTrackElement * track_ele
 
 G_GNUC_INTERNAL GESSource * timeline_get_parent_uri_source  (GESTimeline *self);
 G_GNUC_INTERNAL void        timeline_set_parent_uri_source  (GESTimeline *self, GESSource *source);
+
+G_GNUC_INTERNAL GESPipelinePoolManager *
+ges_timeline_get_pool_manager (GESTimeline *timeline);
 G_GNUC_INTERNAL void        timeline_get_framerate          (GESTimeline *self,
                                                              gint *fps_n,
                                                              gint *fps_d);

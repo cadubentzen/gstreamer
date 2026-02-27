@@ -1,0 +1,69 @@
+set-globals,
+  media_dir="$(test_dir)/../../../medias/defaults",
+  video_caps="video/x-raw, format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1"
+
+meta,
+    tool = "ges-launch-$(gst_api_version)",
+    seek=true,
+    handles-states=true,
+    needs_preroll=true,
+    ges = "uridecodepoolsrc=enabled,compositor-factory=compositor,converter-type=software",
+    ges-options={
+        "--track-types=video",
+        "--video-caps=$(video_caps)",
+        "--videosink=capsfilter caps=\"$(video_caps)\" ! videoconvert ! $(videosink) name=videosink",
+    },
+    configs = {
+        "$(validateflow), pad=videosink:sink, buffers-checksum=sha256, ignored-fields=\"stream-start={stream-id,group-id,stream}, segment={position,}, buffer={meta,}\", ignored-event-types={gap}",
+    }
+
+set-vars,
+    media_uri0="file://$(media_dir)/mp4/blue_timed_frames_av_1fps.mp4",
+    media_uri1="file://$(media_dir)/mp4/red_timed_frames_av_1fps.mp4"
+
+# Create 2 subtimelines with 4 video-only clips each (8 total sources)
+foreach, subtimeline_id=<"sub0", "sub1">,
+  actions = {
+    [register-subtimeline-primary, primary-id="$(subtimeline_id)"],
+    [add-track, project-uri="gessubtimeline:$(subtimeline_id)", track-type=video, caps="video/x-raw", name="$(subtimeline_id)_video_track"],
+  }
+
+add-clip, project-uri="gessubtimeline:sub0", name=sub0_clip0, asset-id="$(media_uri0)?id=sub0_clip0", duration=2.0
+add-clip, project-uri="gessubtimeline:sub0", name=sub0_clip1, asset-id="$(media_uri1)?id=sub0_clip1", start=2.0, duration=2.0
+add-clip, project-uri="gessubtimeline:sub0", name=sub0_clip2, asset-id="$(media_uri0)?id=sub0_clip2", start=4.0, duration=2.0
+add-clip, project-uri="gessubtimeline:sub0", name=sub0_clip3, asset-id="$(media_uri1)?id=sub0_clip3", start=6.0, duration=2.0
+
+add-clip, project-uri="gessubtimeline:sub1", name=sub1_clip0, asset-id="$(media_uri1)?id=sub1_clip0", duration=2.0
+add-clip, project-uri="gessubtimeline:sub1", name=sub1_clip1, asset-id="$(media_uri0)?id=sub1_clip1", start=2.0, duration=2.0
+add-clip, project-uri="gessubtimeline:sub1", name=sub1_clip2, asset-id="$(media_uri1)?id=sub1_clip2", start=4.0, duration=2.0
+add-clip, project-uri="gessubtimeline:sub1", name=sub1_clip3, asset-id="$(media_uri0)?id=sub1_clip3", start=6.0, duration=2.0
+
+# Place both subtimelines on the main timeline
+add-clip, name=main_sub0, asset-id="gessubtimeline:sub0", duration=8.0
+add-clip, name=main_sub1, asset-id="gessubtimeline:sub1", start=8.0, duration=8.0
+
+# Set a low budget so we can verify it is respected
+set-property, target-element-name=gestimeline0, property-name=max-preloaded-sources, property-value=(uint)3
+
+# Timeline structure:
+#
+# MAIN TIMELINE
+#   0s                  8s                  16s
+#   |-------------------|-------------------|
+#   [main_sub0]         [main_sub1]
+#     |                   |
+#     v                   v
+# SUB0                  SUB1
+#   0  2  4  6  8        0  2  4  6  8
+#   [0][1][2][3]         [0][1][2][3]
+#
+# 4 video-only clips per subtimeline
+# At pause (position 0), only main_sub0's nested timeline is active,
+# so we expect 4 pooled sources from sub0's clips.
+# max-preloaded-sources=3: at most 3 should be prepared at any time.
+
+pause
+
+wait, duration=0.1
+check-pool-manager, min-pooled-sources=4, max-prepared-sources=3
+play

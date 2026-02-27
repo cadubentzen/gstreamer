@@ -1652,6 +1652,12 @@ timeline_get_parent_uri_source (GESTimeline * self)
   return g_weak_ref_get (&self->priv->parent_source);
 }
 
+GESPipelinePoolManager *
+ges_timeline_get_pool_manager (GESTimeline * timeline)
+{
+  return timeline->priv->pool_manager;
+}
+
 void
 timeline_set_parent_uri_source (GESTimeline * self, GESSource * source)
 {

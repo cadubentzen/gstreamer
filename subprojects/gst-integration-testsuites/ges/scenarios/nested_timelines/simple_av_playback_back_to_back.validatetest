@@ -65,4 +65,5 @@ add-clip, name=sub0_clip2, asset-id="gessubtimeline:sub0", start=6.0, duration=6
 pause
 
 wait, duration=0.1
+check-pool-manager, min-pooled-sources=6
 play

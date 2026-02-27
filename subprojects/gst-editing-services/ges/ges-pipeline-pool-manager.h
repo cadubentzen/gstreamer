@@ -40,3 +40,7 @@ void ges_pipeline_pool_manager_register_nested_timeline   (GESPipelinePoolManage
                                                            GESTimeline *nested_timeline);
 void ges_pipeline_pool_manager_deregister_nested_timeline (GESPipelinePoolManager *self,
                                                            GESTimeline *nested_timeline);
+
+guint ges_pipeline_pool_manager_get_n_pooled_sources    (GESPipelinePoolManager *self);
+guint ges_pipeline_pool_manager_get_n_prepared_sources  (GESPipelinePoolManager *self);
+guint ges_pipeline_pool_manager_get_n_registered_nested (GESPipelinePoolManager *self);

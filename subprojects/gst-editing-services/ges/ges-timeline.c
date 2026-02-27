@@ -285,7 +285,8 @@ struct _GESTimelinePrivate
   gboolean rendering_smartly;
   gboolean disable_edit_apis;
 
-  GESPipelinePoolManager pool_manager;
+  GESPipelinePoolManager *pool_manager;
+  guint max_preloaded_sources;
   /* When the timeline is nested, this is the parent source that lead to the
    * creation of the timeline */
     GWeakRef /*<GESTrackElement> */ parent_source;
@@ -437,8 +438,12 @@ ges_timeline_get_property (GObject * object, guint property_id,
       g_value_set_uint64 (value, timeline->priv->snapping_distance);
       break;
     case PROP_MAX_PRELOADED_SOURCES:
-      g_value_set_uint (value,
-          timeline->priv->pool_manager.max_preloaded_sources);
+      if (timeline->priv->pool_manager)
+        g_value_set_uint (value,
+            ges_pipeline_pool_manager_get_max_preloaded_sources (
+                timeline->priv->pool_manager));
+      else
+        g_value_set_uint (value, timeline->priv->max_preloaded_sources);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -459,8 +464,11 @@ ges_timeline_set_property (GObject * object, guint property_id,
       timeline->priv->snapping_distance = g_value_get_uint64 (value);
       break;
     case PROP_MAX_PRELOADED_SOURCES:
-      timeline->priv->pool_manager.max_preloaded_sources =
-          g_value_get_uint (value);
+      timeline->priv->max_preloaded_sources = g_value_get_uint (value);
+      if (timeline->priv->pool_manager)
+        ges_pipeline_pool_manager_set_max_preloaded_sources (
+            timeline->priv->pool_manager,
+            timeline->priv->max_preloaded_sources);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -531,11 +539,49 @@ ges_timeline_finalize (GObject * object)
   g_mutex_clear (&tl->priv->flushing_seek_info_lock);
   g_mutex_clear (&tl->priv->commited_lock);
   g_node_destroy (tl->priv->tree);
-  ges_pipeline_pool_clear (&tl->priv->pool_manager);
+  g_clear_pointer (&tl->priv->pool_manager, ges_pipeline_pool_manager_unref);
   g_free (tl->priv->primary_id);
   g_weak_ref_clear (&tl->priv->parent_source);
 
   G_OBJECT_CLASS (ges_timeline_parent_class)->finalize (object);
+}
+
+/* Translate coordinates from a nested timeline to toplevel coordinates.
+ * Walks up the parent_uri_source chain, applying outer = inner - inpoint + start
+ * at each level and resolving the track by type. */
+static void
+translate_to_toplevel_coordinates (GESTimeline * timeline,
+    GstClockTime * start, GstClockTime * end, GESTrack ** track)
+{
+  GESSource *parent_source = timeline_get_parent_uri_source (timeline);
+
+  if (!parent_source)
+    return;
+
+  GstClockTime clip_start =
+      GES_TIMELINE_ELEMENT_START (GES_TIMELINE_ELEMENT_PARENT (parent_source));
+  GstClockTime clip_inpoint =
+      GES_TIMELINE_ELEMENT_INPOINT (GES_TIMELINE_ELEMENT_PARENT
+      (parent_source));
+
+  if (GST_CLOCK_TIME_IS_VALID (*start))
+    *start = *start - clip_inpoint + clip_start;
+  if (GST_CLOCK_TIME_IS_VALID (*end))
+    *end = *end - clip_inpoint + clip_start;
+
+  GESTrack *outer_track =
+      ges_track_element_get_track (GES_TRACK_ELEMENT (parent_source));
+  if (outer_track) {
+    gst_object_unref (*track);
+    *track = gst_object_ref (outer_track);
+  }
+
+  GESTimeline *parent_tl =
+      ges_timeline_element_get_timeline (GES_TIMELINE_ELEMENT (parent_source));
+  g_object_unref (parent_source);
+
+  if (parent_tl)
+    translate_to_toplevel_coordinates (parent_tl, start, end, track);
 }
 
 static void
@@ -602,8 +648,16 @@ ges_timeline_handle_message (GstBin * bin, GstMessage * message)
       GST_DEBUG_OBJECT (timeline, "Setting rate = %f", rate);
       timeline->priv->rate = rate;
       GST_OBJECT_UNLOCK (timeline);
-      ges_pipeline_pool_manager_prepare_pipelines_around (&timeline->
-          priv->pool_manager, track, stack_start, stack_end);
+      if (timeline->priv->pool_manager) {
+        GstClockTime outer_start = stack_start, outer_end = stack_end;
+        GESTrack *outer_track = gst_object_ref (track);
+
+        translate_to_toplevel_coordinates (timeline, &outer_start, &outer_end,
+            &outer_track);
+        ges_pipeline_pool_manager_prepare_pipelines_around (
+            timeline->priv->pool_manager, outer_track, outer_start, outer_end);
+        gst_object_unref (outer_track);
+      }
 
       gst_object_unref (track);
 
@@ -628,9 +682,6 @@ ges_timeline_handle_message (GstBin * bin, GstMessage * message)
     } else if (gst_structure_has_name (mstructure,
             "GESTimelineQueryIsRendering")) {
       if (GST_MESSAGE_SRC (message) != (GstObject *) bin) {
-        ges_timeline_set_rendering (GES_TIMELINE (GST_MESSAGE_SRC (message)),
-            timeline->priv->pool_manager.rendering);
-
         goto forward;
       }
     } else if (gst_structure_has_name (mstructure,
@@ -750,9 +801,27 @@ ges_timeline_change_state (GstElement * element, GstStateChange transition)
       g_mutex_unlock (&timeline->priv->flushing_seek_info_lock);
       break;
     case GST_STATE_CHANGE_READY_TO_PAUSED:
-      ges_pipeline_pool_manager_commit (&timeline->priv->pool_manager);
+    {
+      GESSource *parent_source = timeline_get_parent_uri_source (timeline);
+      if (!timeline->priv->pool_manager) {
+        /* Toplevel: create manager */
+        timeline->priv->pool_manager =
+            ges_pipeline_pool_manager_new (timeline);
+        ges_pipeline_pool_manager_set_max_preloaded_sources (
+            timeline->priv->pool_manager,
+            timeline->priv->max_preloaded_sources);
+      } else {
+        /* Nested: already set by parent via timeline_set_parent_uri_source.
+         * Register self with the shared manager. */
+        ges_pipeline_pool_manager_register_nested_timeline (
+            timeline->priv->pool_manager, timeline);
+      }
+      if (!parent_source)
+        ges_pipeline_pool_manager_commit (timeline->priv->pool_manager);
+      g_clear_object (&parent_source);
       ges_timeline_post_query_is_rendering (timeline);
       break;
+    }
     default:
       break;
   }
@@ -765,9 +834,23 @@ ges_timeline_change_state (GstElement * element, GstStateChange transition)
       ges_timeline_post_stream_collection (timeline);
       break;
     case GST_STATE_CHANGE_PAUSED_TO_READY:
+    {
+      if (timeline->priv->pool_manager) {
+        GESSource *parent_source = timeline_get_parent_uri_source (timeline);
+        if (!parent_source) {
+          ges_pipeline_pool_manager_unprepare_all (
+              timeline->priv->pool_manager);
+        } else {
+          ges_pipeline_pool_manager_deregister_nested_timeline (
+              timeline->priv->pool_manager, timeline);
+          g_object_unref (parent_source);
+        }
+        g_clear_pointer (&timeline->priv->pool_manager,
+            ges_pipeline_pool_manager_unref);
+      }
       g_weak_ref_set (&timeline->priv->parent_source, NULL);
-      ges_pipeline_pool_manager_unprepare_all (&timeline->priv->pool_manager);
       break;
+    }
     default:
       break;
   }
@@ -1230,8 +1313,8 @@ ges_timeline_init (GESTimeline * self)
   priv->flushing_seek_infos = g_ptr_array_new_with_free_func ((GDestroyNotify)
       flushing_seek_info_unref);
 
-  ges_pipeline_pool_manager_init (&priv->pool_manager, self);
-  priv->pool_manager.max_preloaded_sources = DEFAULT_MAX_PRELOADED_SOURCES;
+  priv->pool_manager = NULL;
+  priv->max_preloaded_sources = DEFAULT_MAX_PRELOADED_SOURCES;
 
   g_weak_ref_init (&priv->parent_source, NULL);
 
@@ -1573,6 +1656,13 @@ void
 timeline_set_parent_uri_source (GESTimeline * self, GESSource * source)
 {
   g_weak_ref_set (&self->priv->parent_source, source);
+
+  GESTimeline *parent_tl =
+      ges_timeline_element_get_timeline (GES_TIMELINE_ELEMENT (source));
+  if (parent_tl && parent_tl->priv->pool_manager) {
+    self->priv->pool_manager =
+        ges_pipeline_pool_manager_ref (parent_tl->priv->pool_manager);
+  }
 }
 
 void
@@ -2655,8 +2745,9 @@ timeline_get_tree (GESTimeline * timeline)
 void
 ges_timeline_set_rendering (GESTimeline * timeline, gboolean rendering)
 {
-  ges_pipeline_pool_manager_set_rendering (&timeline->priv->pool_manager,
-      rendering);
+  if (timeline->priv->pool_manager)
+    ges_pipeline_pool_manager_set_rendering (timeline->priv->pool_manager,
+        rendering);
 }
 
 void
@@ -3515,7 +3606,12 @@ ges_timeline_commit (GESTimeline * timeline)
 
   LOCK_DYN (timeline);
   ret = ges_timeline_commit_unlocked (timeline);
-  ges_pipeline_pool_manager_commit (&timeline->priv->pool_manager);
+  {
+    GESSource *parent_source = timeline_get_parent_uri_source (timeline);
+    if (!parent_source && timeline->priv->pool_manager)
+      ges_pipeline_pool_manager_commit (timeline->priv->pool_manager);
+    g_clear_object (&parent_source);
+  }
   UNLOCK_DYN (timeline);
 
   if (pcollection != timeline->priv->stream_collection) {

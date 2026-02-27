@@ -19,35 +19,12 @@
 #include "ges-timeline.h"
 #pragma once
 
-typedef struct {
-  GESClip *clip;
-  GESTrack *track;
-  /* Committed values captured during timeline commit - these reflect
-   * what NLE sees, not potentially uncommitted GES edits */
-  GstClockTime timeline_inpoint;    /* Where we start reading in the nested timeline */
-  GstClockTime timeline_duration;   /* How much of the nested timeline we read */
-  GstClockTime outer_start;         /* Where the clip appears in the outer timeline */
-} NestedTimelineInfo;
+typedef struct _GESPipelinePoolManager GESPipelinePoolManager;
 
-typedef struct {
-    GRecMutex lock;
-    GArray *pooled_sources;
-    GArray *prepared_sources;
-    GESTimeline *timeline;
-    GObject *pool;
-    gboolean has_subtimelines;
-
-    gboolean rendering;
-
-    guint max_preloaded_sources;
-
-    GArray *pending_nested_timelines;
-    GPtrArray *pipeline_buses;
-} GESPipelinePoolManager;
-
-void ges_pipeline_pool_manager_init   (GESPipelinePoolManager *self, GESTimeline *timeline);
-void ges_pipeline_pool_clear          (GESPipelinePoolManager *self);
-void ges_pipeline_pool_manager_commit (GESPipelinePoolManager *self);
+GESPipelinePoolManager * ges_pipeline_pool_manager_new    (GESTimeline *timeline);
+GESPipelinePoolManager * ges_pipeline_pool_manager_ref    (GESPipelinePoolManager *self);
+void ges_pipeline_pool_manager_unref                      (GESPipelinePoolManager *self);
+void ges_pipeline_pool_manager_commit                     (GESPipelinePoolManager *self);
 
 void ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *self,
                                                          GESTrack *track,
@@ -56,3 +33,10 @@ void ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager 
 void ges_pipeline_pool_manager_unprepare_all            (GESPipelinePoolManager *self);
 
 void ges_pipeline_pool_manager_set_rendering (GESPipelinePoolManager * self, gboolean rendering);
+void ges_pipeline_pool_manager_set_max_preloaded_sources (GESPipelinePoolManager *self, guint max);
+guint ges_pipeline_pool_manager_get_max_preloaded_sources (GESPipelinePoolManager *self);
+
+void ges_pipeline_pool_manager_register_nested_timeline   (GESPipelinePoolManager *self,
+                                                           GESTimeline *nested_timeline);
+void ges_pipeline_pool_manager_deregister_nested_timeline (GESPipelinePoolManager *self,
+                                                           GESTimeline *nested_timeline);

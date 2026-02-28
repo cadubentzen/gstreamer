@@ -440,8 +440,8 @@ ges_timeline_get_property (GObject * object, guint property_id,
     case PROP_MAX_PRELOADED_SOURCES:
       if (timeline->priv->pool_manager)
         g_value_set_uint (value,
-            ges_pipeline_pool_manager_get_max_preloaded_sources (
-                timeline->priv->pool_manager));
+            ges_pipeline_pool_manager_get_max_preloaded_sources
+            (timeline->priv->pool_manager));
       else
         g_value_set_uint (value, timeline->priv->max_preloaded_sources);
       break;

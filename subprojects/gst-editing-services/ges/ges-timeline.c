@@ -466,9 +466,8 @@ ges_timeline_set_property (GObject * object, guint property_id,
     case PROP_MAX_PRELOADED_SOURCES:
       timeline->priv->max_preloaded_sources = g_value_get_uint (value);
       if (timeline->priv->pool_manager)
-        ges_pipeline_pool_manager_set_max_preloaded_sources (
-            timeline->priv->pool_manager,
-            timeline->priv->max_preloaded_sources);
+        ges_pipeline_pool_manager_set_max_preloaded_sources (timeline->
+            priv->pool_manager, timeline->priv->max_preloaded_sources);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -547,7 +546,8 @@ ges_timeline_finalize (GObject * object)
 }
 
 /* Translate coordinates from a nested timeline to toplevel coordinates.
- * Walks up the parent_uri_source chain, applying outer = inner - inpoint + start
+ * Walks up the parent_uri_source chain, clamping to the visible window
+ * [inpoint, inpoint+duration] then applying outer = inner - inpoint + start
  * at each level and resolving the track by type. */
 static void
 translate_to_toplevel_coordinates (GESTimeline * timeline,
@@ -558,16 +558,18 @@ translate_to_toplevel_coordinates (GESTimeline * timeline,
   if (!parent_source)
     return;
 
-  GstClockTime clip_start =
-      GES_TIMELINE_ELEMENT_START (GES_TIMELINE_ELEMENT_PARENT (parent_source));
-  GstClockTime clip_inpoint =
-      GES_TIMELINE_ELEMENT_INPOINT (GES_TIMELINE_ELEMENT_PARENT
-      (parent_source));
+  GESTimelineElement *parent_clip = GES_TIMELINE_ELEMENT_PARENT (parent_source);
+  GstClockTime clip_start = GES_TIMELINE_ELEMENT_START (parent_clip);
+  GstClockTime clip_inpoint = GES_TIMELINE_ELEMENT_INPOINT (parent_clip);
+  GstClockTime clip_end =
+      clip_inpoint + GES_TIMELINE_ELEMENT_DURATION (parent_clip);
 
+  /* Clamp inner coordinates to the visible window [inpoint, inpoint+duration]
+   * to avoid unsigned underflow when inner < inpoint */
   if (GST_CLOCK_TIME_IS_VALID (*start))
-    *start = *start - clip_inpoint + clip_start;
+    *start = CLAMP (*start, clip_inpoint, clip_end) - clip_inpoint + clip_start;
   if (GST_CLOCK_TIME_IS_VALID (*end))
-    *end = *end - clip_inpoint + clip_start;
+    *end = CLAMP (*end, clip_inpoint, clip_end) - clip_inpoint + clip_start;
 
   GESTrack *outer_track =
       ges_track_element_get_track (GES_TRACK_ELEMENT (parent_source));
@@ -640,7 +642,7 @@ ges_timeline_handle_message (GstBin * bin, GstMessage * message)
               "stack-end", GST_TYPE_CLOCK_TIME, &stack_end, "rate",
               G_TYPE_DOUBLE, &rate, NULL)) {
 
-        g_error ("Invalid NleCompositionNewStack %s",
+        g_error ("Invalid NleCompositionUpdateDone %s",
             gst_structure_to_string (mstructure));
       }
 
@@ -654,8 +656,8 @@ ges_timeline_handle_message (GstBin * bin, GstMessage * message)
 
         translate_to_toplevel_coordinates (timeline, &outer_start, &outer_end,
             &outer_track);
-        ges_pipeline_pool_manager_prepare_pipelines_around (
-            timeline->priv->pool_manager, outer_track, outer_start, outer_end);
+        ges_pipeline_pool_manager_prepare_pipelines_around (timeline->
+            priv->pool_manager, outer_track, outer_start, outer_end);
         gst_object_unref (outer_track);
       }
 
@@ -690,8 +692,7 @@ ges_timeline_handle_message (GstBin * bin, GstMessage * message)
 
       if (parent_source) {
         NleObjectQueryInitializationSeek *q;
-        GstClockTime start =
-            GES_TIMELINE_ELEMENT_INPOINT (parent_source);
+        GstClockTime start = GES_TIMELINE_ELEMENT_INPOINT (parent_source);
         GstClockTime stop =
             start + GES_TIMELINE_ELEMENT_DURATION (parent_source);
 
@@ -700,8 +701,7 @@ ges_timeline_handle_message (GstBin * bin, GstMessage * message)
         GST_BIN_CLASS (parent_class)->handle_message (bin, message);
 
         {
-          const GValue *v =
-              gst_structure_get_value (mstructure, "query");
+          const GValue *v = gst_structure_get_value (mstructure, "query");
 
           g_assert (v);
           q = g_atomic_rc_box_acquire (g_value_get_boxed (v));
@@ -711,12 +711,10 @@ ges_timeline_handle_message (GstBin * bin, GstMessage * message)
         if (!q->initialization_seek) {
           gdouble rate = ges_timeline_get_rate (timeline);
 
-          q->initialization_seek = gst_event_new_seek (
-              rate == 0.0 ? 1.0 : rate,
+          q->initialization_seek = gst_event_new_seek (rate == 0.0 ? 1.0 : rate,
               GST_FORMAT_TIME,
               GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE,
-              GST_SEEK_TYPE_SET, start,
-              GST_SEEK_TYPE_SET, stop);
+              GST_SEEK_TYPE_SET, start, GST_SEEK_TYPE_SET, stop);
 
           GST_INFO_OBJECT (timeline,
               "Providing initialization seek [%" GST_TIME_FORMAT " - %"
@@ -805,16 +803,14 @@ ges_timeline_change_state (GstElement * element, GstStateChange transition)
       GESSource *parent_source = timeline_get_parent_uri_source (timeline);
       if (!timeline->priv->pool_manager) {
         /* Toplevel: create manager */
-        timeline->priv->pool_manager =
-            ges_pipeline_pool_manager_new (timeline);
-        ges_pipeline_pool_manager_set_max_preloaded_sources (
-            timeline->priv->pool_manager,
-            timeline->priv->max_preloaded_sources);
+        timeline->priv->pool_manager = ges_pipeline_pool_manager_new (timeline);
+        ges_pipeline_pool_manager_set_max_preloaded_sources (timeline->
+            priv->pool_manager, timeline->priv->max_preloaded_sources);
       } else {
         /* Nested: already set by parent via timeline_set_parent_uri_source.
          * Register self with the shared manager. */
-        ges_pipeline_pool_manager_register_nested_timeline (
-            timeline->priv->pool_manager, timeline);
+        ges_pipeline_pool_manager_register_nested_timeline (timeline->
+            priv->pool_manager, timeline);
       }
       if (!parent_source)
         ges_pipeline_pool_manager_commit (timeline->priv->pool_manager);
@@ -838,11 +834,11 @@ ges_timeline_change_state (GstElement * element, GstStateChange transition)
       if (timeline->priv->pool_manager) {
         GESSource *parent_source = timeline_get_parent_uri_source (timeline);
         if (!parent_source) {
-          ges_pipeline_pool_manager_unprepare_all (
-              timeline->priv->pool_manager);
+          ges_pipeline_pool_manager_unprepare_all (timeline->
+              priv->pool_manager);
         } else {
-          ges_pipeline_pool_manager_deregister_nested_timeline (
-              timeline->priv->pool_manager, timeline);
+          ges_pipeline_pool_manager_deregister_nested_timeline (timeline->
+              priv->pool_manager, timeline);
           g_object_unref (parent_source);
         }
         g_clear_pointer (&timeline->priv->pool_manager,

@@ -9,14 +9,13 @@
 
 GST_DEBUG_CATEGORY_STATIC (GST_CAT_DEFAULT);
 
-typedef struct {
+typedef struct
+{
   GESClip *clip;
   GESTrack *track;
-  /* Committed values captured during timeline commit - these reflect
-   * what NLE sees, not potentially uncommitted GES edits */
-  GstClockTime timeline_inpoint;    /* Where we start reading in the nested timeline */
-  GstClockTime timeline_duration;   /* How much of the nested timeline we read */
-  GstClockTime outer_start;         /* Where the clip appears in the outer timeline */
+  GstClockTime timeline_inpoint;
+  GstClockTime timeline_duration;
+  GstClockTime outer_start;
 } NestedTimelineInfo;
 
 typedef struct
@@ -31,23 +30,27 @@ typedef struct
 
   GObject *decoderpipe;
 
-  /* For nested timeline sources */
-  GESTimeline *source_timeline; /* NULL for top-level sources */
+  /* For nested timeline sources: the clip on the parent timeline that
+   * contains this nested timeline.  Not ref'd — only used for pointer
+   * comparison so we can identify and remove stale entries when NLE
+   * re-activates a nested timeline with a fresh GstBin instance. */
+  GESClip *parent_clip; /* NULL for top-level sources */
 } PooledSource;
 
-struct _GESPipelinePoolManager {
-    GRecMutex lock;
-    GArray *pooled_sources;
-    GArray *prepared_sources;
-    GESTimeline *timeline;
-    GObject *pool;
+struct _GESPipelinePoolManager
+{
+  GRecMutex lock;
+  GArray *pooled_sources;
+  GArray *prepared_sources;
+  GWeakRef timeline;
+  GObject *pool;
 
-    gboolean rendering;
+  gboolean rendering;
 
-    guint max_preloaded_sources;
+  guint max_preloaded_sources;
 
-    GArray *pending_nested_timelines;
-    GPtrArray *registered_nested_timelines;
+  GArray *pending_nested_timelines;
+  GPtrArray *registered_nested_timelines;
 };
 
 static gint
@@ -84,10 +87,10 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
   gint max_preloaded_sources = self->max_preloaded_sources;
   GArray *to_prepare;
   GPtrArray *to_remove;
+  GESTimeline *timeline;
 
   if (!GES_IS_VIDEO_TRACK (track)) {
-    GST_DEBUG_OBJECT (self->timeline,
-        "Not preparing neighboors anything for %s track",
+    GST_DEBUG ("Not preparing neighboors anything for %s track",
         G_OBJECT_TYPE_NAME (track));
 
     return;
@@ -98,9 +101,14 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
     return;
   }
 
+  timeline = g_weak_ref_get (&self->timeline);
+  if (!timeline)
+    return;
+
   g_rec_mutex_lock (&self->lock);
   if (!self->pooled_sources) {
     g_rec_mutex_unlock (&self->lock);
+    g_object_unref (timeline);
     return;
   }
 
@@ -110,7 +118,7 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
               0) == GST_STATE_CHANGE_SUCCESS) && state == GST_STATE_PLAYING
       && pending == GST_STATE_VOID_PENDING);
   if (self->rendering || playing) {
-    GST_DEBUG_OBJECT (self->timeline, "We are %s not loading clips before",
+    GST_DEBUG_OBJECT (timeline, "We are %s not loading clips before",
         playing ? "playing" : "rendering");
     window_start = stack_start;
     max_preloaded_sources = max_preloaded_sources / 2;
@@ -118,20 +126,20 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
     window_start = stack_start >= window_dur ? stack_start - window_dur : 0;
   }
 
-  GESSource *parent_source = timeline_get_parent_uri_source (self->timeline);
+  GESSource *parent_source = timeline_get_parent_uri_source (timeline);
   if (parent_source) {
     /* TODO: time-effect: Add support for time effects! */
     window_start =
         MAX (window_start, GES_TIMELINE_ELEMENT_INPOINT (parent_source));
     window_dur =
         MIN (window_dur, GES_TIMELINE_ELEMENT_DURATION (parent_source));
-    GST_DEBUG_OBJECT (self->timeline,
+    GST_DEBUG_OBJECT (timeline,
         "Reducing window %" GST_PTR_FORMAT "[%" GST_TIMEP_FORMAT "- %"
         GST_TIMEP_FORMAT "]", parent_source, &window_start, &window_dur);
   }
   g_clear_object (&parent_source);
 
-  GST_ERROR_OBJECT (self->timeline, "Preparing pipelines around %" GST_TIME_FORMAT
+  GST_DEBUG_OBJECT (timeline, "Preparing pipelines around %" GST_TIME_FORMAT
       " - %" GST_TIME_FORMAT " window: [%" GST_TIMEP_FORMAT " - %"
       GST_TIMEP_FORMAT "]" " in %d soures", GST_TIME_ARGS (stack_start),
       GST_TIME_ARGS (stack_end), &window_start, &window_stop,
@@ -173,7 +181,7 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
     g_array_append_val (to_prepare, ps);
 
     if (self->prepared_sources->len + to_prepare->len >= max_preloaded_sources) {
-      GST_INFO_OBJECT (self->timeline, "%d sources to prepare already.",
+      GST_INFO_OBJECT (timeline, "%d sources to prepare already.",
           max_preloaded_sources);
       break;
     }
@@ -191,24 +199,24 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
     gboolean in_window = (source->start >= window_start)
         && (source->start <= window_stop);
     if (!in_window) {
-      GST_DEBUG_OBJECT (self->timeline,
+      GST_DEBUG_OBJECT (timeline,
           "Unpreparing pipeline for %s [%" GST_TIMEP_FORMAT "- %"
           GST_TIMEP_FORMAT "]", GST_OBJECT_NAME (source->element),
           &source->start, &source->end);
       g_ptr_array_add (to_remove, gst_object_ref (source->element));
-      GST_DEBUG_OBJECT (self->timeline, "Unprepared %s",
+      GST_DEBUG_OBJECT (timeline, "Unprepared %s",
           GST_OBJECT_NAME (source->element));
     }
   }
 
-  GST_DEBUG_OBJECT (self->timeline, "%d sources prepared",
+  GST_DEBUG_OBJECT (timeline, "%d sources prepared",
       self->prepared_sources->len);
   g_rec_mutex_unlock (&self->lock);
 
   for (guint i = 0; i < to_prepare->len; i++) {
     PooledSource *source = &g_array_index (to_prepare, PooledSource, i);
 
-    GST_DEBUG_OBJECT (self->timeline,
+    GST_DEBUG_OBJECT (timeline,
         "Preparing %s [%" GST_TIMEP_FORMAT "- %" GST_TIMEP_FORMAT "]",
         GST_OBJECT_NAME (source->element), &source->start, &source->end);
     g_signal_emit_by_name (self->pool, "prepare-pipeline", source->element,
@@ -233,7 +241,7 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
     for (gint i = 0; i < self->prepared_sources->len; i++) {
       PooledSource *source =
           &g_array_index (self->prepared_sources, PooledSource, i);
-      GST_DEBUG_OBJECT (self->timeline,
+      GST_DEBUG_OBJECT (timeline,
           "Prepared: %s [%" GST_TIMEP_FORMAT "- %" GST_TIMEP_FORMAT "]",
           GST_OBJECT_NAME (source->element), &source->start, &source->end);
     }
@@ -245,11 +253,12 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
     GstElement *element = g_ptr_array_index (to_remove, i);
     gboolean res;
     g_signal_emit_by_name (self->pool, "unprepare-pipeline", element, &res);
-    GST_LOG_OBJECT (self->timeline, "Unprepared %s: result %s",
+    GST_LOG_OBJECT (timeline, "Unprepared %s: result %s",
         GST_OBJECT_NAME (element), res ? "TRUE" : "FALSE");
   }
 
   g_ptr_array_unref (to_remove);
+  g_object_unref (timeline);
 }
 
 void
@@ -286,10 +295,18 @@ nested_timeline_info_clear (NestedTimelineInfo * info)
   g_object_unref (info->clip);
 }
 
+typedef struct
+{
+  GESPipelinePoolManager *pool_manager;
+  GESTimeline *timeline;
+} ListPooledSourcesData;
+
 /* With self->lock taken */
 static gboolean
-list_pooled_sources (GNode * node, GESPipelinePoolManager * self)
+list_pooled_sources (GNode * node, ListPooledSourcesData * data)
 {
+  GESPipelinePoolManager *self = data->pool_manager;
+
   if (GES_IS_AUDIO_URI_SOURCE (node->data)
       || GES_IS_VIDEO_URI_SOURCE (node->data)) {
     gboolean is_nested_timeline;
@@ -312,7 +329,7 @@ list_pooled_sources (GNode * node, GESPipelinePoolManager * self)
         .outer_start = clip_start,
       };
 
-      GST_DEBUG_OBJECT (self->timeline,
+      GST_DEBUG_OBJECT (data->timeline,
           "Recording pending nested timeline clip %" GES_FORMAT
           " inpoint=%" GST_TIME_FORMAT " duration=%" GST_TIME_FORMAT,
           GES_ARGS (clip), GST_TIME_ARGS (clip_inpoint),
@@ -347,11 +364,14 @@ void
 ges_pipeline_pool_manager_set_rendering (GESPipelinePoolManager * self,
     gboolean rendering)
 {
-  GST_DEBUG_OBJECT (self->timeline, "Set rendering %d", rendering);
+  GESTimeline *timeline = g_weak_ref_get (&self->timeline);
+
+  GST_DEBUG_OBJECT (timeline, "Set rendering %d", rendering);
 
   g_rec_mutex_lock (&self->lock);
   self->rendering = rendering;
   g_rec_mutex_unlock (&self->lock);
+  g_clear_object (&timeline);
 }
 
 static void
@@ -370,8 +390,7 @@ ges_pipeline_pool_manager_prepare_pipeline_removed_cb (GObject * pool,
         &g_array_index (self->prepared_sources, PooledSource, i);
     if (source->decoderpipe == decoderpipe) {
       gst_object_unref (source->decoderpipe);
-      GST_DEBUG_OBJECT (self->timeline, "Removing prepared source %s",
-          GST_OBJECT_NAME (src));
+      GST_DEBUG ("Removing prepared source %s", GST_OBJECT_NAME (src));
       g_array_remove_index (self->prepared_sources, i);
       break;
     }
@@ -379,9 +398,74 @@ ges_pipeline_pool_manager_prepare_pipeline_removed_cb (GObject * pool,
   g_rec_mutex_unlock (&self->lock);
 }
 
+static void
+add_nested_timeline_sources (GESPipelinePoolManager * self,
+    GESTimeline * timeline, GESTimeline * nested_timeline);
+
+void
+ges_pipeline_pool_manager_commit (GESPipelinePoolManager * self)
+{
+  GESTimeline *timeline = g_weak_ref_get (&self->timeline);
+
+  if (!timeline)
+    return;
+
+  g_rec_mutex_lock (&self->lock);
+  if (!self->pooled_sources)
+    goto done;
+
+  GNode *tree = timeline_get_tree (timeline);
+  g_array_remove_range (self->pooled_sources, 0, self->pooled_sources->len);
+  if (self->pending_nested_timelines)
+    g_array_remove_range (self->pending_nested_timelines, 0,
+        self->pending_nested_timelines->len);
+
+  ListPooledSourcesData list_data = {
+    .pool_manager = self,
+    .timeline = timeline,
+  };
+  g_node_traverse (tree, G_IN_ORDER, G_TRAVERSE_LEAVES, -1,
+      (GNodeTraverseFunc) list_pooled_sources, &list_data);
+
+  /* Re-add sources from registered nested timelines using committed coords */
+  for (guint i = 0; i < self->registered_nested_timelines->len; i++) {
+    GESTimeline *nested =
+        g_ptr_array_index (self->registered_nested_timelines, i);
+    add_nested_timeline_sources (self, timeline, nested);
+  }
+
+  g_array_sort (self->pooled_sources, (GCompareFunc) compare_pooled_source);
+
+done:
+  g_rec_mutex_unlock (&self->lock);
+  g_object_unref (timeline);
+}
+
+static void
+deep_element_added_cb (GstBin * _pipeline, GstBin * _sub_bin,
+    GstElement * element)
+{
+  if (!GST_IS_VIDEO_DECODER (element)) {
+    return;
+  }
+
+  GST_DEBUG_OBJECT (element, "Output out of segment frames!");
+  g_object_set (element, "output-out-of-segment", TRUE, NULL);
+}
+
+static void
+new_pipeline_cb (GObject * pool, GstElement * pipeline,
+    GESPipelinePoolManager * self)
+{
+  GST_DEBUG_OBJECT (pipeline, "Connecting %" GST_PTR_FORMAT, pool);
+  g_signal_connect (pipeline, "deep-element-added",
+      G_CALLBACK (deep_element_added_cb), NULL);
+}
+
 typedef struct
 {
   GESPipelinePoolManager *pool_manager;
+  GESTimeline *timeline;
   GESTimeline *nested_timeline;
   NestedTimelineInfo *info;
 } NestedTimelineTraversalData;
@@ -420,7 +504,7 @@ list_nested_timeline_sources (GNode * node, NestedTimelineTraversalData * data)
 
       /* Check if deeply nested clip intersects the visible window */
       if (clip_end <= inner_visible_start || clip_start >= inner_visible_end) {
-        GST_DEBUG_OBJECT (self->timeline,
+        GST_DEBUG_OBJECT (data->timeline,
             "Deeply nested timeline %" GES_FORMAT " outside visible window",
             GES_ARGS (clip));
         return FALSE;
@@ -449,7 +533,7 @@ list_nested_timeline_sources (GNode * node, NestedTimelineTraversalData * data)
         .outer_start = outer_start,
       };
 
-      GST_DEBUG_OBJECT (self->timeline,
+      GST_DEBUG_OBJECT (data->timeline,
           "Recording deeply nested timeline clip %" GES_FORMAT
           " outer_start=%" GST_TIME_FORMAT " inpoint=%" GST_TIME_FORMAT
           " duration=%" GST_TIME_FORMAT,
@@ -506,7 +590,7 @@ list_nested_timeline_sources (GNode * node, NestedTimelineTraversalData * data)
         .source_timeline = data->nested_timeline,
       };
 
-      GST_DEBUG_OBJECT (self->timeline,
+      GST_DEBUG_OBJECT (data->timeline,
           "Adding nested source %s [%" GST_TIME_FORMAT " - %" GST_TIME_FORMAT
           "] (inner: [%" GST_TIME_FORMAT " - %" GST_TIME_FORMAT "])",
           GST_OBJECT_NAME (source_element),
@@ -524,7 +608,7 @@ list_nested_timeline_sources (GNode * node, NestedTimelineTraversalData * data)
  * Must be called with self->lock held. */
 static void
 add_nested_timeline_sources (GESPipelinePoolManager * self,
-    GESTimeline * nested_timeline)
+    GESTimeline * timeline, GESTimeline * nested_timeline)
 {
   GESSource *parent_source;
   GESClip *parent_clip;
@@ -534,14 +618,14 @@ add_nested_timeline_sources (GESPipelinePoolManager * self,
 
   parent_source = timeline_get_parent_uri_source (nested_timeline);
   if (!parent_source) {
-    GST_DEBUG_OBJECT (self->timeline,
+    GST_DEBUG_OBJECT (timeline,
         "Nested timeline has no parent source, skipping");
     return;
   }
 
   parent_clip = GES_CLIP (GES_TIMELINE_ELEMENT_PARENT (parent_source));
 
-  GST_DEBUG_OBJECT (self->timeline,
+  GST_DEBUG_OBJECT (timeline,
       "Looking for pending entry matching clip %" GES_FORMAT,
       GES_ARGS (parent_clip));
 
@@ -552,13 +636,14 @@ add_nested_timeline_sources (GESPipelinePoolManager * self,
     if (info->clip != parent_clip)
       continue;
 
-    GST_DEBUG_OBJECT (self->timeline,
+    GST_DEBUG_OBJECT (timeline,
         "Found matching pending entry for clip %" GES_FORMAT,
         GES_ARGS (parent_clip));
 
     GNode *tree = timeline_get_tree (nested_timeline);
     NestedTimelineTraversalData data = {
       .pool_manager = self,
+      .timeline = timeline,
       .nested_timeline = nested_timeline,
       .info = info,
     };
@@ -569,7 +654,7 @@ add_nested_timeline_sources (GESPipelinePoolManager * self,
 
   g_object_unref (parent_source);
 
-  GST_DEBUG_OBJECT (self->timeline,
+  GST_DEBUG_OBJECT (timeline,
       "After adding nested timeline sources, pooled_sources has %d entries",
       self->pooled_sources->len);
 }
@@ -578,11 +663,28 @@ void
 ges_pipeline_pool_manager_register_nested_timeline (GESPipelinePoolManager *
     self, GESTimeline * nested_timeline)
 {
+  GESTimeline *timeline = g_weak_ref_get (&self->timeline);
+
+  if (!timeline)
+    return;
+
   g_rec_mutex_lock (&self->lock);
+  /* Remove any stale pooled sources from a previous activation of this
+   * nested timeline before re-adding them with fresh coordinates. */
+  if (self->pooled_sources) {
+    for (gint i = self->pooled_sources->len - 1; i >= 0; i--) {
+      PooledSource *source =
+          &g_array_index (self->pooled_sources, PooledSource, i);
+      if (source->source_timeline == (GESTimeline *) nested_timeline)
+        g_array_remove_index (self->pooled_sources, i);
+    }
+  }
+
   g_ptr_array_add (self->registered_nested_timelines, nested_timeline);
-  add_nested_timeline_sources (self, nested_timeline);
+  add_nested_timeline_sources (self, timeline, nested_timeline);
   g_array_sort (self->pooled_sources, (GCompareFunc) compare_pooled_source);
   g_rec_mutex_unlock (&self->lock);
+  g_object_unref (timeline);
 }
 
 void
@@ -590,16 +692,13 @@ ges_pipeline_pool_manager_deregister_nested_timeline (GESPipelinePoolManager *
     self, GESTimeline * nested_timeline)
 {
   g_rec_mutex_lock (&self->lock);
+  GST_DEBUG ("deregister_nested_timeline: nested=%p", nested_timeline);
   g_ptr_array_remove (self->registered_nested_timelines, nested_timeline);
 
-  if (self->pooled_sources) {
-    for (gint i = self->pooled_sources->len - 1; i >= 0; i--) {
-      PooledSource *source =
-          &g_array_index (self->pooled_sources, PooledSource, i);
-      if (source->source_timeline == nested_timeline)
-        g_array_remove_index (self->pooled_sources, i);
-    }
-  }
+  /* Don't remove pooled sources here: they represent the timeline tree
+   * structure which hasn't changed. NLE may temporarily deactivate a nested
+   * timeline (PAUSED→READY) during normal operation (e.g. at EOS). The
+   * pooled sources will be naturally refreshed on the next commit. */
 
   if (self->prepared_sources) {
     GPtrArray *to_unprepare = g_ptr_array_new_with_free_func (
@@ -625,55 +724,6 @@ ges_pipeline_pool_manager_deregister_nested_timeline (GESPipelinePoolManager *
   }
 
   g_rec_mutex_unlock (&self->lock);
-}
-
-void
-ges_pipeline_pool_manager_commit (GESPipelinePoolManager * self)
-{
-  g_rec_mutex_lock (&self->lock);
-  if (!self->pooled_sources)
-    goto done;
-
-  GNode *tree = timeline_get_tree (self->timeline);
-  g_array_remove_range (self->pooled_sources, 0, self->pooled_sources->len);
-  if (self->pending_nested_timelines)
-    g_array_remove_range (self->pending_nested_timelines, 0,
-        self->pending_nested_timelines->len);
-  g_node_traverse (tree, G_IN_ORDER, G_TRAVERSE_LEAVES, -1,
-      (GNodeTraverseFunc) list_pooled_sources, self);
-
-  /* Re-add sources from registered nested timelines using committed coords */
-  for (guint i = 0; i < self->registered_nested_timelines->len; i++) {
-    GESTimeline *nested =
-        g_ptr_array_index (self->registered_nested_timelines, i);
-    add_nested_timeline_sources (self, nested);
-  }
-
-  g_array_sort (self->pooled_sources, (GCompareFunc) compare_pooled_source);
-
-done:
-  g_rec_mutex_unlock (&self->lock);
-}
-
-static void
-deep_element_added_cb (GstBin * _pipeline, GstBin * _sub_bin,
-    GstElement * element)
-{
-  if (!GST_IS_VIDEO_DECODER (element)) {
-    return;
-  }
-
-  GST_DEBUG_OBJECT (element, "Output out of segment frames!");
-  g_object_set (element, "output-out-of-segment", TRUE, NULL);
-}
-
-static void
-new_pipeline_cb (GObject * pool, GstElement * pipeline,
-    GESPipelinePoolManager * self)
-{
-  GST_DEBUG_OBJECT (pipeline, "Connecting %" GST_PTR_FORMAT, pool);
-  g_signal_connect (pipeline, "deep-element-added",
-      G_CALLBACK (deep_element_added_cb), NULL);
 }
 
 static void ges_pipeline_pool_manager_deinit (GObject * _pool,
@@ -731,7 +781,13 @@ guint
 ges_pipeline_pool_manager_get_max_preloaded_sources (GESPipelinePoolManager *
     self)
 {
-  return self->max_preloaded_sources;
+  guint max;
+
+  g_rec_mutex_lock (&self->lock);
+  max = self->max_preloaded_sources;
+  g_rec_mutex_unlock (&self->lock);
+
+  return max;
 }
 
 guint
@@ -793,7 +849,7 @@ ges_pipeline_pool_manager_new (GESTimeline * timeline)
 
   self = g_atomic_rc_box_new0 (GESPipelinePoolManager);
   g_rec_mutex_init (&self->lock);
-  self->timeline = timeline;
+  g_weak_ref_init (&self->timeline, timeline);
 
   if (!has_uridecodepoolsrc)
     return self;
@@ -837,6 +893,7 @@ static void
 ges_pipeline_pool_manager_free (GESPipelinePoolManager * self)
 {
   ges_pipeline_pool_manager_clear (self);
+  g_weak_ref_clear (&self->timeline);
   g_rec_mutex_clear (&self->lock);
 }
 

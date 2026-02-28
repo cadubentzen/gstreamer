@@ -172,11 +172,25 @@ ges_pipeline_pool_manager_prepare_pipelines_around (GESPipelinePoolManager *
       continue;
     }
 
+    /* Skip sources that are already prepared */
+    gboolean already_prepared = FALSE;
+    for (gint j = 0; j < self->prepared_sources->len; j++) {
+      PooledSource *prepared =
+          &g_array_index (self->prepared_sources, PooledSource, j);
+      if (prepared->element == source->element) {
+        already_prepared = TRUE;
+        break;
+      }
+    }
+    if (already_prepared)
+      continue;
+
     PooledSource ps = {
       .element = gst_object_ref (source->element),
       .track = source->track,
       .start = source->start,
       .end = source->end,
+      .parent_clip = source->parent_clip,
     };
     g_array_append_val (to_prepare, ps);
 
@@ -348,7 +362,7 @@ list_pooled_sources (GNode * node, ListPooledSourcesData * data)
         .track = ges_track_element_get_track (node->data),
         .start = GES_TIMELINE_ELEMENT_START (node->data),
         .end = GES_TIMELINE_ELEMENT_END (node->data),
-        .source_timeline = NULL,
+        .parent_clip = NULL,
       };
 
       g_array_append_val (self->pooled_sources, s);
@@ -466,7 +480,6 @@ typedef struct
 {
   GESPipelinePoolManager *pool_manager;
   GESTimeline *timeline;
-  GESTimeline *nested_timeline;
   NestedTimelineInfo *info;
 } NestedTimelineTraversalData;
 
@@ -587,7 +600,7 @@ list_nested_timeline_sources (GNode * node, NestedTimelineTraversalData * data)
         .track = info->track,
         .start = outer_start,
         .end = outer_end,
-        .source_timeline = data->nested_timeline,
+        .parent_clip = info->clip,
       };
 
       GST_DEBUG_OBJECT (data->timeline,
@@ -605,6 +618,10 @@ list_nested_timeline_sources (GNode * node, NestedTimelineTraversalData * data)
 }
 
 /* Add sources from a registered nested timeline using its committed coordinates.
+ * Each nested timeline is responsible for a single track (audio or video) —
+ * NLE creates separate nested timeline instances per track.  We only touch
+ * pooled sources for the registering track to avoid interfering with sources
+ * belonging to another track's nested timeline.
  * Must be called with self->lock held. */
 static void
 add_nested_timeline_sources (GESPipelinePoolManager * self,
@@ -612,6 +629,7 @@ add_nested_timeline_sources (GESPipelinePoolManager * self,
 {
   GESSource *parent_source;
   GESClip *parent_clip;
+  GESTrack *registering_track;
 
   if (!self->pooled_sources || !self->pending_nested_timelines)
     return;
@@ -624,16 +642,33 @@ add_nested_timeline_sources (GESPipelinePoolManager * self,
   }
 
   parent_clip = GES_CLIP (GES_TIMELINE_ELEMENT_PARENT (parent_source));
+  registering_track =
+      ges_track_element_get_track (GES_TRACK_ELEMENT (parent_source));
+
+  /* Remove stale pooled sources for this clip+track-type combination.
+   * This handles NLE deactivating a nested timeline (PAUSED→READY) and
+   * later re-activating it with a fresh GstBin instance: the old entries
+   * would otherwise accumulate as duplicates.  We compare by track type
+   * rather than track pointer because deeply nested timelines have
+   * different GESTrack objects at each nesting level. */
+  for (gint i = self->pooled_sources->len - 1; i >= 0; i--) {
+    PooledSource *source =
+        &g_array_index (self->pooled_sources, PooledSource, i);
+    if (source->parent_clip == parent_clip
+        && source->track->type == registering_track->type)
+      g_array_remove_index (self->pooled_sources, i);
+  }
 
   GST_DEBUG_OBJECT (timeline,
-      "Looking for pending entry matching clip %" GES_FORMAT,
-      GES_ARGS (parent_clip));
+      "Looking for pending entry matching clip %" GES_FORMAT
+      " track type %d", GES_ARGS (parent_clip), registering_track->type);
 
   for (guint i = 0; i < self->pending_nested_timelines->len; i++) {
     NestedTimelineInfo *info =
         &g_array_index (self->pending_nested_timelines, NestedTimelineInfo, i);
 
-    if (info->clip != parent_clip)
+    if (info->clip != parent_clip
+        || info->track->type != registering_track->type)
       continue;
 
     GST_DEBUG_OBJECT (timeline,
@@ -644,7 +679,6 @@ add_nested_timeline_sources (GESPipelinePoolManager * self,
     NestedTimelineTraversalData data = {
       .pool_manager = self,
       .timeline = timeline,
-      .nested_timeline = nested_timeline,
       .info = info,
     };
 
@@ -669,17 +703,6 @@ ges_pipeline_pool_manager_register_nested_timeline (GESPipelinePoolManager *
     return;
 
   g_rec_mutex_lock (&self->lock);
-  /* Remove any stale pooled sources from a previous activation of this
-   * nested timeline before re-adding them with fresh coordinates. */
-  if (self->pooled_sources) {
-    for (gint i = self->pooled_sources->len - 1; i >= 0; i--) {
-      PooledSource *source =
-          &g_array_index (self->pooled_sources, PooledSource, i);
-      if (source->source_timeline == (GESTimeline *) nested_timeline)
-        g_array_remove_index (self->pooled_sources, i);
-    }
-  }
-
   g_ptr_array_add (self->registered_nested_timelines, nested_timeline);
   add_nested_timeline_sources (self, timeline, nested_timeline);
   g_array_sort (self->pooled_sources, (GCompareFunc) compare_pooled_source);
@@ -691,23 +714,32 @@ void
 ges_pipeline_pool_manager_deregister_nested_timeline (GESPipelinePoolManager *
     self, GESTimeline * nested_timeline)
 {
+  GESSource *parent_source = timeline_get_parent_uri_source (nested_timeline);
+  GESClip *parent_clip = parent_source ?
+      GES_CLIP (GES_TIMELINE_ELEMENT_PARENT (parent_source)) : NULL;
+  GESTrack *track = parent_source ?
+      ges_track_element_get_track (GES_TRACK_ELEMENT (parent_source)) : NULL;
+
   g_rec_mutex_lock (&self->lock);
-  GST_DEBUG ("deregister_nested_timeline: nested=%p", nested_timeline);
+  GST_DEBUG ("deregister_nested_timeline: nested=%p parent_clip=%p track=%p",
+      nested_timeline, parent_clip, track);
   g_ptr_array_remove (self->registered_nested_timelines, nested_timeline);
 
   /* Don't remove pooled sources here: they represent the timeline tree
    * structure which hasn't changed. NLE may temporarily deactivate a nested
    * timeline (PAUSED→READY) during normal operation (e.g. at EOS). The
-   * pooled sources will be naturally refreshed on the next commit. */
+   * pooled sources will be naturally refreshed on the next commit or
+   * re-registration (which handles stale cleanup via parent_clip+track). */
 
-  if (self->prepared_sources) {
+  if (self->prepared_sources && parent_clip) {
     GPtrArray *to_unprepare = g_ptr_array_new_with_free_func (
         (GDestroyNotify) gst_object_unref);
 
     for (gint i = self->prepared_sources->len - 1; i >= 0; i--) {
       PooledSource *source =
           &g_array_index (self->prepared_sources, PooledSource, i);
-      if (source->source_timeline == nested_timeline) {
+      if (source->parent_clip == parent_clip
+          && track && source->track->type == track->type) {
         g_ptr_array_add (to_unprepare, gst_object_ref (source->element));
         g_array_remove_index (self->prepared_sources, i);
       }
@@ -720,10 +752,11 @@ ges_pipeline_pool_manager_deregister_nested_timeline (GESPipelinePoolManager *
       g_signal_emit_by_name (self->pool, "unprepare-pipeline", element, &res);
     }
     g_ptr_array_unref (to_unprepare);
-    return;
+  } else {
+    g_rec_mutex_unlock (&self->lock);
   }
 
-  g_rec_mutex_unlock (&self->lock);
+  g_clear_object (&parent_source);
 }
 
 static void ges_pipeline_pool_manager_deinit (GObject * _pool,
@@ -765,7 +798,9 @@ static void
 ges_pipeline_pool_manager_deinit (GObject * _pool,
     GESPipelinePoolManager * self)
 {
+  ges_pipeline_pool_manager_ref (self);
   ges_pipeline_pool_manager_clear (self);
+  ges_pipeline_pool_manager_unref (self);
 }
 
 void
@@ -826,6 +861,44 @@ ges_pipeline_pool_manager_get_n_registered_nested (GESPipelinePoolManager *
   g_rec_mutex_unlock (&self->lock);
 
   return n;
+}
+
+static gchar **
+get_uris_from_sources (GESPipelinePoolManager * self, GArray * sources)
+{
+  GPtrArray *uris;
+
+  g_rec_mutex_lock (&self->lock);
+  if (!sources || sources->len == 0) {
+    g_rec_mutex_unlock (&self->lock);
+    return NULL;
+  }
+
+  uris = g_ptr_array_new ();
+  for (guint i = 0; i < sources->len; i++) {
+    PooledSource *source = &g_array_index (sources, PooledSource, i);
+    gchar *uri = NULL;
+
+    g_object_get (source->element, "uri", &uri, NULL);
+    if (uri)
+      g_ptr_array_add (uris, uri);
+  }
+  g_rec_mutex_unlock (&self->lock);
+
+  g_ptr_array_add (uris, NULL);
+  return (gchar **) g_ptr_array_free (uris, FALSE);
+}
+
+gchar **
+ges_pipeline_pool_manager_get_pooled_uris (GESPipelinePoolManager * self)
+{
+  return get_uris_from_sources (self, self->pooled_sources);
+}
+
+gchar **
+ges_pipeline_pool_manager_get_prepared_uris (GESPipelinePoolManager * self)
+{
+  return get_uris_from_sources (self, self->prepared_sources);
 }
 
 GESPipelinePoolManager *

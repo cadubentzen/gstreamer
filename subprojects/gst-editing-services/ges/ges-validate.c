@@ -1300,6 +1300,73 @@ done:
   return res;
 }
 
+static GstValidateActionReturn
+_check_pool_manager_uris (GstValidateScenario * scenario,
+    GstValidateAction * action, GESPipelinePoolManager * pool_manager,
+    const gchar * field_name,
+    gchar ** (*get_uris) (GESPipelinePoolManager *),
+    GstValidateActionReturn res)
+{
+  const GValue *value =
+      gst_structure_get_value (action->structure, field_name);
+
+  if (!value)
+    return res;
+
+  gchar **actual_uris = get_uris (pool_manager);
+  guint n_actual = actual_uris ? g_strv_length (actual_uris) : 0;
+  guint n_expected;
+
+  if (GST_VALUE_HOLDS_LIST (value))
+    n_expected = gst_value_list_get_size (value);
+  else
+    n_expected = 1;
+
+  if (n_expected != n_actual) {
+    gchar *actual_str =
+        actual_uris ? g_strjoinv (", ", actual_uris) : g_strdup ("(none)");
+    GST_VALIDATE_REPORT_ACTION (GST_VALIDATE_REPORTER (scenario), action,
+        SCENARIO_ACTION_CHECK_ERROR,
+        "%s: expected %u URIs but got %u. Actual: [%s]",
+        field_name, n_expected, n_actual, actual_str);
+    g_free (actual_str);
+    res = GST_VALIDATE_EXECUTE_ACTION_ERROR_REPORTED;
+  }
+
+  /* Exact set match: verify each expected URI exists in the actual set. */
+  for (guint i = 0; i < n_expected; i++) {
+    const gchar *expected_uri;
+
+    if (GST_VALUE_HOLDS_LIST (value))
+      expected_uri =
+          g_value_get_string (gst_value_list_get_value (value, i));
+    else
+      expected_uri = g_value_get_string (value);
+
+    gboolean found = FALSE;
+    for (guint j = 0; j < n_actual; j++) {
+      if (g_strcmp0 (expected_uri, actual_uris[j]) == 0) {
+        found = TRUE;
+        break;
+      }
+    }
+
+    if (!found) {
+      gchar *actual_str =
+          actual_uris ? g_strjoinv (", ", actual_uris) : g_strdup ("(none)");
+      GST_VALIDATE_REPORT_ACTION (GST_VALIDATE_REPORTER (scenario), action,
+          SCENARIO_ACTION_CHECK_ERROR,
+          "%s: expected URI '%s' not found. Actual: [%s]",
+          field_name, expected_uri, actual_str);
+      g_free (actual_str);
+      res = GST_VALIDATE_EXECUTE_ACTION_ERROR_REPORTED;
+    }
+  }
+
+  g_strfreev (actual_uris);
+  return res;
+}
+
 static gint
 _check_pool_manager (GstValidateScenario * scenario, GstValidateAction * action)
 {
@@ -1379,6 +1446,11 @@ _check_pool_manager (GstValidateScenario * scenario, GstValidateAction * action)
         n_nested);
     res = GST_VALIDATE_EXECUTE_ACTION_ERROR_REPORTED;
   }
+
+  res = _check_pool_manager_uris (scenario, action, pool_manager,
+      "pooled-uris", ges_pipeline_pool_manager_get_pooled_uris, res);
+  res = _check_pool_manager_uris (scenario, action, pool_manager,
+      "prepared-uris", ges_pipeline_pool_manager_get_prepared_uris, res);
 
   GST_INFO_OBJECT (timeline,
       "check-pool-manager: pooled=%u prepared=%u nested=%u", n_pooled,
@@ -2254,6 +2326,18 @@ ges_validate_register_action_types (void)
           .name = "n-registered-nested-timelines",
           .description = "Expected number of registered nested timelines (exact match)",
           .types = "int",
+          .mandatory = FALSE,
+        },
+        {
+          .name = "pooled-uris",
+          .description = "Expected set of URIs in the pool (exact set match, order independent)",
+          .types = "{ string, ... }",
+          .mandatory = FALSE,
+        },
+        {
+          .name = "prepared-uris",
+          .description = "Expected set of prepared URIs (exact set match, order independent)",
+          .types = "{ string, ... }",
           .mandatory = FALSE,
         },
         {NULL}

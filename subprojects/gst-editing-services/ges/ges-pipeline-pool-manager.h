@@ -44,3 +44,6 @@ void ges_pipeline_pool_manager_deregister_nested_timeline (GESPipelinePoolManage
 guint ges_pipeline_pool_manager_get_n_pooled_sources    (GESPipelinePoolManager *self);
 guint ges_pipeline_pool_manager_get_n_prepared_sources  (GESPipelinePoolManager *self);
 guint ges_pipeline_pool_manager_get_n_registered_nested (GESPipelinePoolManager *self);
+
+gchar ** ges_pipeline_pool_manager_get_pooled_uris   (GESPipelinePoolManager *self);
+gchar ** ges_pipeline_pool_manager_get_prepared_uris  (GESPipelinePoolManager *self);

@@ -5,6 +5,7 @@ meta,
     handles-states=true,
     needs_preroll=true,
     clock-source=test,
+    tested-elements = { "uridecodepoolsrc", },
     args = {
         "--track-types=video",
         "--video-caps=video/x-raw,width=320,height=240,framerate=1/1,format=I420",

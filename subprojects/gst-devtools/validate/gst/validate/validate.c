@@ -606,7 +606,15 @@ gst_validate_get_test_file_scenario (GList ** structs,
     if (!element_factory)
       gst_validate_abort ("Element `%s` required but not found", elements[i]);
 
-    /* Ensure that the element class_init function is called */
+    /* Load the plugin so the GType is registered, then ensure that
+     * the element class_init function is called */
+    element_factory =
+        GST_ELEMENT_FACTORY (gst_plugin_feature_load (GST_PLUGIN_FEATURE
+            (element_factory)));
+    if (!element_factory)
+      gst_validate_abort ("Could not load plugin for element `%s`",
+          elements[i]);
+
     g_type_class_unref (g_type_class_ref (gst_element_factory_get_element_type
             (element_factory)));
 

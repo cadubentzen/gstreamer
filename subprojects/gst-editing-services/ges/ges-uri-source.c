@@ -367,6 +367,20 @@ uridecodepoolsrc_get_initial_seek_cb (GstElement * uridecodepoolsrc,
     g_object_set (self->decodebin, "inpoint", start, "duration", duration,
         "reverse", rate < 0.0, NULL);
 
+    if (self->controls_nested_timeline) {
+      /* Sub-compositions initialize themselves via the
+       * nle_composition_query_topelevel_initializing_seek mechanism.
+       * Don't provide an initial_seek to the decoder pipeline — the
+       * sub-composition will self-seek to [inpoint, inpoint+duration].
+       * We still set inpoint/duration/reverse above so that
+       * uridecodepoolsrc handles segments correctly. */
+      GST_DEBUG_OBJECT (self->element,
+          "%s sub-timeline: set inpoint/duration/reverse but returning "
+          "NULL initial seek", GES_TIMELINE_ELEMENT_NAME (self->element));
+      gst_event_unref (seek);
+      return NULL;
+    }
+
     GST_DEBUG_OBJECT (self->element,
         "%s initial seek from pending seek-in-ready: %" GST_PTR_FORMAT,
         GES_TIMELINE_ELEMENT_NAME (self->element), seek);

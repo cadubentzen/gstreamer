@@ -2208,6 +2208,16 @@ gst_video_rate_set_property (GObject * object,
       videorate->pending_rate = g_value_get_double (value);
       GST_OBJECT_UNLOCK (videorate);
 
+      GstState cur_state;
+      gst_element_get_state (GST_ELEMENT (videorate), &cur_state, NULL, 0);
+
+      GST_OBJECT_LOCK (videorate);
+      if (cur_state < GST_STATE_PAUSED) {
+        videorate->rate = videorate->pending_rate;
+      }
+      GST_OBJECT_UNLOCK (videorate);
+
+
       gst_videorate_update_duration (videorate);
       return;
     case PROP_MAX_DUPLICATION_TIME:

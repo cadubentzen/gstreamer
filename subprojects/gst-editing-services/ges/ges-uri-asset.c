@@ -332,26 +332,33 @@ _create_uri_source_asset (GESUriClipAsset * asset,
   GESAsset *src_asset;
   GESUriSourceAssetPrivate *src_priv;
   GESUriClipAssetPrivate *priv = asset->priv;
-  gchar *stream_id =
-      g_strdup (gst_discoverer_stream_info_get_stream_id (sinfo));
+  const gchar *raw_stream_id = gst_discoverer_stream_info_get_stream_id (sinfo);
+  gchar *asset_key;
 
-  if (stream_id == NULL) {
+  if (raw_stream_id == NULL) {
     GST_WARNING_OBJECT (asset,
         "No stream ID, ignoring stream info: %p off type: %s", sinfo,
         ges_track_type_name (type));
     return;
   }
 
+  /* Use a composite key so that clips using the same media file but with
+   * different ?id= suffixes each get their own GESUriSourceAsset instead
+   * of sharing one and overwriting each other's priv->uri. */
+  asset_key = g_strdup_printf ("%s::%s",
+      ges_asset_get_id (GES_ASSET (asset)), raw_stream_id);
+
   if (type == GES_TRACK_TYPE_VIDEO) {
-    src_asset = ges_asset_request (GES_TYPE_VIDEO_URI_SOURCE, stream_id, NULL);
+    src_asset = ges_asset_request (GES_TYPE_VIDEO_URI_SOURCE, asset_key, NULL);
   } else if (type == GES_TRACK_TYPE_AUDIO) {
-    src_asset = ges_asset_request (GES_TYPE_AUDIO_URI_SOURCE, stream_id, NULL);
+    src_asset = ges_asset_request (GES_TYPE_AUDIO_URI_SOURCE, asset_key, NULL);
   } else {
     GST_INFO_OBJECT (asset,
         "Unknown track type %d, not creating any asset backing it", type);
+    g_free (asset_key);
     return;
   }
-  g_free (stream_id);
+  g_free (asset_key);
 
   gchar *checksum;
   src_priv = GES_URI_SOURCE_ASSET (src_asset)->priv;

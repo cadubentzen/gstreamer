@@ -2406,9 +2406,15 @@ free_output_slot (OutputSlotInfo * slot, GstURISourceBin * urisrc)
     gst_object_unref (slot->pending_stream);
 
   gst_object_unref (slot->originating_pad);
-  /* deactivate and remove the srcpad */
+  /* deactivate and remove the srcpad — check parent first because
+   * free_output_slot_async() can race with remove_source() during
+   * pipeline teardown: the async callback may run after the element
+   * has already gone through PAUSED→READY and removed all its pads. */
   gst_pad_set_active (slot->output_pad, FALSE);
-  gst_element_remove_pad (GST_ELEMENT_CAST (urisrc), slot->output_pad);
+  if (GST_OBJECT_PARENT (slot->output_pad) == GST_OBJECT_CAST (urisrc))
+    gst_element_remove_pad (GST_ELEMENT_CAST (urisrc), slot->output_pad);
+  else
+    gst_object_unref (slot->output_pad);
 
   g_free (slot);
 }

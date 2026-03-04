@@ -230,6 +230,7 @@ ges_uri_source_translate_composition_seek_cb (GstElement * nlesource,
 
   GstClockTime inpoint = GES_TIMELINE_ELEMENT_INPOINT (self->element);
   GstClockTime initial_start = start;
+  GstClockTime initial_stop = stop;
 
   if (!ges_clip_apply_time_effect_on_seek (parent_clip,
           GES_SOURCE (self->element), (GstClockTime *) & start,
@@ -239,7 +240,7 @@ ges_uri_source_translate_composition_seek_cb (GstElement * nlesource,
   }
 
   GstEvent *adjusted = NULL;
-  if (start != initial_start) {
+  if (start != initial_start || stop != initial_stop) {
     GST_INFO_OBJECT (nlesource,
         "Adjusted seek start for time effects: %" GST_TIME_FORMAT " -> %"
         GST_TIME_FORMAT, GST_TIME_ARGS (initial_start), GST_TIME_ARGS (start));

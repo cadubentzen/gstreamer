@@ -797,6 +797,10 @@ ges_timeline_change_state (GstElement * element, GstStateChange transition)
           timeline->priv->flushing_seek_infos->len);
 
       g_mutex_unlock (&timeline->priv->flushing_seek_info_lock);
+
+      LOCK_DYN (timeline);
+      timeline->priv->commit_frozen = FALSE;
+      UNLOCK_DYN (timeline);
       break;
     case GST_STATE_CHANGE_READY_TO_PAUSED:
     {
@@ -2563,15 +2567,21 @@ _pad_probe_cb (GstPad * track_pad, GstPadProbeInfo * info,
       return GST_PAD_PROBE_OK;
     }
 
+    gboolean thaw_commit = FALSE;
+
     g_hash_table_remove (seek_probe_info->awaited_flush_stop_pads,
         tr_priv->ghostpad);
     if (g_hash_table_size (seek_probe_info->awaited_flush_stop_pads) == 0) {
       GST_DEBUG_OBJECT (tr_priv->timeline, "Done seeking %d", seqnum);
       g_ptr_array_remove_index (timeline->priv->flushing_seek_infos, n);
+      thaw_commit = timeline->priv->flushing_seek_infos->len == 0;
     }
 
     flushing_seek_info_unref (seek_probe_info);
     g_mutex_unlock (&timeline->priv->flushing_seek_info_lock);
+
+    if (thaw_commit)
+      ges_timeline_thaw_commit (timeline);
   }
 
   return GST_PAD_PROBE_OK;
@@ -2590,6 +2600,10 @@ ges_timeline_src_pad_event (GstPad * pad, GstObject * parent, GstEvent * event)
     if (flags & GST_SEEK_FLAG_FLUSH) {
       GST_INFO_OBJECT (timeline, "Got FLUSHING seek event, "
           "ensuring flushing synchronously between all tracks");
+
+      LOCK_DYN (timeline);
+      timeline->priv->commit_frozen = TRUE;
+      UNLOCK_DYN (timeline);
 
       g_mutex_lock (&timeline->priv->flushing_seek_info_lock);
       FlushingSeekInfo *info = get_seek_probe_info (timeline, seqnum, NULL);

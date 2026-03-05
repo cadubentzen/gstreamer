@@ -9,19 +9,27 @@
 #   - seek to 8: media_time = 2 + 8*0.5 = 6
 
 set-globals, media_dir="$(test_dir)/../../../medias/defaults"
-meta, seek=true, handles-states=true,
-    tool = "ges-launch-$(gst_api_version)",
-    ges = "uridecodepoolsrc=enabled",
-    args = {
-        --track-types, video,
-        --video-caps, "video/x-raw(ANY), format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1",
-        --videosink, "$(videosink) name=videosink",
+meta,
+    seek=true,
+    handles-states=true,
+    tool="ges-launch-$(gst_api_version)",
+    ges="uridecodepoolsrc=enabled",
+    args={
+        --track-types, video, --video-caps,
+        "video/x-raw(ANY), format=(string)I420, width=(int)1080, height=(int)720, framerate=(fraction)1/1", --videosink,
+        "$(videosink) name=videosink",
     },
-    configs = {
+    configs={
         "$(validateflow), pad=rate-effect:src, ignored-event-types={tag,stream-start,caps,stream-group-done,flush-start,flush-stop,eos}, logged-fields=\"segment={start,stop}\"",
     }
 
-add-clip, name=clip, asset-id="file://$(media_dir)/matroska/timed_frames_video_only_1fps_with_qrcodes.mkv", layer-priority=0, type=GESUriClip, inpoint=2.0, duration=10.0
+add-clip,
+    name=clip,
+    asset-id="file://$(media_dir)/matroska/timed_frames_video_only_1fps_with_qrcodes.mkv",
+    layer-priority=0,
+    type=GESUriClip,
+    inpoint=2.0,
+    duration=10.0
 container-add-child, container-name=clip, asset-id="videorate rate=0.5 name=rate-effect", child-type=GESEffect
 
 commit;

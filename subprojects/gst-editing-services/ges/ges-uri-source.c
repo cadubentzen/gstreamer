@@ -212,14 +212,18 @@ ges_uri_source_translate_composition_seek_cb (GstElement * nlesource,
   gboolean from_composition =
       s && gst_structure_has_field (s, "nle-seek-in-ready");
 
-  if (!from_composition)
+  if (!from_composition) {
+    GST_INFO_OBJECT (nlesource,
+        "Not converting seek without nle-seek-in-ready field: " "%"
+        GST_PTR_FORMAT, seek);
     return NULL;
+  }
 
+  GST_INFO_OBJECT (nlesource, "Translating seek from composition");
   GESClip *parent_clip =
       GES_CLIP (ges_timeline_element_get_parent (GES_TIMELINE_ELEMENT
           (self->element)));
-  if (!parent_clip)
-    return NULL;
+  g_assert (parent_clip);
 
   gdouble rate;
   gint64 start, stop;

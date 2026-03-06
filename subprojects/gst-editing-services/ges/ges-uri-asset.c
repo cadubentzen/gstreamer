@@ -1032,7 +1032,7 @@ load_serialized_info_for_subtimeline (GESDiscovererManager * manager,
   g_type_class_unref (demux_class);
 
   primary_id = uri + strlen (SUBTIMELINE_URI_PREFIX);
-  GST_ERROR ("Looking up subtimeline primary '%s'", primary_id);
+  GST_DEBUG ("Looking up subtimeline primary '%s'", primary_id);
 
   timeline = ges_timeline_get_subtimeline_primary (primary_id);
   if (!timeline) {
@@ -1041,13 +1041,13 @@ load_serialized_info_for_subtimeline (GESDiscovererManager * manager,
     return NULL;
   }
 
-  GST_ERROR ("Building discoverer info for subtimeline '%s' from timeline %"
+  GST_DEBUG ("Building discoverer info for subtimeline '%s' from timeline %"
       GST_PTR_FORMAT, primary_id, timeline);
 
   info = _ges_build_discoverer_info_from_timeline (uri, timeline);
   gst_object_unref (timeline);
 
-  GST_ERROR ("Built discoverer info for '%s': %" GST_PTR_FORMAT, uri, info);
+  GST_DEBUG ("Built discoverer info for '%s': %" GST_PTR_FORMAT, uri, info);
 
   return info;
 }

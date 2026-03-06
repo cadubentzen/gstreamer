@@ -1402,7 +1402,7 @@ _create_pipeline (GESLauncher * self, const gchar * serialized_timeline)
           gst_child_proxy_get_child_by_name (GST_CHILD_PROXY (uridecodepoolsrc),
           "pool");
 
-      GST_ERROR_OBJECT (self, "Setting pool bus to %" GST_PTR_FORMAT, bus);
+      GST_DEBUG_OBJECT (self, "Setting pool bus to %" GST_PTR_FORMAT, bus);
       // g_object_set (pool, "bus", bus, NULL);
 
       g_object_unref (pool);

@@ -1822,7 +1822,7 @@ handle_key_press (GESLauncher * self, const gchar * key_input)
           toggle_paused (self);
           if (gst_element_get_state (GST_ELEMENT (self->priv->pipeline), NULL,
                   NULL, GST_SECOND * 10) != GST_STATE_CHANGE_SUCCESS) {
-            GST_ERROR_OBJECT (self, "Could not get state after pausing?");
+            GST_WARNING_OBJECT (self, "Could not get state after pausing?");
           }
         }
         relative_seek (self, 0, -1);
@@ -1852,7 +1852,7 @@ handle_key_press (GESLauncher * self, const gchar * key_input)
         toggle_paused (self);
         if (gst_element_get_state (GST_ELEMENT (self->priv->pipeline), NULL,
                 NULL, GST_SECOND * 10) != GST_STATE_CHANGE_SUCCESS) {
-          GST_ERROR_OBJECT (self, "Could not get state after pausing?");
+          GST_WARNING_OBJECT (self, "Could not get state after pausing?");
         }
         relative_seek (self, 0, -1);
       }

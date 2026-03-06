@@ -287,7 +287,7 @@ nle_source_query_seek (GstElement * nlesrc, GstEvent * seek)
 
   if (!gst_element_query (nlesrc, query_translate_seek)) {
     gst_event_unref (seek);
-    GST_ERROR_OBJECT (nlesrc, "Failed to translate seek!!");
+    GST_WARNING_OBJECT (nlesrc, "Failed to translate seek!!");
     return NULL;
   }
 

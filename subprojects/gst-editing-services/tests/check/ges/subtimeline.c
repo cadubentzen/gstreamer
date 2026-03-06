@@ -220,7 +220,7 @@ GST_START_TEST (test_subtimeline_formatter)
 
   GESFormatter *formatter =
       GES_FORMATTER (ges_asset_extract (formatter_asset, &error));
-  GST_ERROR_OBJECT (formatter, "Yes");
+  GST_DEBUG_OBJECT (formatter, "Yes");
   fail_unless (formatter != NULL, "Failed to create SubTimelineFormatter: %s",
       error ? error->message : "unknown error");
   fail_unless (error == NULL);
@@ -550,7 +550,7 @@ GST_START_TEST (test_subtimeline_dynamic_clip_operations)
   CHECK_LAYER_CLIP_COUNT (replica_layer, 1,
       "Replica layer after dynamic addition");
   GList *replica_clips = ges_layer_get_clips (replica_layer);
-  GST_ERROR ("%" GES_FORMAT, GES_ARGS (clip1));
+  GST_DEBUG ("%" GES_FORMAT, GES_ARGS (clip1));
   assert_num_children (clip1, 1);
   assert_num_children (replica_clips->data, 1);
 

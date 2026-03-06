@@ -373,7 +373,7 @@ GES_START_VALIDATE_ACTION (_add_track)
   REPORT_UNLESS ((track_type =
           gst_validate_utils_flags_from_str (GES_TYPE_TRACK_TYPE,
               track_type_str)), done, "Invalid track type: %s", track_type_str);
-  GST_ERROR ("track type is %d", track_type);
+  GST_DEBUG ("track type is %d", track_type);
 
   caps_str = gst_structure_get_string (action->structure, "caps");
   if (caps_str) {

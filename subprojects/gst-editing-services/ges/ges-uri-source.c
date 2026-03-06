@@ -936,7 +936,7 @@ ges_uri_source_select_pad (GESSource * self, GstPad * pad)
   stream_id = gst_pad_get_stream_id (pad);
   res = !g_strcmp0 (stream_id, wanted_stream_id);
 
-  GST_ERROR_OBJECT (self, "%s pad with stream id: %s as %s wanted",
+  GST_DEBUG_OBJECT (self, "%s pad with stream id: %s as %s wanted",
       res ? "Using" : "Ignoring", stream_id, wanted_stream_id);
   g_free (stream_id);
 

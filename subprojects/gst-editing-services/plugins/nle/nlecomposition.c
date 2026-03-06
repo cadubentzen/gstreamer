@@ -2979,7 +2979,7 @@ get_clean_toplevel_stack (NleComposition * comp, GstClockTime * timestamp,
       GstClockTime next_timestamp = reverse ? start : stop;
       GstClockTime next_start_time = *start_time;
       GstClockTime next_stop_time = *stop_time;
-      GST_ERROR_OBJECT (comp, "New timestamp: %" GST_TIMEP_FORMAT, timestamp);
+      GST_DEBUG_OBJECT (comp, "New timestamp: %" GST_TIMEP_FORMAT, timestamp);
 
       GNode *next_stack =
           get_clean_toplevel_stack (comp, &next_timestamp, &next_start_time,
@@ -2992,7 +2992,7 @@ get_clean_toplevel_stack (NleComposition * comp, GstClockTime * timestamp,
         return next_stack;
       }
 
-      GST_ERROR_OBJECT (comp, "Failed to get next stack, using small one");
+      GST_WARNING_OBJECT (comp, "Failed to get next stack, using small one");
     }
   }
 

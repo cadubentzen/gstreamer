@@ -1039,6 +1039,7 @@ if host_system == 'emscripten' and need_platform_emscripten != 'no'
   enabled_gl_platforms += 'emscripten'
   glconf.set('GST_GL_HAVE_WINDOW_CANVAS', 1)
   glconf.set('GST_GL_HAVE_PLATFORM_EMSCRIPTEN', 1)
+  gl_misc_deps += [cc.find_library('html5')]
 endif
 
 gl_nvmm = false

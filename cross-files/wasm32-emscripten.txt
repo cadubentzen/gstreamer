@@ -191,7 +191,7 @@ tests = 'false'
 nls = 'disabled'
 xattr = 'false'
 introspection = 'disabled'
-dtrace = 'disabled'
+dtrace = 'false'
 
 [libxml2:project options]
 output = 'enabled'

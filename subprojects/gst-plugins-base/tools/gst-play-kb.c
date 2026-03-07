@@ -29,7 +29,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifdef G_OS_UNIX
+#if defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)
 #include <unistd.h>
 #include <termios.h>
 #endif
@@ -45,7 +45,7 @@
 static GstPlayKbFunc kb_callback;
 static gpointer kb_callback_data;
 
-#ifdef G_OS_UNIX
+#if defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)
 static struct termios term_settings;
 static gboolean term_settings_saved = FALSE;
 static gulong io_watch_id;

@@ -29,12 +29,14 @@
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
-#ifdef HAVE_UNISTD_H
+#if defined(HAVE_UNISTD_H) || defined(__EMSCRIPTEN__)
 #include <unistd.h>
 #endif
 #ifdef G_OS_UNIX
-#include <glib-unix.h>
 #include <sys/wait.h>
+#ifndef __EMSCRIPTEN__
+#include <glib-unix.h>
+#endif
 #elif defined (G_OS_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -492,14 +494,14 @@ print_toc_entry (gpointer data, gpointer user_data)
   g_list_foreach (subentries, print_toc_entry, GUINT_TO_POINTER (indent));
 }
 
-#ifdef G_OS_UNIX
+#if defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)
 static guint signal_watch_hup_id;
 #endif
-#if defined(G_OS_UNIX) || defined(G_OS_WIN32)
+#if (defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)) || defined(G_OS_WIN32)
 static guint signal_watch_intr_id;
 #endif
 
-#if defined(G_OS_UNIX) || defined(G_OS_WIN32)
+#if (defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)) || defined(G_OS_WIN32)
 /* As the interrupt handler is dispatched from GMainContext as a GSourceFunc
  * handler, we can react to this by posting a message. */
 static gboolean
@@ -520,7 +522,7 @@ intr_handler (gpointer user_data)
   return G_SOURCE_REMOVE;
 }
 
-#ifdef G_OS_UNIX
+#if defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)
 static gboolean
 hup_handler (gpointer user_data)
 {
@@ -1303,7 +1305,7 @@ real_main (int argc, char *argv[])
         break;
     }
 
-#ifdef G_OS_UNIX
+#if defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)
     signal_watch_intr_id =
         g_unix_signal_add (SIGINT, (GSourceFunc) intr_handler, pipeline);
     signal_watch_hup_id =
@@ -1361,7 +1363,7 @@ real_main (int argc, char *argv[])
     PRINT (_("Setting pipeline to NULL ...\n"));
     gst_element_set_state (pipeline, GST_STATE_NULL);
 
-#ifdef G_OS_UNIX
+#if defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)
     if (signal_watch_intr_id > 0)
       g_source_remove (signal_watch_intr_id);
     if (signal_watch_hup_id > 0)

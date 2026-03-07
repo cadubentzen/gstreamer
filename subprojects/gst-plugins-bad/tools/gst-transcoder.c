@@ -22,7 +22,7 @@
 
 #include "utils.h"
 #include <gst/transcoder/gsttranscoder.h>
-#ifdef G_OS_UNIX
+#if defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)
 #include <glib-unix.h>
 #endif
 
@@ -72,7 +72,7 @@ typedef struct
   gchar *framerate;
 } Settings;
 
-#ifdef G_OS_UNIX
+#if defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)
 static guint signal_watch_hup_id;
 static guint signal_watch_intr_id;
 
@@ -440,7 +440,7 @@ real_main (int argc, char *argv[])
       transcoder);
 
 
-#ifdef G_OS_UNIX
+#if defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)
   signal_watch_intr_id =
       g_unix_signal_add (SIGINT, (GSourceFunc) intr_handler, transcoder);
   signal_watch_hup_id =
@@ -453,7 +453,7 @@ real_main (int argc, char *argv[])
   if (!err)
     ok ("\nDONE.");
 
-#ifdef G_OS_UNIX
+#if defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)
   if (signal_watch_intr_id > 0)
     g_source_remove (signal_watch_intr_id);
   if (signal_watch_hup_id > 0)

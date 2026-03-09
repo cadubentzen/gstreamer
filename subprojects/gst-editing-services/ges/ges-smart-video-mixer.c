@@ -228,7 +228,15 @@ set_pad_properties_from_composition_meta (GstPad * mixer_pad,
 {
   GESFrameCompositionMeta *meta;
   GstBuffer *buf = gst_sample_get_buffer (sample);
-  GESSmartMixer *self = GES_SMART_MIXER (GST_OBJECT_PARENT (ghost));
+  GstObject *ghost_parent = GST_OBJECT_PARENT (ghost);
+  GESSmartMixer *self;
+
+  if (!ghost_parent) {
+    GST_WARNING ("Ghost pad %" GST_PTR_FORMAT " has no parent, "
+        "probably being removed during reconfiguration", ghost);
+    return;
+  }
+  self = GES_SMART_MIXER (ghost_parent);
 
   meta = ges_frame_composition_get_synced_meta (GST_PAD (ghost),
       gst_sample_get_segment (sample), buf);

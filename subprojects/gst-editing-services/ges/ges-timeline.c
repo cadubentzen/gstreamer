@@ -388,9 +388,10 @@ track_private_unref (TrackPrivate * tr_priv)
 
 /* GESExtractable implementation */
 static gchar *
-extractable_check_id (GType type, const gchar * id)
+extractable_check_id (GType type, const gchar * id, GError ** error)
 {
   gchar *res;
+  (void) error;
 
   if (id == NULL)
     res = g_strdup_printf ("%s-%i", "project", nb_assets);
@@ -417,7 +418,7 @@ static void
 ges_extractable_interface_init (GESExtractableInterface * iface)
 {
   iface->asset_type = GES_TYPE_PROJECT;
-  iface->check_id = (GESExtractableCheckId) extractable_check_id;
+  iface->check_id = extractable_check_id;
   iface->get_id = extractable_get_id;
   iface->can_update_asset = TRUE;
 }

@@ -44,10 +44,12 @@ static const GFlagsValue track_types_values[] = {
   {0, NULL, NULL}
 };
 
-static void
-register_ges_track_type_select_result (GType * id)
+static gpointer
+register_ges_track_type_select_result (gpointer data)
 {
+  GType *id = data;
   *id = g_flags_register_static ("GESTrackType", track_types_values);
+  return NULL;
 }
 
 const gchar *
@@ -69,13 +71,14 @@ ges_track_type_get_type (void)
   static GType id;
   static GOnce once = G_ONCE_INIT;
 
-  g_once (&once, (GThreadFunc) register_ges_track_type_select_result, &id);
+  g_once (&once, register_ges_track_type_select_result, &id);
   return id;
 }
 
-static void
-register_ges_pipeline_flags (GType * id)
+static gpointer
+register_ges_pipeline_flags (gpointer data)
 {
+  GType *id = data;
   static const GFlagsValue values[] = {
     {C_ENUM (GES_PIPELINE_MODE_PREVIEW_AUDIO),
           "GES_PIPELINE_MODE_PREVIEW_AUDIO",
@@ -92,6 +95,7 @@ register_ges_pipeline_flags (GType * id)
   };
 
   *id = g_flags_register_static ("GESPipelineFlags", values);
+  return NULL;
 }
 
 GType
@@ -100,13 +104,14 @@ ges_pipeline_flags_get_type (void)
   static GType id;
   static GOnce once = G_ONCE_INIT;
 
-  g_once (&once, (GThreadFunc) register_ges_pipeline_flags, &id);
+  g_once (&once, register_ges_pipeline_flags, &id);
   return id;
 }
 
-static void
-register_ges_edit_mode (GType * id)
+static gpointer
+register_ges_edit_mode (gpointer data)
 {
+  GType *id = data;
   static const GEnumValue edit_mode[] = {
     {C_ENUM (GES_EDIT_MODE_NORMAL), "GES_EDIT_MODE_NORMAL",
         "edit_normal"},
@@ -142,6 +147,7 @@ register_ges_edit_mode (GType * id)
   };
 
   *id = g_enum_register_static ("GESEditMode", edit_mode);
+  return NULL;
 }
 
 const gchar *
@@ -169,13 +175,14 @@ ges_edit_mode_get_type (void)
   static GType id;
   static GOnce once = G_ONCE_INIT;
 
-  g_once (&once, (GThreadFunc) register_ges_edit_mode, &id);
+  g_once (&once, register_ges_edit_mode, &id);
   return id;
 }
 
-static void
-register_ges_edge (GType * id)
+static gpointer
+register_ges_edge (gpointer data)
 {
+  GType *id = data;
   static const GEnumValue edges[] = {
     {C_ENUM (GES_EDGE_START), "GES_EDGE_START", "edge_start"},
     {C_ENUM (GES_EDGE_START), "GES_EDGE_START", "start"},
@@ -187,6 +194,7 @@ register_ges_edge (GType * id)
   };
 
   *id = g_enum_register_static ("GESEdge", edges);
+  return NULL;
 }
 
 /**
@@ -216,7 +224,7 @@ ges_edge_get_type (void)
   static GType id;
   static GOnce once = G_ONCE_INIT;
 
-  g_once (&once, (GThreadFunc) register_ges_edge, &id);
+  g_once (&once, register_ges_edge, &id);
   return id;
 }
 
@@ -594,9 +602,10 @@ ges_video_test_pattern_get_type (void)
   return theType;
 }
 
-static void
-register_ges_meta_flag (GType * id)
+static gpointer
+register_ges_meta_flag (gpointer data)
 {
+  GType *id = data;
   static const GFlagsValue values[] = {
     {C_ENUM (GES_META_READABLE), "GES_META_READABLE", "readable"},
     {C_ENUM (GES_META_WRITABLE), "GES_META_WRITABLE", "writable"},
@@ -605,6 +614,7 @@ register_ges_meta_flag (GType * id)
   };
 
   *id = g_flags_register_static ("GESMetaFlag", values);
+  return NULL;
 }
 
 GType
@@ -613,13 +623,14 @@ ges_meta_flag_get_type (void)
   static GType id;
   static GOnce once = G_ONCE_INIT;
 
-  g_once (&once, (GThreadFunc) register_ges_meta_flag, &id);
+  g_once (&once, register_ges_meta_flag, &id);
   return id;
 }
 
-static void
-register_ges_marker_flags (GType * id)
+static gpointer
+register_ges_marker_flags (gpointer data)
 {
+  GType *id = data;
   static const GFlagsValue values[] = {
     {C_ENUM (GES_MARKER_FLAG_NONE), "GES_MARKER_FLAG_NONE", "none"},
     {C_ENUM (GES_MARKER_FLAG_SNAPPABLE), "GES_MARKER_FLAG_SNAPPABLE",
@@ -628,6 +639,7 @@ register_ges_marker_flags (GType * id)
   };
 
   *id = g_flags_register_static ("GESMarkerFlags", values);
+  return NULL;
 }
 
 GType
@@ -636,6 +648,6 @@ ges_marker_flags_get_type (void)
   static GType id;
   static GOnce once = G_ONCE_INIT;
 
-  g_once (&once, (GThreadFunc) register_ges_marker_flags, &id);
+  g_once (&once, register_ges_marker_flags, &id);
   return id;
 }

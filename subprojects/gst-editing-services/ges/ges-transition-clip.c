@@ -128,10 +128,11 @@ extractable_get_parameters_from_id (const gchar * id, guint * n_params)
 
 G_GNUC_END_IGNORE_DEPRECATIONS; /* End ignoring GParameter deprecation */
 static gchar *
-extractable_check_id (GType type, const gchar * id)
+extractable_check_id (GType type, const gchar * id, GError ** error)
 {
   guint index;
   GEnumClass *enum_class;
+  (void) error;
   enum_class = g_type_class_peek (GES_VIDEO_STANDARD_TRANSITION_TYPE_TYPE);
 
   for (index = 0; index < enum_class->n_values; index++) {
@@ -205,7 +206,7 @@ extractable_set_asset (GESExtractable * self, GESAsset * asset)
 static void
 ges_extractable_interface_init (GESExtractableInterface * iface)
 {
-  iface->check_id = (GESExtractableCheckId) extractable_check_id;
+  iface->check_id = extractable_check_id;
   iface->get_id = extractable_get_id;
   iface->get_parameters_from_id = extractable_get_parameters_from_id;
   iface->can_update_asset = TRUE;

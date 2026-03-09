@@ -140,7 +140,7 @@ static void
 ges_extractable_interface_init (GESExtractableInterface * iface)
 {
   iface->asset_type = GES_TYPE_EFFECT_ASSET;
-  iface->check_id = (GESExtractableCheckId) extractable_check_id;
+  iface->check_id = extractable_check_id;
   iface->get_parameters_from_id = extractable_get_parameters_from_id;
   iface->get_id = extractable_get_id;
 }

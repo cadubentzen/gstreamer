@@ -9,6 +9,7 @@ endif
 
 ges_launch_files = files('ges-validate.c', 'ges-launch.c', 'ges-launcher.c', 'utils.c', 'ges-launcher-kb.c')
 man_page = files('ges-launch-1.0.1')
+
 gst_tools = {
   'ges-launch': {
     'files': ges_launch_files,
@@ -17,6 +18,24 @@ gst_tools = {
     'man_page': man_page,
   },
 }
+
+if host_system == 'emscripten'
+  ges_web_app_files = files('ges-web-app.c')
+  ges_web_app_deps = [ges_dep, gstpbutils_dep, gio_dep, gstvideo_dep, gstaudio_dep]
+
+  gst_tools += {'ges-web-app': {
+    'files': ges_web_app_files,
+    'deps': ges_web_app_deps,
+    'extra_c_args': ['-DHAVE_CONFIG_H'],
+    'extra_link_args': [
+      '-sEXPORTED_RUNTIME_METHODS=stringToNewUTF8',
+      '-sEXPORTED_FUNCTIONS=_main,_free,_ges_web_app_play,_ges_web_app_pause,_ges_web_app_toggle_playback,_ges_web_app_seek,_ges_web_app_get_position,_ges_web_app_get_duration,_ges_web_app_is_playing,_ges_web_app_add_test_clip,_ges_web_app_remove_clip,_ges_web_app_add_effect,_ges_web_app_set_clip_duration,_ges_web_app_set_clip_start,_ges_web_app_get_layer_count,_ges_web_app_get_clip_count,_ges_web_app_get_clip_start,_ges_web_app_get_clip_duration,_ges_web_app_add_layer,_ges_web_app_split_clip',
+      '-sMIN_WEBGL_VERSION=2',
+      '-sMAX_WEBGL_VERSION=2',
+      '-sFULL_ES3',
+    ],
+  }}
+endif
 
 if not get_option('tools').disabled() and not static_build
   # FIXME: need ges_launch in the tests.

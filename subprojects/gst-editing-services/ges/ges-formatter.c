@@ -96,8 +96,9 @@ static gboolean default_can_load_uri (GESFormatter * dummy_instance,
 
 /* GESExtractable implementation */
 static gchar *
-extractable_check_id (GType type, const gchar * id)
+extractable_check_id (GType type, const gchar * id, GError ** error)
 {
+  (void) error;
   GESFormatterClass *class;
 
   if (id)
@@ -150,7 +151,7 @@ _register_metas (GESExtractableInterface * iface, GObjectClass * class,
 static void
 ges_extractable_interface_init (GESExtractableInterface * iface)
 {
-  iface->check_id = (GESExtractableCheckId) extractable_check_id;
+  iface->check_id = extractable_check_id;
   iface->get_id = extractable_get_id;
   iface->asset_type = GES_TYPE_ASSET;
   iface->register_metas = _register_metas;

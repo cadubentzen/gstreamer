@@ -180,7 +180,10 @@ static gpointer
 gst_gl_buffer_cpu_access (GstGLBuffer * mem, GstMapInfo * info, gsize size)
 {
   const GstGLFuncs *gl = mem->mem.context->gl_vtable;
-  gpointer data, ret;
+  gpointer ret;
+#ifndef __EMSCRIPTEN__
+  gpointer data;
+#endif
 
   GST_CAT_LOG (GST_CAT_GL_BUFFER, "mapping %p id %d size %" G_GSIZE_FORMAT,
       mem, mem->id, size);
@@ -242,7 +245,9 @@ gst_gl_buffer_upload_cpu_write (GstGLBuffer * mem, GstMapInfo * info,
     gsize size)
 {
   const GstGLFuncs *gl = mem->mem.context->gl_vtable;
+#ifndef __EMSCRIPTEN__
   gpointer data;
+#endif
 
   if (!mem->mem.data)
     /* no data pointer has been written */

@@ -53,14 +53,7 @@
 #define USING_GLES2(context) (gst_gl_context_check_gl_version (context, GST_GL_API_GLES2, 2, 0))
 #define USING_GLES3(context) (gst_gl_context_check_gl_version (context, GST_GL_API_GLES2, 3, 0))
 
-/* WebGL2/Emscripten does not support GL_EXT_buffer_storage but
- * emscripten_GetProcAddress returns non-NULL stubs for all GL functions,
- * so the vtable check alone is insufficient. */
-#ifdef __EMSCRIPTEN__
-#define HAVE_BUFFER_STORAGE(context) (FALSE)
-#else
 #define HAVE_BUFFER_STORAGE(context) (context->gl_vtable->BufferStorage != NULL)
-#endif
 
 /* compatibility definitions... */
 #ifndef GL_MAP_READ_BIT
@@ -126,8 +119,8 @@ _gl_buffer_create (GstGLBuffer * gl_mem, GError ** error)
 
     gl->BufferStorage (gl_mem->target, gl_mem->mem.mem.maxsize, NULL, flags);
   } else {
-    GST_CAT_ERROR (GST_CAT_GL_BUFFER, "gl_buffer_create does not have "
-        "buffer storage: %p %u", gl_mem, gl_mem->id);
+    GST_CAT_DEBUG (GST_CAT_GL_BUFFER, "gl_buffer_create: no buffer storage "
+        "support, using BufferData: %p %u", gl_mem, gl_mem->id);
     gl->BufferData (gl_mem->target, gl_mem->mem.mem.maxsize, NULL,
         gl_mem->usage_hints);
   }
@@ -230,7 +223,9 @@ gst_gl_buffer_cpu_access (GstGLBuffer * mem, GstMapInfo * info, gsize size)
 
       gl->UnmapBuffer (mem->target);
       ret = mem->mem.data;
-    } else if (gl->GetBufferSubData) {
+    } else
+#endif
+    if (gl->GetBufferSubData) {
       gl->GetBufferSubData (mem->target, 0, size, mem->mem.data);
       ret = mem->mem.data;
     } else {
@@ -269,10 +264,8 @@ gst_gl_buffer_upload_cpu_write (GstGLBuffer * mem, GstMapInfo * info,
       || (mem->mem.map_flags & GST_MAP_WRITE) != 0) {
     gl->BindBuffer (mem->target, mem->id);
 
+#ifndef __EMSCRIPTEN__
     if (gl->MapBufferRange) {
-      /* FIXME: optionally remove this with a flag and return the
-       * glMapBufferRange pointer (requires
-       * GL_ARB_buffer_storage/GL4/GL_COHERENT_BIT) */
       guint gl_map_flags = GL_MAP_WRITE_BIT;
 
       data = gl->MapBufferRange (mem->target, 0, size, gl_map_flags);
@@ -281,7 +274,9 @@ gst_gl_buffer_upload_cpu_write (GstGLBuffer * mem, GstMapInfo * info,
         memcpy (data, mem->mem.data, size);
 
       gl->UnmapBuffer (mem->target);
-    } else if (gl->BufferSubData) {
+    } else
+#endif
+    if (gl->BufferSubData) {
       gl->BufferSubData (mem->target, 0, size, mem->mem.data);
     }
     gl->BindBuffer (mem->target, 0);

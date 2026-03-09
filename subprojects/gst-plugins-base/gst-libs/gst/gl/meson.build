@@ -1040,6 +1040,7 @@ if host_system == 'emscripten' and need_platform_emscripten != 'no'
   glconf.set('GST_GL_HAVE_WINDOW_CANVAS', 1)
   glconf.set('GST_GL_HAVE_PLATFORM_EMSCRIPTEN', 1)
   gl_misc_deps += [cc.find_library('html5')]
+  gl_node_polyfill_path = meson.current_source_dir() / 'web' / 'gstgl_node_polyfill.js'
 endif
 
 gl_nvmm = false
@@ -1206,10 +1207,15 @@ if build_gstgl
     endif
   endif
   gst_libraries += [[pkg_name, library_def]]
+  gstgl_link_args = []
+  if host_system == 'emscripten'
+    gstgl_link_args += ['--pre-js=' + gl_node_polyfill_path]
+  endif
   gstgl_dep = declare_dependency(link_with : gstgl,
     include_directories : [libsinc, compat_includes],
     sources: gen_sources,
     dependencies : [video_dep, gst_base_dep, gl_winsys_deps],
+    link_args: gstgl_link_args,
     variables: pkgconfig_gl_variables)
   gstglproto_dep = declare_dependency(
     dependencies : [gstgl_dep] + gl_lib_deps,

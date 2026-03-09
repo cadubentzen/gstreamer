@@ -915,7 +915,7 @@ typedef guint64 (*AtomCopyDataFunc) (Atom *atom, guint8 **buffer, guint64 *size,
 /*
  * Releases memory allocated by an atom
  */
-typedef guint64 (*AtomFreeFunc) (Atom *atom);
+typedef void (*AtomFreeFunc) (Atom *atom);
 
 /*
  * Some atoms might have many optional different kinds of child atoms, so this

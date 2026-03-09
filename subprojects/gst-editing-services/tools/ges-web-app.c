@@ -215,6 +215,17 @@ setup_ges_pipeline (void)
     return FALSE;
   }
 
+  /* Set glimagesink as the video sink (autovideosink is not available in WASM) */
+  {
+    GstElement *video_sink = gst_element_factory_make ("glimagesink", NULL);
+    if (!video_sink) {
+      g_printerr ("Failed to create glimagesink\n");
+      return FALSE;
+    }
+    ges_pipeline_preview_set_video_sink (ges_pipeline, video_sink);
+    gst_object_unref (video_sink);
+  }
+
   /* Set preview mode */
   ges_pipeline_set_mode (ges_pipeline, GES_PIPELINE_MODE_PREVIEW_VIDEO);
 
@@ -229,7 +240,8 @@ setup_ges_pipeline (void)
 
   /* Add a default SMPTE bars clip so there's something to render */
   {
-    GESLayer *layer = g_list_nth_data (ges_timeline_get_layers (timeline), 0);
+    GList *layers = ges_timeline_get_layers (timeline);
+    GESLayer *layer = g_list_nth_data (layers, 0);
     GESClip *clip = GES_CLIP (ges_test_clip_new ());
     g_object_set (clip,
         "start", (guint64) 0,
@@ -238,7 +250,7 @@ setup_ges_pipeline (void)
         NULL);
     ges_layer_add_clip (layer, clip);
     ges_timeline_commit (timeline);
-    gst_object_unref (layer);
+    g_list_free_full (layers, gst_object_unref);
     update_cached_state ();
   }
 

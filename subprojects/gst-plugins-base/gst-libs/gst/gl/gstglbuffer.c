@@ -53,7 +53,14 @@
 #define USING_GLES2(context) (gst_gl_context_check_gl_version (context, GST_GL_API_GLES2, 2, 0))
 #define USING_GLES3(context) (gst_gl_context_check_gl_version (context, GST_GL_API_GLES2, 3, 0))
 
+/* WebGL2/Emscripten does not support GL_EXT_buffer_storage but
+ * emscripten_GetProcAddress returns non-NULL stubs for all GL functions,
+ * so the vtable check alone is insufficient. */
+#ifdef __EMSCRIPTEN__
+#define HAVE_BUFFER_STORAGE(context) (FALSE)
+#else
 #define HAVE_BUFFER_STORAGE(context) (context->gl_vtable->BufferStorage != NULL)
+#endif
 
 /* compatibility definitions... */
 #ifndef GL_MAP_READ_BIT
@@ -212,10 +219,8 @@ gst_gl_buffer_cpu_access (GstGLBuffer * mem, GstMapInfo * info, gsize size)
       && (info->flags & GST_MAP_GL) == 0 && (info->flags & GST_MAP_READ) != 0) {
     gl->BindBuffer (mem->target, mem->id);
 
+#ifndef __EMSCRIPTEN__
     if (gl->MapBufferRange) {
-      /* FIXME: optionally remove this with a flag and return the
-       * glMapBufferRange pointer (requires
-       * GL_ARB_buffer_storage/GL4/GL_COHERENT_BIT) */
       guint gl_map_flags = GL_MAP_READ_BIT;
 
       data = gl->MapBufferRange (mem->target, 0, size, gl_map_flags);

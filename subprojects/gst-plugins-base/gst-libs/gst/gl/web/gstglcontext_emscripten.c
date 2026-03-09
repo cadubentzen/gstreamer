@@ -24,6 +24,8 @@
 
 #include <gst/gst.h>
 #include <gst/gl/gl.h>
+#include <emscripten/threading.h>
+#include <emscripten/em_asm.h>
 #include "../gstglcontext_private.h"
 
 #include "gstglcontext_emscripten.h"
@@ -93,13 +95,56 @@ gst_gl_context_emscripten_create_context (GstGLContext * context,
   canvas = (gchar *) gst_gl_display_get_handle (display);
  
   emscripten_webgl_init_context_attributes (&attrs);
-  attrs.proxyContextToMainThread = EMSCRIPTEN_WEBGL_CONTEXT_PROXY_DISALLOW;
+  attrs.majorVersion = 2;
+  attrs.alpha = EM_FALSE;
+  attrs.proxyContextToMainThread = EMSCRIPTEN_WEBGL_CONTEXT_PROXY_ALWAYS;
   attrs.explicitSwapControl = EM_TRUE;
+  attrs.renderViaOffscreenBackBuffer = EM_TRUE;
   /* comma-delimited list with # */
   GST_DEBUG_OBJECT (context, "Creating Emscripten WebGL context on %s", (gchar *)canvas);
   self->priv->handle = emscripten_webgl_create_context (canvas, &attrs);
 
+  /* Work around Emscripten bug: with PROXY_ALWAYS, the proxied GL context
+   * activation sets GL.currentContext to the raw WebGL context instead of
+   * the Emscripten wrapper object. This breaks glBindFramebuffer's FBO
+   * interception (GL.currentContext.defaultFbo is undefined, so FBO 0
+   * binds to the canvas instead of the offscreen FBO).
+   *
+   * Fix by hooking gl.bindFramebuffer to manually redirect FBO null
+   * to the offscreen FBO. */
+  MAIN_THREAD_EM_ASM({
+    var keys = Object.keys(GL.contexts);
+    for (var i = 0; i < keys.length; i++) {
+      var ctx = GL.contexts[keys[i]];
+      if (ctx && ctx.defaultFbo && ctx.GLctx && !ctx._fboPatched) {
+        var gl = ctx.GLctx;
+        var origBind = gl.bindFramebuffer.bind(gl);
+        var defaultFbo = ctx.defaultFbo;
+        gl.bindFramebuffer = function(target, fb) {
+          /* Only redirect 'undefined' (broken proxy interception result)
+           * to the offscreen FBO. Leave 'null' alone since the blit
+           * function uses null intentionally to bind the real canvas. */
+          if (fb === undefined) {
+            fb = defaultFbo;
+          }
+          return origBind(target, fb);
+        };
+        ctx._fboPatched = true;
+      }
+    }
+  });
+
   gst_object_unref (display);
+
+  if (!self->priv->handle) {
+    g_set_error (error, GST_GL_CONTEXT_ERROR,
+        GST_GL_CONTEXT_ERROR_CREATE_CONTEXT,
+        "Failed to create Emscripten WebGL context on '%s'. "
+        "In Node.js, install the 'gl' npm package for headless GL support.",
+        (gchar *) canvas);
+    return FALSE;
+  }
+
   return TRUE;
 }
 
@@ -115,8 +160,26 @@ gst_gl_context_emscripten_destroy_context (GstGLContext * context)
 
 static void gst_gl_context_emscripten_swap_buffers (GstGLContext * context)
 {
-  GST_LOG_OBJECT (context, "Swapping buffers");
-  emscripten_webgl_commit_frame ();
+  /* With PROXY_ALWAYS, GL calls are proxied to the main thread which
+   * renders to an offscreen FBO. However, the Emscripten proxied context
+   * activation incorrectly sets GL.currentContext to the raw WebGL context
+   * instead of the wrapper object, so GL.currentContext.defaultFbo is
+   * undefined and the FBO interception in glBindFramebuffer doesn't work.
+   *
+   * Work around this by looking up the correct context wrapper from
+   * GL.contexts and using it to blit the offscreen FBO to the canvas. */
+  MAIN_THREAD_EM_ASM({
+    var keys = Object.keys(GL.contexts);
+    for (var i = 0; i < keys.length; i++) {
+      var ctx = GL.contexts[keys[i]];
+      if (ctx && ctx.defaultFbo) {
+        GL.currentContext = ctx;
+        Module["ctx"] = GLctx = ctx.GLctx;
+        GL.blitOffscreenFramebuffer(ctx);
+        break;
+      }
+    }
+  });
 }
 
 static GstGLAPI
@@ -164,9 +227,12 @@ gst_gl_context_emscripten_create_thread (GstGLContext * context,
   display = gst_gl_context_get_display (context);
   canvas = (gchar *) gst_gl_display_get_handle (display);
 
-  GST_DEBUG_OBJECT (context, "Creating GL thread on canvas %s", canvas);
-  /* Check for a window to use the canvas name */
-  thread = g_thread_emscripten_new (name, canvas, run, context);
+  GST_DEBUG_OBJECT (context, "Creating GL thread (canvas %s stays on main thread for proxied rendering)", canvas);
+  /* Don't transfer the canvas to the worker. With PROXY_ALWAYS, GL calls
+   * are proxied to the main thread where the canvas lives. This avoids
+   * OffscreenCanvas compositing issues (the main thread event loop handles
+   * canvas presentation naturally). */
+  thread = g_thread_emscripten_new (name, NULL, run, context);
   GST_DEBUG_OBJECT (context, "Thread created");
 
   gst_object_unref (display);

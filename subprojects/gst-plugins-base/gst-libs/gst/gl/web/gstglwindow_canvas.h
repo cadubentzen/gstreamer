@@ -41,8 +41,9 @@ struct _GstGLWindowCanvas {
 
   gchar *canvas;
   gint canvas_width, canvas_height;
+  volatile gboolean running;
 
-  gpointer _reserved[GST_PADDING];
+  gpointer _reserved[GST_PADDING - 1];
 };
 
 struct _GstGLWindowCanvasClass {

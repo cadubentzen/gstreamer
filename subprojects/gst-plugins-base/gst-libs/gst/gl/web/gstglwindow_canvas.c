@@ -23,6 +23,7 @@
 #endif
 
 #include <emscripten/html5.h>
+#include <unistd.h>
 #include <gst/gst.h>
 #include <gst/gl/gl.h>
 #include "gstglcontext_emscripten.h"
@@ -132,6 +133,44 @@ gst_gl_window_canvas_finalize (GObject * object)
   G_OBJECT_CLASS (gst_gl_window_canvas_parent_class)->finalize (object);
 }
 
+/*
+ * GLib's GWakeup is non-functional on WASM (g_wakeup_new returns NULL,
+ * g_wakeup_signal is a no-op). This means g_main_context_invoke from a
+ * different thread cannot wake up g_main_loop_run, causing deadlocks
+ * when the streaming thread sends synchronous messages to the GL thread.
+ *
+ * Work around this by using a polling loop with usleep instead of the
+ * default g_main_loop_run-based implementation.
+ */
+static void
+gst_gl_window_canvas_run (GstGLWindow * window)
+{
+  GstGLWindowCanvas *self = GST_GL_WINDOW_CANVAS (window);
+
+  self->running = TRUE;
+  while (self->running)
+    {
+      /* Non-blocking iteration: process any pending sources (idle callbacks
+       * from g_main_context_invoke, etc.) without relying on GWakeup. */
+      while (g_main_context_iteration (window->main_context, FALSE));
+
+      if (!self->running)
+        break;
+
+      /* Yield briefly so we don't spin the CPU. */
+      usleep (1000);
+    }
+}
+
+static void
+gst_gl_window_canvas_quit (GstGLWindow * window)
+{
+  GstGLWindowCanvas *self = GST_GL_WINDOW_CANVAS (window);
+
+  gst_gl_display_remove_window (window->display, window);
+  self->running = FALSE;
+}
+
 static void
 gst_gl_window_canvas_class_init (GstGLWindowCanvasClass * klass)
 {
@@ -140,6 +179,8 @@ gst_gl_window_canvas_class_init (GstGLWindowCanvasClass * klass)
   window_class->get_window_handle =
       GST_DEBUG_FUNCPTR (gst_gl_window_canvas_get_window_handle);
   window_class->draw = GST_DEBUG_FUNCPTR (gst_gl_window_canvas_draw);
+  window_class->run = GST_DEBUG_FUNCPTR (gst_gl_window_canvas_run);
+  window_class->quit = GST_DEBUG_FUNCPTR (gst_gl_window_canvas_quit);
   G_OBJECT_CLASS (klass)->finalize = gst_gl_window_canvas_finalize;
 }
 

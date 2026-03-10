@@ -45,6 +45,7 @@
 #include <gst/pbutils/pbutils.h>
 #include <emscripten.h>
 #include <emscripten/bind.h>
+#include <pthread.h>
 #include <gst/web/gstwebutils.h>
 #include <gst/web/gstwebvideoframe.h>
 
@@ -165,6 +166,11 @@ gst_web_codecs_video_decoder_on_output (guintptr self_, val video_frame)
 
   GST_VIDEO_DECODER_STREAM_LOCK (self);
   frame = gst_video_decoder_get_oldest_frame (GST_VIDEO_DECODER (self));
+  if (!frame) {
+    GST_WARNING_OBJECT (self, "get_oldest_frame returned NULL");
+    GST_VIDEO_DECODER_STREAM_UNLOCK (self);
+    return;
+  }
   GST_DEBUG_OBJECT (self,
       "queued frame %" GST_TIME_FORMAT " decoded frame %" GST_TIME_FORMAT,
       GST_TIME_ARGS (frame->pts),
@@ -501,6 +507,87 @@ gst_web_codecs_video_decoder_set_format (
   return TRUE;
 }
 
+typedef struct _GstWebCodecsVideoDecoderFlushData
+{
+  GstWebCodecsVideoDecoder *self;
+  GMutex lock;
+  GCond cond;
+  gboolean done;
+} GstWebCodecsVideoDecoderFlushData;
+
+static void
+gst_web_codecs_video_decoder_do_flush (gpointer data)
+{
+  GstWebCodecsVideoDecoderFlushData *flush_data =
+      (GstWebCodecsVideoDecoderFlushData *) data;
+  GstWebCodecsVideoDecoder *self = flush_data->self;
+
+  GST_DEBUG_OBJECT (self, "Calling WebCodecs flush()");
+
+  /* Call flush() and attach a .then() callback that signals completion.
+   * The output callbacks will fire during the flush before the promise
+   * resolves. We use EM_ASM to call .then() since we can't use .await()
+   * inside a GMainContext dispatch. */
+  EM_ASM ({
+    var decoder = Emval.toValue ($0);
+    var flush_data_ptr = $1;
+    decoder.flush ().then (function () {
+      /* Signal completion back to C */
+      Module._gst_web_codecs_video_decoder_flush_done (flush_data_ptr);
+    });
+  }, self->decoder.as_handle (), (guintptr) flush_data);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void
+gst_web_codecs_video_decoder_flush_done (guintptr flush_data_ptr)
+{
+  GstWebCodecsVideoDecoderFlushData *flush_data =
+      (GstWebCodecsVideoDecoderFlushData *) flush_data_ptr;
+
+  g_mutex_lock (&flush_data->lock);
+  flush_data->done = TRUE;
+  g_cond_signal (&flush_data->cond);
+  g_mutex_unlock (&flush_data->lock);
+}
+
+static GstFlowReturn
+gst_web_codecs_video_decoder_finish (GstVideoDecoder *decoder)
+{
+  GstWebCodecsVideoDecoder *self = GST_WEB_CODECS_VIDEO_DECODER (decoder);
+  GstWebRunner *runner;
+  GstWebCodecsVideoDecoderFlushData flush_data;
+
+  GST_DEBUG_OBJECT (self, "Draining — flushing WebCodecs decoder");
+
+  flush_data.self = self;
+  flush_data.done = FALSE;
+  g_mutex_init (&flush_data.lock);
+  g_cond_init (&flush_data.cond);
+
+  /* Release stream lock while we wait, otherwise the output callback
+   * (which takes the stream lock) will deadlock */
+  GST_VIDEO_DECODER_STREAM_UNLOCK (self);
+
+  runner = gst_web_canvas_get_runner (self->canvas);
+  gst_web_runner_send_message_async (
+      runner, gst_web_codecs_video_decoder_do_flush, &flush_data, NULL);
+  gst_object_unref (runner);
+
+  /* Wait for the JS flush() Promise to resolve */
+  g_mutex_lock (&flush_data.lock);
+  while (!flush_data.done)
+    g_cond_wait (&flush_data.cond, &flush_data.lock);
+  g_mutex_unlock (&flush_data.lock);
+
+  g_mutex_clear (&flush_data.lock);
+  g_cond_clear (&flush_data.cond);
+
+  GST_VIDEO_DECODER_STREAM_LOCK (self);
+
+  GST_DEBUG_OBJECT (self, "Drain complete");
+  return GST_FLOW_OK;
+}
+
 static gboolean
 gst_web_codecs_video_decoder_flush (GstVideoDecoder *decoder)
 {
@@ -701,6 +788,8 @@ gst_web_codecs_video_decoder_class_init (
       GST_DEBUG_FUNCPTR (gst_web_codecs_video_decoder_start);
   video_decoder_class->stop =
       GST_DEBUG_FUNCPTR (gst_web_codecs_video_decoder_stop);
+  video_decoder_class->finish =
+      GST_DEBUG_FUNCPTR (gst_web_codecs_video_decoder_finish);
   video_decoder_class->flush =
       GST_DEBUG_FUNCPTR (gst_web_codecs_video_decoder_flush);
   video_decoder_class->set_format =

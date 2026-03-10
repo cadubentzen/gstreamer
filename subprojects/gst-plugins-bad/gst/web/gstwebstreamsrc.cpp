@@ -62,6 +62,7 @@ typedef struct _GstWebStreamSrc
   GCond qcond;
   GThread *fetch_thread;
   gboolean flushing;
+  gint32 queue_signal; /* 0 = full (wait), 1 = has space (proceed) */
   gint64 download_start;
   gint64 download_end;
   gint64 download_offset;
@@ -88,12 +89,18 @@ gst_web_stream_src_cleanup_unlocked (GstWebStreamSrc *self)
 {
   self->flushing = TRUE;
   g_cond_signal (&self->qcond);
+
+  /* Wake the JS read loop if it is waiting for queue space */
+  g_atomic_int_set (&self->queue_signal, 1);
+  EM_ASM ({ Atomics.notify (HEAP32, $0 >> 2, 1); }, &self->queue_signal);
+
   g_clear_pointer (&self->fetch_thread, g_thread_join);
   self->in_eos = FALSE;
   g_queue_clear_full (self->q, (GDestroyNotify) gst_buffer_unref);
   g_clear_pointer (&self->fetch_error, g_free);
   self->accumulated_data_size = 0;
   self->flushing = FALSE;
+  self->queue_signal = 1;
   self->download_start = -1;
   self->download_end = -1;
   self->download_offset = 0;
@@ -132,31 +139,13 @@ gst_web_stream_src_chunk (guintptr thiz, val chunk)
   enum
   {
     GST_WEB_STREAM_STOP = 0,
-    GST_WEB_STREAM_CONTINUE = 1
+    GST_WEB_STREAM_CONTINUE = 1,
+    GST_WEB_STREAM_WAIT = 2
   } ret = GST_WEB_STREAM_CONTINUE;
 
   GST_DEBUG_OBJECT (self, "Received chunk of size: %u", chunk_size);
 
   GST_OBJECT_LOCK (self);
-  while (self->accumulated_data_size + chunk_size > self->queue_max_size &&
-         !self->flushing) {
-    /* In case of que queue max size is less then the amount accumulated
-     * there's no way out: to prevent from this we will have to extend the
-     * queue max size. */
-    if (chunk_size > self->queue_max_size) {
-      GST_INFO_OBJECT (
-          self, "Will have to extend the queue max size to %u", chunk_size);
-      self->queue_max_size = chunk_size;
-      continue;
-    }
-
-    GST_DEBUG_OBJECT (self,
-        "Not enough space in the queue: (%u) --> (%u/%u) bytes."
-        " Sleeping..",
-        chunk_size, self->accumulated_data_size, self->queue_max_size);
-    g_cond_wait (&self->qcond, GST_OBJECT_GET_LOCK (self));
-  }
-
   if (self->flushing) {
     GST_DEBUG_OBJECT (self, "Element is flushing, stop fetching");
     ret = GST_WEB_STREAM_STOP;
@@ -173,6 +162,14 @@ gst_web_stream_src_chunk (guintptr thiz, val chunk)
   GST_DEBUG_OBJECT (self,
       "Pushed buffer of size %u to the queue. Now it's of (%u/%u) bytes",
       chunk_size, self->accumulated_data_size, self->queue_max_size);
+
+  /* Apply backpressure: tell the JS read loop to pause if the queue
+   * is full.  The JS side will Atomics.waitAsync on queue_signal
+   * until the consumer notifies space available. */
+  if (self->accumulated_data_size >= self->queue_max_size) {
+    g_atomic_int_set (&self->queue_signal, 0);
+    ret = GST_WEB_STREAM_WAIT;
+  }
 
 done:
   g_cond_signal (&self->qcond);
@@ -217,8 +214,9 @@ EMSCRIPTEN_BINDINGS (gst_web_stream_src)
 }
 
 // clang-format off
-EM_JS(void, gst_web_stream_fetch, (guintptr thiz, const char* url, const char *range), {
+EM_JS(void, gst_web_stream_fetch, (guintptr thiz, const char* url, const char *range, guintptr signal_addr), {
       const fetchUrl = UTF8ToString (url);
+      const signalIdx = signal_addr >> 2;
       const options = range ?
       {
           headers: {
@@ -235,8 +233,8 @@ EM_JS(void, gst_web_stream_fetch, (guintptr thiz, const char* url, const char *r
 
              return new ReadableStream({
                  async start(controller) {
-                     let keep_reading = true;
-                     while (keep_reading) {
+                     let result = 1;
+                     while (result) {
                          const { done, value } = await reader.read();
 
                          if (done) {
@@ -244,7 +242,16 @@ EM_JS(void, gst_web_stream_fetch, (guintptr thiz, const char* url, const char *r
                              break;
                          }
 
-                         keep_reading = Module.gst_web_stream_src_chunk(thiz, value);
+                         result = Module.gst_web_stream_src_chunk(thiz, value);
+
+                         /* If queue is full (WAIT=2), wait for the consumer
+                          * to notify space available via Atomics. */
+                         if (result === 2) {
+                             var w = Atomics.waitAsync(HEAP32, signalIdx, 0);
+                             if (w.async)
+                                 await w.value;
+                             result = 1;
+                         }
                      }
                      reader.releaseLock();
 		 }
@@ -355,7 +362,7 @@ gst_web_stream_fetch_thread (gpointer data)
   }
 
   gst_web_stream_fetch (
-      (guintptr) self, self->uri, range);
+      (guintptr) self, self->uri, range, (guintptr) &self->queue_signal);
   g_free (range);
   return NULL;
 }
@@ -413,9 +420,15 @@ gst_web_stream_src_create (GstPushSrc *psrc, GstBuffer **outbuf)
 
   self->accumulated_data_size -= gst_buffer_get_size (*outbuf);
 
+  /* Wake the JS read loop if it was paused due to a full queue */
+  if (self->accumulated_data_size < self->queue_max_size &&
+      g_atomic_int_get (&self->queue_signal) == 0) {
+    g_atomic_int_set (&self->queue_signal, 1);
+    EM_ASM ({ Atomics.notify (HEAP32, $0 >> 2, 1); }, &self->queue_signal);
+  }
+
   GST_DEBUG_OBJECT (self, "Buffer of size %" G_GSIZE_FORMAT " ready",
       gst_buffer_get_size (*outbuf));
-  g_cond_signal (&self->qcond);
   GST_OBJECT_UNLOCK (self);
 
   return GST_FLOW_OK;

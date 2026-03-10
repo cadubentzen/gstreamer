@@ -26,6 +26,11 @@
 
 #include <string.h>
 #include <gst/gst.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#include <emscripten/threading.h>
+#include <emscripten/eventloop.h>
+#endif
 
 #include "gstwebrunner.h"
 
@@ -110,17 +115,38 @@ _run_message_async (GstWebRunnerAsyncMessage *message)
 static void
 gst_web_runner_quit (GstWebRunner *self)
 {
-  g_main_loop_quit (self->priv->loop);
+  self->priv->alive = FALSE;
+}
+
+static void
+_run_thread_iteration (void *arg)
+{
+  GstWebRunner *self = (GstWebRunner *) arg;
+
+  if (!self->priv->alive) {
+    GST_INFO_OBJECT (self, "loop exited");
+
+    g_mutex_lock (&self->priv->create_lock);
+    self->priv->created = FALSE;
+
+    g_cond_signal (&self->priv->destroy_cond);
+    g_mutex_unlock (&self->priv->create_lock);
+    return;
+  }
+
+  /* Process all pending GLib sources without blocking */
+  while (g_main_context_iteration (self->priv->main_context, FALSE))
+    ;
+
+  /* Schedule next iteration via setTimeout */
+  emscripten_set_timeout (_run_thread_iteration, 1, self);
 }
 
 static gpointer
 gst_web_runner_run_thread (GstWebRunner *self)
 {
-  GstWebRunnerClass *klass;
-
   GST_DEBUG_OBJECT (self, "Creating thread");
 
-  klass = GST_WEB_RUNNER_GET_CLASS (self);
   g_mutex_lock (&self->priv->create_lock);
 
   self->priv->alive = TRUE;
@@ -130,24 +156,29 @@ gst_web_runner_run_thread (GstWebRunner *self)
   gst_web_runner_send_message_async (
       self, (GstWebRunnerCB) _unlock_create_thread, self, NULL);
 
-  g_main_loop_run (self->priv->loop);
+  /* Start the callback-based iteration chain via setTimeout */
+  emscripten_set_timeout (_run_thread_iteration, 0, self);
 
-  GST_INFO_OBJECT (self, "loop exited");
-
-  g_mutex_lock (&self->priv->create_lock);
-  self->priv->alive = FALSE;
-  self->priv->created = FALSE;
-
-  g_cond_signal (&self->priv->destroy_cond);
-  g_mutex_unlock (&self->priv->create_lock);
-
-  return NULL;
+  /* Unwind the C stack but keep this pthread and worker alive.
+   * The worker continues processing rAF callbacks, which drive
+   * the GMainContext iteration loop. */
+  emscripten_unwind_to_js_event_loop ();
 }
 
 static void
 gst_web_runner_default_send_message (
     GstWebRunner *self, GstWebRunnerCB callback, gpointer data)
 {
+  /* If we're already on the runner's thread (e.g., a JS callback fired during
+   * emscripten_sleep), call directly to avoid deadlock.  Otherwise we would
+   * queue work to the GMainContext and block in g_cond_wait below, but the
+   * context iteration loop is suspended in emscripten_sleep on this same
+   * thread and cannot process the queued message — deadlock. */
+  if (self->priv->thread && g_thread_self () == self->priv->thread) {
+    callback (data);
+    return;
+  }
+
   GstWebRunnerSyncMessage message;
 
   message.self = self;

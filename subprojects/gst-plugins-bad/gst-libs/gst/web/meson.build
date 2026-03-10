@@ -27,10 +27,10 @@ pkg_name = 'gstreamer-web-' + api_version
 gstweb = library('gstweb-' + api_version,
   gstweb_sources,
   c_args : gst_plugins_web_args,
-  cpp_args: gst_plugins_web_args,
+  cpp_args: gst_plugins_web_cpp_args,
   link_args: link_args,
   include_directories : [configinc, libinc],
-  dependencies : [common_deps],
+  dependencies : [common_deps, gstvideo_dep, gstgl_dep],
   version : libversion,
   install : true,
 )
@@ -49,6 +49,6 @@ install_headers(gstweb_headers, subdir : 'gstreamer-1.0/gst/web')
 
 gstweb_dep = declare_dependency(link_with : gstweb,
   include_directories : [libinc],
-  dependencies : [common_deps],
+  dependencies : [common_deps, gstvideo_dep, gstgl_dep],
   link_args : [link_args]
 )

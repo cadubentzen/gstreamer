@@ -27,7 +27,7 @@ gstweb_lib = static_library('gstweb',
   dependencies: gstweb_lib_deps,
   include_directories: [configinc],
   c_args: gst_plugins_web_args,
-  cpp_args: gst_plugins_web_args,
+  cpp_args: gst_plugins_web_cpp_args,
   link_args: gstweb_link_args
 )
 

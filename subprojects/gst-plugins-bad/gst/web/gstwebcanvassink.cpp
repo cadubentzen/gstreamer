@@ -49,6 +49,7 @@
 #include <emscripten.h>
 #include <emscripten/bind.h>
 #include <emscripten/threading.h>
+#include <pthread.h>
 #include <gst/web/gstwebvideoframe.h>
 #include <gst/web/gstwebcanvas.h>
 #include <gst/web/gstwebutils.h>
@@ -85,6 +86,9 @@ typedef struct _GstWebCanvasSink
   gchar *id;
   val val_context;
   val val_canvas;
+  gint canvas_width;
+  gint canvas_height;
+  GstWebRunnerCB draw_cb;
 } GstWebCanvasSink;
 
 typedef struct _GstWebCanvasSinkClass
@@ -169,9 +173,43 @@ gst_web_canvas_sink_draw_video_frame (gpointer data)
       GST_TIME_ARGS (GST_BUFFER_TIMESTAMP (draw_data->buffer)));
   vf = (GstWebVideoFrame *) gst_buffer_get_memory (draw_data->buffer, 0);
   video_frame = gst_web_video_frame_get_handle (vf);
-  self->val_context.call<void> ("drawImage", video_frame, 0, 0,
-      video_frame["displayWidth"], video_frame["displayHeight"], 0, 0,
-      self->val_canvas["width"], self->val_canvas["height"]);
+
+  {
+    gboolean is_closed = video_frame["closed"].as<bool> ();
+
+    if (!is_closed) {
+      int bw = self->buffer_width;
+      int bh = self->buffer_height;
+
+      /* Send the frame as an ImageBitmap to the main thread via
+       * BroadcastChannel.  The main thread draws it in a
+       * requestAnimationFrame loop, ensuring vsync-aligned
+       * presentation.  VideoFrame cannot be structured-cloned
+       * across BroadcastChannel, so we rasterize to a scratch
+       * OffscreenCanvas and transfer the resulting ImageBitmap. */
+      EM_ASM ({
+        var bw = $0;
+        var bh = $1;
+
+        if (!Module._bc)
+          Module._bc = new BroadcastChannel ('gst-draw');
+
+        if (!Module._scratch) {
+          Module._scratch = new OffscreenCanvas (bw, bh);
+          Module._scratchCtx = Module._scratch.getContext ('2d');
+        }
+        if (Module._scratch.width != bw || Module._scratch.height != bh) {
+          Module._scratch.width = bw;
+          Module._scratch.height = bh;
+        }
+
+        var frame = Emval.toValue ($2);
+        Module._scratchCtx.drawImage (frame, 0, 0, bw, bh);
+        var bmp = Module._scratch.transferToImageBitmap ();
+        Module._bc.postMessage ({bmp : bmp, w : bw, h : bh});
+      }, bw, bh, video_frame.as_handle ());
+    }
+  }
   gst_memory_unref (GST_MEMORY_CAST (vf));
 }
 
@@ -212,41 +250,87 @@ gst_web_canvas_sink_setup (gpointer data)
   GstWebCanvasSinkSetupData *setup_data = (GstWebCanvasSinkSetupData *) data;
   GstWebCanvasSink *self = setup_data->self;
 
-  /* FIXME how to handle the case of multiple canvases? (RDI-2858) */
-  self->val_canvas = val::module_property ("canvas");
-  self->val_context =
-      self->val_canvas.call<val> ("getContext", std::string ("2d"));
+  /* Strip the leading '#' from the element id for getElementById */
+  const gchar *dom_id = self->id;
+  if (dom_id && dom_id[0] == '#')
+    dom_id++;
+
+  /* Get DOM canvas dimensions and install the vsync-aligned
+   * presentation loop on the main thread.  The BroadcastChannel
+   * receiver draws the latest ImageBitmap in a rAF callback. */
+  int cw = MAIN_THREAD_EM_ASM_INT ({
+    var id = UTF8ToString ($0);
+    var c = document.getElementById (id);
+    if (!c)
+      return 640;
+
+    /* The original canvas is transferred to a Worker as an
+     * OffscreenCanvas, so the main thread cannot draw on it.
+     * Create a sibling display canvas and set up the
+     * BroadcastChannel receiver + rAF presentation loop. */
+    if (!window._gstPresenter) {
+      var d = document.createElement ('canvas');
+      d.width = c.width;
+      d.height = c.height;
+      d.style.cssText = c.style.cssText;
+      d.className = c.className;
+      c.style.display = 'none';
+      c.parentNode.insertBefore (d, c.nextSibling);
+
+      var ctx = d.getContext ('2d');
+      var latest = null;
+      var bc = new BroadcastChannel ('gst-draw');
+      bc.onmessage = function (e) {
+        if (!e.data)
+          return;
+        if (latest)
+          latest.close ();
+        latest = e.data.bmp;
+        if (e.data.w && d.width != e.data.w) {
+          d.width = e.data.w;
+          d.height = e.data.h;
+        }
+      };
+      function present () {
+        if (latest)
+          ctx.drawImage (latest, 0, 0, d.width, d.height);
+        requestAnimationFrame (present);
+      }
+      requestAnimationFrame (present);
+      window._gstPresenter = d;
+    }
+    return c.width;
+  }, dom_id);
+
+  int ch = MAIN_THREAD_EM_ASM_INT ({
+    var id = UTF8ToString ($0);
+    var c = document.getElementById (id);
+    return c ? c.height : 480;
+  }, dom_id);
+
+  self->canvas_width = cw;
+  self->canvas_height = ch;
 }
 
 static GstFlowReturn
 gst_web_canvas_sink_show_frame (GstVideoSink *sink, GstBuffer *buf)
 {
   GstWebCanvasSink *self = GST_WEB_CANVAS_SINK (sink);
-  GstWebCanvasSinkDrawData data;
   GstWebRunner *runner;
-  GstWebRunnerCB cb;
-  GstCapsFeatures *features;
-  GstCaps *caps;
+  GstWebCanvasSinkDrawData data;
 
   GST_DEBUG_OBJECT (self, "show frame, pts = %" GST_TIME_FORMAT,
       GST_TIME_ARGS (GST_BUFFER_PTS (buf)));
 
-  /* Check the format */
-  caps = gst_pad_get_current_caps (GST_BASE_SINK (sink)->sinkpad);
-  features = gst_caps_get_features (caps, 0);
-  /* TODO cache this on set_info */
-  if (features && gst_caps_features_contains (
-                      features, GST_CAPS_FEATURE_MEMORY_WEB_VIDEO_FRAME)) {
-    cb = gst_web_canvas_sink_draw_video_frame;
-  } else {
-    cb = gst_web_canvas_sink_draw_raw;
+  if (G_UNLIKELY (!self->draw_cb)) {
+    GST_ERROR_OBJECT (self, "No draw callback set, caps not negotiated yet");
+    return GST_FLOW_NOT_NEGOTIATED;
   }
-  gst_caps_unref (caps);
 
-  runner = gst_web_canvas_get_runner (self->canvas);
   data.self = self;
   data.buffer = buf;
-  gst_web_runner_send_message (runner, cb, &data);
+  runner = gst_web_canvas_get_runner (self->canvas);
+  gst_web_runner_send_message (runner, self->draw_cb, &data);
   gst_object_unref (GST_OBJECT (runner));
 
   GST_DEBUG_OBJECT (self, "show frame done, pts = %" GST_TIME_FORMAT,
@@ -259,9 +343,20 @@ gst_web_canvas_sink_set_info (
     GstVideoSink *sink, GstCaps *caps, const GstVideoInfo *info)
 {
   GstWebCanvasSink *self = GST_WEB_CANVAS_SINK (sink);
+  GstCapsFeatures *features;
 
   self->buffer_width = info->width;
   self->buffer_height = info->height;
+
+  /* Cache the draw callback based on caps features */
+  features = gst_caps_get_features (caps, 0);
+  if (features && gst_caps_features_contains (
+                      features, GST_CAPS_FEATURE_MEMORY_WEB_VIDEO_FRAME)) {
+    self->draw_cb = gst_web_canvas_sink_draw_video_frame;
+  } else {
+    self->draw_cb = gst_web_canvas_sink_draw_raw;
+  }
+
   return TRUE;
 }
 

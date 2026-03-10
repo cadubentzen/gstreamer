@@ -38,6 +38,7 @@ struct _GESUriSource
   GWeakRef toplevel_pipeline;
 
   GList *parent_ges_uri_sources;
+  GMutex lock;
   gboolean controls_nested_timeline;
   gboolean disable_seek_in_ready;
 

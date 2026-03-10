@@ -267,8 +267,10 @@ ges_uri_source_translate_composition_seek_cb (GstElement * nlesource,
    * starting from timeline position 0 and translating through all parent
    * NLE objects, which gives the full media range. */
   if (self->controls_nested_timeline) {
+    g_mutex_lock (&self->lock);
     gst_clear_event (&self->pending_seek_in_ready);
     self->pending_seek_in_ready = gst_event_copy (adjusted ? adjusted : seek);
+    g_mutex_unlock (&self->lock);
   }
 
   gst_object_unref (parent_clip);
@@ -349,6 +351,19 @@ ges_uri_source_query_seek (GESUriSource * self, GstEvent * seek)
   return translated_seek;
 }
 
+static gpointer
+ref_parent_source (gconstpointer src, gpointer user_data G_GNUC_UNUSED)
+{
+  gst_object_ref (((GESUriSource *) src)->element);
+  return (gpointer) src;
+}
+
+static void
+unref_parent_source (GESUriSource * parent)
+{
+  gst_object_unref (parent->element);
+}
+
 static GstEvent *
 uridecodepoolsrc_get_initial_seek_cb (GstElement * uridecodepoolsrc,
     GESUriSource * self)
@@ -360,8 +375,12 @@ uridecodepoolsrc_get_initial_seek_cb (GstElement * uridecodepoolsrc,
    * correct position for this source.  Use it directly instead of starting
    * from toplevel position 0 (which gives the wrong result for sources that
    * don't start at position 0 in their composition). */
-  if (self->pending_seek_in_ready) {
-    GstEvent *seek = g_steal_pointer (&self->pending_seek_in_ready);
+  g_mutex_lock (&self->lock);
+  GstEvent *pending_seek = g_steal_pointer (&self->pending_seek_in_ready);
+  g_mutex_unlock (&self->lock);
+
+  if (pending_seek) {
+    GstEvent *seek = pending_seek;
 
     gdouble rate;
     gint64 start, stop;
@@ -400,7 +419,12 @@ uridecodepoolsrc_get_initial_seek_cb (GstElement * uridecodepoolsrc,
       "Using timeline rate %f for initial seek for timeline %" GST_PTR_FORMAT,
       rate, timeline);
 
-  GList *toplevel_src_node = g_list_last (self->parent_ges_uri_sources);
+  g_mutex_lock (&self->lock);
+  GList *parent_sources_copy =
+      g_list_copy_deep (self->parent_ges_uri_sources, ref_parent_source, NULL);
+  g_mutex_unlock (&self->lock);
+
+  GList *toplevel_src_node = g_list_last (parent_sources_copy);
   GESTimeline *toplevel_timeline = toplevel_src_node ?
       GES_TIMELINE_ELEMENT_TIMELINE (((GESUriSource *)
           toplevel_src_node->data)->element) : NULL;
@@ -423,11 +447,15 @@ uridecodepoolsrc_get_initial_seek_cb (GstElement * uridecodepoolsrc,
   for (GList * tmp = toplevel_src_node; tmp; tmp = tmp->prev) {
     seek = ges_uri_source_query_seek (tmp->data, seek);
     if (!seek) {
+      g_list_free_full (parent_sources_copy,
+          (GDestroyNotify) unref_parent_source);
       return NULL;
     }
     GST_DEBUG_OBJECT (uridecodepoolsrc, "Parent: %s",
         GES_TIMELINE_ELEMENT_NAME (((GESUriSource *) tmp->data)->element));
   }
+  g_list_free_full (parent_sources_copy,
+      (GDestroyNotify) unref_parent_source);
 
   seek = ges_uri_source_query_seek (self, seek);
 
@@ -455,9 +483,7 @@ uridecodepoolsrc_setup_parent_sources (GstElement * uridecodepoolsrc,
       g_object_get_data (G_OBJECT (uridecodepoolsrc), "__gesurisource_data__");
   g_assert (child_ges_source);
 
-  for (GList * tmp = child_ges_source->parent_ges_uri_sources; tmp;
-      tmp = tmp->next) {
-  }
+  g_mutex_lock (&child_ges_source->lock);
 
   if (!g_list_find (child_ges_source->parent_ges_uri_sources, self)) {
     child_ges_source->parent_ges_uri_sources =
@@ -471,9 +497,7 @@ uridecodepoolsrc_setup_parent_sources (GstElement * uridecodepoolsrc,
     }
   }
 
-  for (GList * tmp = child_ges_source->parent_ges_uri_sources; tmp;
-      tmp = tmp->next) {
-  }
+  g_mutex_unlock (&child_ges_source->lock);
 }
 
 static gboolean
@@ -566,6 +590,7 @@ ges_uri_source_update_toplevel_pipeline (GESUriSource * self)
   GstElement *parent;
   GstElement *prev_pipeline;
 
+  g_mutex_lock (&self->lock);
   if (self->parent_ges_uri_sources) {
     GList *toplevel_src_node = g_list_last (self->parent_ges_uri_sources);
     GESUriSource *toplevel_src = (GESUriSource *) toplevel_src_node->data;
@@ -574,6 +599,7 @@ ges_uri_source_update_toplevel_pipeline (GESUriSource * self)
   } else {
     timeline = GES_TIMELINE_ELEMENT_TIMELINE (self->element);
   }
+  g_mutex_unlock (&self->lock);
 
   if (!timeline) {
     ges_uri_source_disconnect_bus_sync (self);
@@ -669,6 +695,17 @@ uridecodepoolsrc_pipeline_notify_cb (GstElement * decodebin,
     g_signal_handlers_disconnect_by_func (prev_pipeline,
         uridecodepoolsrc_pipeline_notify_cb, self);
   }
+
+  /* The pool pipeline changed — the old parent chain stored in
+   * parent_ges_uri_sources is no longer valid (the previous parent
+   * GESUriSource may have been disposed).  Clear it now; it will be
+   * repopulated when deep-element-added discovers the inner GES
+   * timeline in the new pipeline. */
+  g_mutex_lock (&self->lock);
+  g_list_free (self->parent_ges_uri_sources);
+  self->parent_ges_uri_sources = NULL;
+  gst_clear_event (&self->pending_seek_in_ready);
+  g_mutex_unlock (&self->lock);
 
   if (pipeline) {
     g_signal_connect_data (pipeline, "deep-element-added",
@@ -902,6 +939,7 @@ ges_uri_source_init (GESTrackElement * element, GESUriSource * self)
 
   self->element = element;
   g_weak_ref_init (&self->toplevel_pipeline, NULL);
+  g_mutex_init (&self->lock);
   g_signal_connect (element, "notify::track",
       G_CALLBACK (ges_uri_source_track_set_cb), self);
 }
@@ -950,7 +988,12 @@ ges_uri_source_dispose (GESUriSource * self)
   ges_uri_source_disconnect_bus_sync (self);
   g_weak_ref_set (&self->toplevel_pipeline, NULL);
   gst_clear_object (&self->uridecodepool_pipeline);
+  g_mutex_lock (&self->lock);
   gst_clear_event (&self->pending_seek_in_ready);
+  g_list_free (self->parent_ges_uri_sources);
+  self->parent_ges_uri_sources = NULL;
+  g_mutex_unlock (&self->lock);
+  g_mutex_clear (&self->lock);
 }
 
 

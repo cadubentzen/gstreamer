@@ -1,7 +1,8 @@
-# Meson cross file for Emscripten WASM32
-# Usage: meson setup builddir --cross-file cross-files/wasm32-emscripten.txt
+# Meson cross file for Emscripten WASM32 - Rust plugins build
+# Usage: meson setup builddir-wasm-rs --cross-file cross-files/wasm32-emscripten.txt
 #
-# Requires the emsdk environment to be activated (emcc in PATH).
+# Requires the emsdk environment to be activated (emcc in PATH)
+# and a Rust toolchain with wasm32-unknown-emscripten target.
 
 [host_machine]
 system = 'emscripten'
@@ -12,8 +13,8 @@ endian = 'little'
 [built-in options]
 c_args = ['-msimd128', '-DWASM_SIMD_COMPAT_SLOW', '-DWASM_BIGINT', '-O2', '-pthread', '-fexceptions', '-mnontrapping-fptoint', '-fPIC', '-fwasm-fix-function-bitcasts']
 cpp_args = ['-msimd128', '-DWASM_SIMD_COMPAT_SLOW', '-DWASM_BIGINT', '-O2', '-pthread', '-fexceptions', '-mnontrapping-fptoint', '-fPIC', '-fwasm-fix-function-bitcasts']
-c_link_args = ['-sOFFSCREEN_FRAMEBUFFER', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sFULL_ES3', '-sPTHREAD_POOL_SIZE=32', '-sPROXY_TO_PTHREAD', '-sALLOW_MEMORY_GROWTH=1', '-sEXIT_RUNTIME=1', '-sASYNCIFY', '-O2', '-pthread', '-fexceptions']
-cpp_link_args = ['-sOFFSCREEN_FRAMEBUFFER', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sFULL_ES3', '-sPTHREAD_POOL_SIZE=32', '-sPROXY_TO_PTHREAD', '-sALLOW_MEMORY_GROWTH=1', '-sEXIT_RUNTIME=1', '-sASYNCIFY', '-O2', '-pthread', '-fexceptions']
+c_link_args = ['-sOFFSCREEN_FRAMEBUFFER', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sFULL_ES3', '-sPTHREAD_POOL_SIZE=32', '-sPROXY_TO_PTHREAD', '-sALLOW_MEMORY_GROWTH=1', '-sEXIT_RUNTIME=1', '--profiling-funcs', '-O2', '-pthread', '-fexceptions', '-fwasm-fix-function-bitcasts']
+cpp_link_args = ['-sOFFSCREEN_FRAMEBUFFER', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sFULL_ES3', '-sPTHREAD_POOL_SIZE=32', '-sPROXY_TO_PTHREAD', '-sALLOW_MEMORY_GROWTH=1', '-sEXIT_RUNTIME=1', '--profiling-funcs', '-O2', '-pthread', '-fexceptions', '-fwasm-fix-function-bitcasts']
 c_thread_count = 0
 cpp_thread_count = 0
 default_library = 'static'
@@ -26,8 +27,14 @@ ar = 'emar'
 nm = 'llvm-nm'
 ranlib = 'emranlib'
 strip = 'emstrip'
-pkg-config = 'false'
 cmake = 'false'
+rust = ['rustc', '--target', 'wasm32-unknown-emscripten']
+
+[properties]
+# Empty pkg_config_libdir prevents pkg-config from finding system packages.
+# Meson-built subproject packages are still found via PKG_CONFIG_PATH
+# (which meson sets internally to include meson-uninstalled/).
+pkg_config_libdir = []
 
 [project options]
 gst-full = 'enabled'
@@ -41,7 +48,7 @@ libav = 'disabled'
 devtools = 'disabled'
 ges = 'enabled'
 rtsp_server = 'disabled'
-rs = 'disabled'
+rs = 'enabled'
 gst-examples = 'disabled'
 python = 'disabled'
 sharp = 'disabled'
@@ -63,6 +70,7 @@ tools = 'enabled'
 tests = 'disabled'
 examples = 'disabled'
 check = 'enabled'
+coretracers = 'enabled'
 
 [gst-plugins-base:project options]
 gl = 'enabled'
@@ -80,6 +88,7 @@ encoding = 'enabled'
 playback = 'enabled'
 typefind = 'enabled'
 videoconvertscale = 'enabled'
+videorate = 'enabled'
 vorbis = 'enabled'
 volume = 'enabled'
 theora = 'disabled'
@@ -99,6 +108,7 @@ nls = 'disabled'
 [gst-plugins-good:project options]
 nls = 'disabled'
 isomp4 = 'enabled'
+autodetect = 'enabled'
 adaptivedemux2 = 'disabled'
 avi = 'disabled'
 cairo = 'disabled'
@@ -121,6 +131,7 @@ pulse = 'disabled'
 qt5 = 'disabled'
 qt6 = 'disabled'
 v4l2 = 'disabled'
+videofilter = 'enabled'
 ximagesrc = 'disabled'
 
 [gst-plugins-bad:project options]
@@ -188,6 +199,11 @@ examples = 'disabled'
 doc = 'disabled'
 introspection = 'disabled'
 
+[gst-plugins-rs:project options]
+auto_plugin_features = 'disabled'
+tracers = 'enabled'
+isobmff = 'enabled'
+
 [glib:project options]
 libmount = 'disabled'
 tests = 'false'
@@ -198,4 +214,3 @@ dtrace = 'false'
 
 [libxml2:project options]
 output = 'enabled'
-

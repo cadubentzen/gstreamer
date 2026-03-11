@@ -454,8 +454,7 @@ uridecodepoolsrc_get_initial_seek_cb (GstElement * uridecodepoolsrc,
     GST_DEBUG_OBJECT (uridecodepoolsrc, "Parent: %s",
         GES_TIMELINE_ELEMENT_NAME (((GESUriSource *) tmp->data)->element));
   }
-  g_list_free_full (parent_sources_copy,
-      (GDestroyNotify) unref_parent_source);
+  g_list_free_full (parent_sources_copy, (GDestroyNotify) unref_parent_source);
 
   seek = ges_uri_source_query_seek (self, seek);
 
@@ -694,6 +693,8 @@ uridecodepoolsrc_pipeline_notify_cb (GstElement * decodebin,
   if (prev_pipeline) {
     g_signal_handlers_disconnect_by_func (prev_pipeline,
         uridecodepoolsrc_pipeline_notify_cb, self);
+    g_signal_handlers_disconnect_by_func (prev_pipeline,
+        uridecodepoolsrc_deep_element_added_cb, self);
   }
 
   /* The pool pipeline changed — the old parent chain stored in
@@ -987,6 +988,10 @@ ges_uri_source_dispose (GESUriSource * self)
 {
   ges_uri_source_disconnect_bus_sync (self);
   g_weak_ref_set (&self->toplevel_pipeline, NULL);
+  if (self->uridecodepool_pipeline) {
+    g_signal_handlers_disconnect_by_func (self->uridecodepool_pipeline,
+        uridecodepoolsrc_deep_element_added_cb, self);
+  }
   gst_clear_object (&self->uridecodepool_pipeline);
   g_mutex_lock (&self->lock);
   gst_clear_event (&self->pending_seek_in_ready);

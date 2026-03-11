@@ -22,10 +22,4 @@ fn main() {
         println!("cargo:rustc-link-arg={flag}");
     }
 
-    // Dots WASM FFI bridge JS library
-    if let Ok(src_root) = std::env::var("GST_SRC_ROOT") {
-        println!(
-            "cargo:rustc-link-arg=--js-library={src_root}/subprojects/gstreamer/plugins/tracers/gstdots-wasm-lib.js"
-        );
-    }
 }

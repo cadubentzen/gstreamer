@@ -35,6 +35,8 @@ gstsdp_dep = dependency('gstreamer-sdp-1.0', version : gst_req,
 gstrtp_dep = dependency('gstreamer-rtp-1.0', version : gst_req,
     fallback : ['gst-plugins-base', 'rtp_dep'])
 
+subdir('wasm')
+
 if static_build
   subdir_done()
 endif

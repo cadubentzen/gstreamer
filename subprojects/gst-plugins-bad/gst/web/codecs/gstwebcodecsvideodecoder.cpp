@@ -586,15 +586,57 @@ gst_web_codecs_video_decoder_finish (GstVideoDecoder *decoder)
   return GST_FLOW_OK;
 }
 
+static void
+gst_web_codecs_video_decoder_do_reset (gpointer data)
+{
+  GstWebCodecsVideoDecoderConfigureData *conf_data =
+      (GstWebCodecsVideoDecoderConfigureData *) data;
+  GstWebCodecsVideoDecoder *self = conf_data->self;
+
+  GST_DEBUG_OBJECT (self, "Calling WebCodecs reset()");
+  self->decoder.call<void> ("reset");
+
+  GST_DEBUG_OBJECT (self, "Reconfiguring after reset");
+  gst_web_codecs_video_decoder_configure (data);
+}
+
 static gboolean
 gst_web_codecs_video_decoder_flush (GstVideoDecoder *decoder)
 {
   GstWebCodecsVideoDecoder *self = GST_WEB_CODECS_VIDEO_DECODER (decoder);
+  GstWebCodecsVideoDecoderConfigureData conf_data;
+  GstWebRunner *runner;
 
   GST_DEBUG_OBJECT (self, "Flushing");
-  /* TODO Call flush */
-  GST_DEBUG_OBJECT (self, "Flushed");
 
+  if (!self->input_state) {
+    GST_DEBUG_OBJECT (self, "No input state, nothing to flush");
+    return TRUE;
+  }
+
+  conf_data.self = self;
+  conf_data.state = self->input_state;
+
+  /* Release stream lock before synchronous dispatch to the runner thread.
+   * The on_output callback runs on the runner thread and takes the stream
+   * lock — keeping it held here would deadlock. */
+  GST_VIDEO_DECODER_STREAM_UNLOCK (self);
+
+  runner = gst_web_canvas_get_runner (self->canvas);
+  gst_web_runner_send_message (
+      runner, gst_web_codecs_video_decoder_do_reset, &conf_data);
+  gst_object_unref (runner);
+
+  /* reset() clears the decode queue without firing on_dequeue callbacks,
+   * so we must reset the counter ourselves to unblock handle_frame. */
+  g_mutex_lock (&self->dequeue_lock);
+  self->dequeue_size = 0;
+  g_cond_signal (&self->dequeue_cond);
+  g_mutex_unlock (&self->dequeue_lock);
+
+  GST_VIDEO_DECODER_STREAM_LOCK (self);
+
+  GST_DEBUG_OBJECT (self, "Flushed");
   return TRUE;
 }
 

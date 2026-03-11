@@ -648,12 +648,52 @@ gst_web_codecs_audio_decoder_set_format (
 }
 
 static void
+gst_web_codecs_audio_decoder_do_reset (gpointer data)
+{
+  GstWebCodecsAudioDecoderConfigureData *conf_data =
+      (GstWebCodecsAudioDecoderConfigureData *) data;
+  GstWebCodecsAudioDecoder *self = conf_data->self;
+
+  GST_DEBUG_OBJECT (self, "Calling WebCodecs reset()");
+  self->decoder.call<void> ("reset");
+
+  GST_DEBUG_OBJECT (self, "Reconfiguring after reset");
+  gst_web_codecs_audio_decoder_configure (data);
+}
+
+static void
 gst_web_codecs_audio_decoder_flush (GstAudioDecoder *decoder, gboolean hard)
 {
   GstWebCodecsAudioDecoder *self = GST_WEB_CODECS_AUDIO_DECODER (decoder);
+  GstWebCodecsAudioDecoderConfigureData conf_data;
 
   GST_DEBUG_OBJECT (self, "Flushing");
-  // TODO: Implement.
+
+  if (!self->input_caps) {
+    GST_DEBUG_OBJECT (self, "No input caps, nothing to flush");
+    return;
+  }
+
+  conf_data.self = self;
+  conf_data.caps = self->input_caps;
+
+  /* Release stream lock before synchronous dispatch to the runner thread.
+   * The on_output callback runs on the runner thread and takes the stream
+   * lock — keeping it held here would deadlock. */
+  GST_AUDIO_DECODER_STREAM_UNLOCK (self);
+
+  gst_web_runner_send_message (
+      self->runner, gst_web_codecs_audio_decoder_do_reset, &conf_data);
+
+  /* reset() clears the decode queue without firing on_dequeue callbacks,
+   * so we must reset the counter ourselves to unblock handle_frame. */
+  g_mutex_lock (&self->dequeue_lock);
+  self->dequeue_size = 0;
+  g_cond_signal (&self->dequeue_cond);
+  g_mutex_unlock (&self->dequeue_lock);
+
+  GST_AUDIO_DECODER_STREAM_LOCK (self);
+
   GST_DEBUG_OBJECT (self, "Flushed");
 }
 

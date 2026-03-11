@@ -66,6 +66,7 @@ typedef struct _GstWebStreamSrc
   gint64 download_start;
   gint64 download_end;
   gint64 download_offset;
+  gint64 content_length;
 } GstWebStreamSrc;
 
 G_DECLARE_FINAL_TYPE (
@@ -82,6 +83,22 @@ static gboolean
 gst_web_stream_src_is_seekable (GstBaseSrc *bsrc)
 {
   return TRUE;
+}
+
+static gboolean
+gst_web_stream_src_get_size (GstBaseSrc *bsrc, guint64 *size)
+{
+  GstWebStreamSrc *self = GST_WEB_STREAM_SRC (bsrc);
+  gboolean ret = FALSE;
+
+  GST_OBJECT_LOCK (self);
+  if (self->content_length > 0) {
+    *size = self->content_length;
+    ret = TRUE;
+  }
+  GST_OBJECT_UNLOCK (self);
+
+  return ret;
 }
 
 static void
@@ -101,6 +118,7 @@ gst_web_stream_src_cleanup_unlocked (GstWebStreamSrc *self)
   self->accumulated_data_size = 0;
   self->flushing = FALSE;
   self->queue_signal = 1;
+  self->content_length = -1;
   self->download_start = -1;
   self->download_end = -1;
   self->download_offset = 0;
@@ -206,6 +224,23 @@ gst_web_stream_src_error (guintptr thiz, val vmsg)
   GST_OBJECT_UNLOCK (self);
 }
 
+static void
+gst_web_stream_src_set_content_length (GstWebStreamSrc *self, gint64 length)
+{
+  GST_INFO_OBJECT (self, "Content-Length: %" G_GINT64_FORMAT, length);
+  GST_OBJECT_LOCK (self);
+  self->content_length = length;
+  GST_OBJECT_UNLOCK (self);
+
+  GstBaseSrc *basesrc = GST_BASE_SRC (self);
+  GST_OBJECT_LOCK (basesrc);
+  basesrc->segment.duration = length;
+  GST_OBJECT_UNLOCK (basesrc);
+
+  gst_element_post_message (GST_ELEMENT (self),
+      gst_message_new_duration_changed (GST_OBJECT (self)));
+}
+
 EMSCRIPTEN_BINDINGS (gst_web_stream_src)
 {
   function ("gst_web_stream_src_error", &gst_web_stream_src_error);
@@ -214,6 +249,14 @@ EMSCRIPTEN_BINDINGS (gst_web_stream_src)
 }
 
 // clang-format off
+EM_JS(double, gst_web_stream_src_head_content_length, (const char* url), {
+      var xhr = new XMLHttpRequest();
+      xhr.open('HEAD', UTF8ToString(url), false);
+      xhr.send();
+      var cl = xhr.getResponseHeader('Content-Length');
+      return cl ? parseInt(cl, 10) : -1;
+});
+
 EM_JS(void, gst_web_stream_fetch, (guintptr thiz, const char* url, const char *range, guintptr signal_addr), {
       const fetchUrl = UTF8ToString (url);
       const signalIdx = signal_addr >> 2;
@@ -334,6 +377,7 @@ gst_web_stream_src_init (GstWebStreamSrc *self)
   self->q = g_queue_new ();
   self->queue_max_size = 1024 * 1024;
 
+  gst_base_src_set_dynamic_size (GST_BASE_SRC (self), TRUE);
   gst_web_stream_src_cleanup_unlocked (self);
 }
 
@@ -359,6 +403,14 @@ gst_web_stream_fetch_thread (gpointer data)
      range = g_strdup_printf ("bytes=%" G_GINT64_FORMAT "-", s);
   } else {
      range = NULL;
+  }
+
+  /* Get file size via a HEAD request before starting the streaming
+   * fetch.  This runs on a worker thread so synchronous XHR is fine. */
+  if (s <= 0) {
+    double cl = gst_web_stream_src_head_content_length (self->uri);
+    if (cl > 0)
+      gst_web_stream_src_set_content_length (self, (gint64) cl);
   }
 
   gst_web_stream_fetch (
@@ -525,6 +577,7 @@ gst_web_stream_src_class_init (GstWebStreamSrcClass *klass)
   pushsrc_class->create = gst_web_stream_src_create;
 
   basesrc_class->is_seekable = gst_web_stream_src_is_seekable;
+  basesrc_class->get_size = gst_web_stream_src_get_size;
   basesrc_class->do_seek = gst_web_stream_src_do_seek;
 
   gst_element_class_add_pad_template (

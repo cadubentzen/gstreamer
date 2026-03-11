@@ -340,9 +340,9 @@ GstWebVideoFrame *
 gst_web_video_frame_wrap (val &video_frame, GstWebRunner *runner)
 {
   GstWebVideoFrameAllocationParams params;
-  GstWebVideoFrameAllocationSizeData allocation_size_data;
   GstAllocatorClass *allocator_class;
   GstMemory *mem;
+  gsize allocation_size;
 
   /* Create the AllocatorParams */
   /* TODO Create an gst_web_video_frame_allocation_parameters_init()
@@ -352,18 +352,17 @@ gst_web_video_frame_wrap (val &video_frame, GstWebRunner *runner)
   params.video_frame = video_frame;
   params.runner = runner;
 
-  /* We need to get the allocationSize from the video_frame to know the buffer
-   * size */
-  allocation_size_data.video_frame = video_frame;
-  gst_web_runner_send_message (
-      runner, gst_web_video_frame_allocation_size, &allocation_size_data);
+  /* Get the allocationSize directly on the current thread where the
+   * video_frame val is valid.  Dispatching through the runner would access
+   * the val copy on a different thread, triggering an assertion. */
+  allocation_size = video_frame.call<int> ("allocationSize");
 
   /* FIXME this should be gst_allocator_alloc, but the params are not
    * subclassable (RDI-2854) */
   /* Allocate with this params and return the VideoFrame */
   allocator_class = GST_ALLOCATOR_GET_CLASS (gst_web_video_frame_allocator);
   mem = allocator_class->alloc (gst_web_video_frame_allocator,
-      allocation_size_data.ret, (GstAllocationParams *) &params);
+      allocation_size, (GstAllocationParams *) &params);
 
   return GST_WEB_VIDEO_FRAME_CAST (mem);
 }

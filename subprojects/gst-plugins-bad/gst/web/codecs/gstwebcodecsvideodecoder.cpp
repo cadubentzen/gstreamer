@@ -162,8 +162,6 @@ gst_web_codecs_video_decoder_on_output (guintptr self_, val video_frame)
   GstFlowReturn flow;
   val vf_timestamp;
 
-  GST_INFO_OBJECT (self, "VideoFrame Received");
-
   GST_VIDEO_DECODER_STREAM_LOCK (self);
   frame = gst_video_decoder_get_oldest_frame (GST_VIDEO_DECODER (self));
   if (!frame) {

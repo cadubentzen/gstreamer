@@ -76,6 +76,11 @@ struct _GstWebCodecsAudioDecoder
   gint dequeue_size;
   GMutex dequeue_lock;
   GCond dequeue_cond;
+
+  /* Decoded output queue to avoid asyncify re-entrancy: on_output copies
+   * data and queues; a drain loop pushes downstream one at a time. */
+  GQueue output_buffers;
+  gboolean draining_output;
 };
 
 struct _GstWebCodecsAudioDecoderClass

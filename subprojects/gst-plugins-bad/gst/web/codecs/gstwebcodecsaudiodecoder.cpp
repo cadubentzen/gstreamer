@@ -206,7 +206,7 @@ gst_web_codecs_audio_decoder_get_format (
 
   GST_DEBUG_OBJECT (self, "Output caps: %" GST_PTR_FORMAT, self->output_caps);
 
-  return gst_audio_decoder_negotiate (GST_AUDIO_DECODER (self));
+  return TRUE;
 }
 
 static void
@@ -261,11 +261,7 @@ gst_web_codecs_audio_decoder_on_output (guintptr self_, val audio_data)
   GstWebCodecsAudioDecoder *self = (GstWebCodecsAudioDecoder *) self_;
   GstAudioDecoder *dec = GST_AUDIO_DECODER (self);
   GstBuffer *buffer = nullptr;
-  GstFlowReturn flow;
 
-  GST_INFO_OBJECT (self, "AudioFrame received");
-
-  // Estimate buffer size
   guint total_size = 0;
   int channels = audio_data["numberOfChannels"].as<int> ();
   int frames = audio_data["numberOfFrames"].as<int> ();
@@ -278,48 +274,81 @@ gst_web_codecs_audio_decoder_on_output (guintptr self_, val audio_data)
     GST_ERROR_OBJECT (self,
         "AudioData has invalid shape: channels=%d, frames=%d", channels,
         frames);
+    audio_data.call<void> ("close");
     return;
   }
 
-  // Lock the audio stream
-  GST_AUDIO_DECODER_STREAM_LOCK (self);
-
-  /* Configure the output */
+  /* Configure the output format from the first decoded frame */
   if (!self->output_caps) {
     self->need_negotiation = TRUE;
     if (!gst_web_codecs_audio_decoder_get_format (self, audio_data)) {
-      GST_ERROR_OBJECT (self, "Failed to negotiate format");
-      goto done;
+      GST_ERROR_OBJECT (self, "Failed to get format");
+      audio_data.call<void> ("close");
+      return;
     }
   }
 
   total_size = get_total_allocation_size (audio_data, channels, planar);
-  GST_DEBUG_OBJECT (self, "Total size is %d", total_size);
   if (total_size == 0) {
     GST_ERROR_OBJECT (self, "Total size is 0");
-    goto done;
+    audio_data.call<void> ("close");
+    return;
   }
 
-  buffer = gst_audio_decoder_allocate_output_buffer (dec, total_size);
-  gst_buffer_add_audio_meta (
-      buffer, &self->output_info, (total_size / self->output_info.bpf), NULL);
+  /* Allocate a plain buffer and copy audio data — no stream lock needed,
+   * no downstream push, so no risk of asyncify yield here */
+  buffer = gst_buffer_new_allocate (NULL, total_size, NULL);
   if (!buffer) {
     GST_ERROR_OBJECT (self, "Failed to allocate output buffer");
-    goto done;
+    audio_data.call<void> ("close");
+    return;
   }
+  gst_buffer_add_audio_meta (
+      buffer, &self->output_info, (total_size / self->output_info.bpf), NULL);
 
   gst_web_codecs_audio_decoder_audio_data_to_buffer (
       self, audio_data, buffer, total_size);
+  audio_data.call<void> ("close");
 
-  flow = gst_audio_decoder_finish_frame (dec, buffer, 1);
-  if (flow != GST_FLOW_OK) {
-    GST_WARNING_OBJECT (
-        self, "Failed to finish frame: %s", gst_flow_get_name (flow));
-    gst_buffer_unref (buffer);
+  /* Queue the buffer */
+  g_queue_push_tail (&self->output_buffers, buffer);
+
+  /* If we are already inside the drain loop below (re-entered via asyncify
+   * yield during finish_frame → OpenAL proxy), just return — the loop
+   * will pick up the newly queued buffer on its next iteration. */
+  if (self->draining_output)
+    return;
+
+  /* Drain all queued buffers, pushing each one downstream.  finish_frame
+   * may asyncify-yield (OpenAL proxy to main thread), during which time
+   * new on_output calls may queue more buffers, but they will NOT
+   * re-enter this drain section thanks to the draining_output guard. */
+  self->draining_output = TRUE;
+  while (!g_queue_is_empty (&self->output_buffers)) {
+    GstFlowReturn flow;
+    GstBuffer *queued =
+        (GstBuffer *) g_queue_pop_head (&self->output_buffers);
+
+    GST_AUDIO_DECODER_STREAM_LOCK (self);
+
+    if (self->need_negotiation) {
+      if (!gst_audio_decoder_negotiate (dec)) {
+        GST_ERROR_OBJECT (self, "Failed to negotiate");
+        gst_buffer_unref (queued);
+        GST_AUDIO_DECODER_STREAM_UNLOCK (self);
+        continue;
+      }
+    }
+
+    flow = gst_audio_decoder_finish_frame (dec, queued, 1);
+    if (flow != GST_FLOW_OK) {
+      GST_WARNING_OBJECT (
+          self, "Failed to finish frame: %s", gst_flow_get_name (flow));
+    }
+
+    GST_AUDIO_DECODER_STREAM_UNLOCK (self);
   }
-
-done:
-  GST_AUDIO_DECODER_STREAM_UNLOCK (self);
+  self->draining_output = FALSE;
 }
 
 static void
@@ -674,6 +703,8 @@ gst_web_codecs_audio_decoder_finalize (GObject *object)
 
   g_mutex_clear (&self->dequeue_lock);
   g_cond_clear (&self->dequeue_cond);
+  g_queue_foreach (&self->output_buffers, (GFunc) gst_buffer_unref, NULL);
+  g_queue_clear (&self->output_buffers);
 
   GST_DEBUG_OBJECT (self, "End of finalize");
   G_OBJECT_CLASS (parent_class)->finalize (object);
@@ -685,6 +716,8 @@ gst_web_codecs_audio_decoder_init (
 {
   g_mutex_init (&self->dequeue_lock);
   g_cond_init (&self->dequeue_cond);
+  g_queue_init (&self->output_buffers);
+  self->draining_output = FALSE;
 }
 
 static void

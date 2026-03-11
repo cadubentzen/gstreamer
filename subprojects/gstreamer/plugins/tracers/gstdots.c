@@ -41,6 +41,11 @@
 #include <gst/gst.h>
 #include <gst/gsttracer.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+static GstTracer *g_pipeline_snapshot_tracer = NULL;
+#endif
+
 #define GST_TYPE_DOTS_TRACER (gst_dots_tracer_get_type())
 G_DECLARE_FINAL_TYPE (GstDotsTracer, gst_dots_tracer, GST, DOTS_TRACER,
     GstTracer)
@@ -199,6 +204,11 @@ Please ensure GStreamer is properly installed.");
     return FALSE;
   }
 
+#ifdef __EMSCRIPTEN__
+  self->pipeline_snapshot_tracer =
+      g_object_new (gst_tracer_factory_get_tracer_type (factory), NULL);
+  g_pipeline_snapshot_tracer = self->pipeline_snapshot_tracer;
+#else
   GType tracer_type = gst_tracer_factory_get_tracer_type (factory);
   GObjectClass *tracer_class = g_type_class_ref (tracer_type);
 
@@ -208,8 +218,9 @@ Please ensure GStreamer is properly installed.");
   else
     self->pipeline_snapshot_tracer =
         g_object_new (gst_tracer_factory_get_tracer_type (factory), NULL);
-  gst_object_unref (factory);
   g_type_class_unref (tracer_class);
+#endif
+  gst_object_unref (factory);
 
   if (!self->pipeline_snapshot_tracer) {
     GST_WARNING ("Could not create pipeline-snapshot tracer instance");
@@ -248,13 +259,27 @@ setup_output_directory (GstDotsTracer * self)
   }
 }
 
+#ifdef __EMSCRIPTEN__
+EMSCRIPTEN_KEEPALIVE void
+gst_dots_snapshot (void)
+{
+  if (g_pipeline_snapshot_tracer) {
+    g_signal_emit_by_name (g_pipeline_snapshot_tracer, "snapshot");
+  } else {
+    GST_WARNING ("pipeline-snapshot tracer not available");
+  }
+}
+#endif
+
 static void
 gst_dots_tracer_init (GstDotsTracer * self)
 {
   self->no_delete = FALSE;
   self->pipeline_snapshot_tracer = NULL;
 
+#ifndef __EMSCRIPTEN__
   setup_output_directory (self);
+#endif
 
   // Try to create pipeline-snapshot tracer with exact same configuration as
   // gstdump.rs

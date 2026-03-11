@@ -67,6 +67,7 @@ typedef struct _GstWebStreamSrc
   gint64 download_end;
   gint64 download_offset;
   gint64 content_length;
+  guint32 fetch_generation;
 } GstWebStreamSrc;
 
 G_DECLARE_FINAL_TYPE (
@@ -101,9 +102,17 @@ gst_web_stream_src_get_size (GstBaseSrc *bsrc, guint64 *size)
   return ret;
 }
 
+/* Forward declaration — defined as EM_JS below */
+static void gst_web_stream_src_cancel_fetch (guintptr thiz);
+
 static void
 gst_web_stream_src_cleanup_unlocked (GstWebStreamSrc *self)
 {
+  /* Invalidate the running JS fetch so its callbacks become no-ops
+   * and abort the underlying network request */
+  self->fetch_generation++;
+  gst_web_stream_src_cancel_fetch ((guintptr) self);
+
   self->flushing = TRUE;
   g_cond_signal (&self->qcond);
 
@@ -138,7 +147,14 @@ gst_web_stream_src_do_seek (GstBaseSrc *bsrc, GstSegment *segment)
   }
 
   GST_OBJECT_LOCK (self);
-  gst_web_stream_src_cleanup_unlocked (self);
+  {
+    /* Preserve the content length across seeks — the file size does not
+     * change and the new fetch with a non-zero offset skips the HEAD
+     * request, so we would lose the size permanently otherwise. */
+    gint64 saved_content_length = self->content_length;
+    gst_web_stream_src_cleanup_unlocked (self);
+    self->content_length = saved_content_length;
+  }
   self->download_offset = self->download_start = segment->start;
   self->download_end =
       GST_CLOCK_TIME_IS_VALID (segment->stop) ? segment->stop : -1;
@@ -148,7 +164,7 @@ gst_web_stream_src_do_seek (GstBaseSrc *bsrc, GstSegment *segment)
 }
 
 static int
-gst_web_stream_src_chunk (guintptr thiz, val chunk)
+gst_web_stream_src_chunk (guintptr thiz, guint32 gen, val chunk)
 {
   GstWebStreamSrc *self = (GstWebStreamSrc *) thiz;
   GstBuffer *buffer = gst_web_utils_js_array_to_buffer (chunk);
@@ -161,11 +177,14 @@ gst_web_stream_src_chunk (guintptr thiz, val chunk)
     GST_WEB_STREAM_WAIT = 2
   } ret = GST_WEB_STREAM_CONTINUE;
 
-  GST_DEBUG_OBJECT (self, "Received chunk of size: %u", chunk_size);
+  GST_DEBUG_OBJECT (self, "Received chunk of size: %u (gen %u)", chunk_size,
+      gen);
 
   GST_OBJECT_LOCK (self);
-  if (self->flushing) {
-    GST_DEBUG_OBJECT (self, "Element is flushing, stop fetching");
+  if (self->flushing || gen != self->fetch_generation) {
+    GST_DEBUG_OBJECT (self,
+        "Element is flushing or stale fetch (gen %u vs %u), stop fetching",
+        gen, self->fetch_generation);
     ret = GST_WEB_STREAM_STOP;
     goto done;
   }
@@ -197,27 +216,40 @@ done:
 }
 
 static void
-gst_web_stream_src_eos (guintptr thiz)
+gst_web_stream_src_eos (guintptr thiz, guint32 gen)
 {
   GstWebStreamSrc *self = (GstWebStreamSrc *) thiz;
 
-  GST_DEBUG_OBJECT (self, "EOS");
+  GST_DEBUG_OBJECT (self, "EOS (gen %u)", gen);
   GST_OBJECT_LOCK (self);
+  if (gen != self->fetch_generation) {
+    GST_DEBUG_OBJECT (self, "Stale fetch EOS (gen %u vs %u), ignoring", gen,
+        self->fetch_generation);
+    GST_OBJECT_UNLOCK (self);
+    return;
+  }
   self->in_eos = TRUE;
   g_cond_signal (&self->qcond);
   GST_OBJECT_UNLOCK (self);
 }
 
 static void
-gst_web_stream_src_error (guintptr thiz, val vmsg)
+gst_web_stream_src_error (guintptr thiz, guint32 gen, val vmsg)
 {
   GstWebStreamSrc *self = (GstWebStreamSrc *) thiz;
   std::string stds = vmsg.as<std::string> ();
   const char *msg = stds.c_str ();
 
-  GST_ERROR_OBJECT (self, "Download failed: %s", msg);
   GST_OBJECT_LOCK (self);
+  if (gen != self->fetch_generation) {
+    GST_DEBUG_OBJECT (self,
+        "Stale fetch error (gen %u vs %u), ignoring: %s", gen,
+        self->fetch_generation, msg);
+    GST_OBJECT_UNLOCK (self);
+    return;
+  }
 
+  GST_ERROR_OBJECT (self, "Download failed: %s", msg);
   g_free (self->fetch_error);
   self->fetch_error = g_strdup (msg);
   g_cond_signal (&self->qcond);
@@ -249,6 +281,15 @@ EMSCRIPTEN_BINDINGS (gst_web_stream_src)
 }
 
 // clang-format off
+EM_JS(void, gst_web_stream_src_cancel_fetch, (guintptr thiz), {
+    if (Module._fetchControllers && Module._fetchControllers[thiz]) {
+        Module._fetchControllers[thiz].abort();
+        delete Module._fetchControllers[thiz];
+    }
+});
+// clang-format on
+
+// clang-format off
 EM_JS(double, gst_web_stream_src_head_content_length, (const char* url), {
       var xhr = new XMLHttpRequest();
       xhr.open('HEAD', UTF8ToString(url), false);
@@ -257,16 +298,24 @@ EM_JS(double, gst_web_stream_src_head_content_length, (const char* url), {
       return cl ? parseInt(cl, 10) : -1;
 });
 
-EM_JS(void, gst_web_stream_fetch, (guintptr thiz, const char* url, const char *range, guintptr signal_addr), {
+EM_JS(void, gst_web_stream_fetch, (guintptr thiz, const char* url, const char *range, guintptr signal_addr, guint32 generation), {
       const fetchUrl = UTF8ToString (url);
       const signalIdx = signal_addr >> 2;
+      const gen = generation;
+
+      /* Set up an AbortController so we can cancel this fetch */
+      if (!Module._fetchControllers) Module._fetchControllers = {};
+      if (Module._fetchControllers[thiz])
+          Module._fetchControllers[thiz].abort();
+      const abortCtrl = new AbortController();
+      Module._fetchControllers[thiz] = abortCtrl;
+
       const options = range ?
       {
-          headers: {
-              'Range': UTF8ToString (range)
-          }
+          headers: { 'Range': UTF8ToString (range) },
+          signal: abortCtrl.signal
       }
-      : {};
+      : { signal: abortCtrl.signal };
 
       // Fetch data using the Streams API
       fetch(fetchUrl, options)
@@ -281,11 +330,11 @@ EM_JS(void, gst_web_stream_fetch, (guintptr thiz, const char* url, const char *r
                          const { done, value } = await reader.read();
 
                          if (done) {
-                             Module.gst_web_stream_src_eos (thiz);
+                             Module.gst_web_stream_src_eos (thiz, gen);
                              break;
                          }
 
-                         result = Module.gst_web_stream_src_chunk(thiz, value);
+                         result = Module.gst_web_stream_src_chunk(thiz, gen, value);
 
                          /* If queue is full (WAIT=2), wait for the consumer
                           * to notify space available via Atomics. */
@@ -301,7 +350,8 @@ EM_JS(void, gst_web_stream_fetch, (guintptr thiz, const char* url, const char *r
              })
         })
         .catch(fetchError => {
-            Module.gst_web_stream_src_error (thiz, fetchError.toString());
+            if (fetchError.name === 'AbortError') return;
+            Module.gst_web_stream_src_error (thiz, gen, fetchError.toString());
         });
    });
 // clang-format on
@@ -413,8 +463,8 @@ gst_web_stream_fetch_thread (gpointer data)
       gst_web_stream_src_set_content_length (self, (gint64) cl);
   }
 
-  gst_web_stream_fetch (
-      (guintptr) self, self->uri, range, (guintptr) &self->queue_signal);
+  gst_web_stream_fetch ((guintptr) self, self->uri, range,
+      (guintptr) &self->queue_signal, self->fetch_generation);
   g_free (range);
   return NULL;
 }
@@ -558,6 +608,33 @@ gst_web_stream_src_finalize (GObject *obj)
   G_OBJECT_CLASS (gst_web_stream_src_parent_class)->finalize (obj);
 }
 
+static gboolean
+gst_web_stream_src_unlock (GstBaseSrc *bsrc)
+{
+  GstWebStreamSrc *self = GST_WEB_STREAM_SRC (bsrc);
+
+  GST_DEBUG_OBJECT (self, "Unlock");
+  GST_OBJECT_LOCK (self);
+  self->flushing = TRUE;
+  g_cond_signal (&self->qcond);
+  GST_OBJECT_UNLOCK (self);
+
+  return TRUE;
+}
+
+static gboolean
+gst_web_stream_src_unlock_stop (GstBaseSrc *bsrc)
+{
+  GstWebStreamSrc *self = GST_WEB_STREAM_SRC (bsrc);
+
+  GST_DEBUG_OBJECT (self, "Unlock stop");
+  GST_OBJECT_LOCK (self);
+  self->flushing = FALSE;
+  GST_OBJECT_UNLOCK (self);
+
+  return TRUE;
+}
+
 static void
 gst_web_stream_src_class_init (GstWebStreamSrcClass *klass)
 {
@@ -579,6 +656,8 @@ gst_web_stream_src_class_init (GstWebStreamSrcClass *klass)
   basesrc_class->is_seekable = gst_web_stream_src_is_seekable;
   basesrc_class->get_size = gst_web_stream_src_get_size;
   basesrc_class->do_seek = gst_web_stream_src_do_seek;
+  basesrc_class->unlock = gst_web_stream_src_unlock;
+  basesrc_class->unlock_stop = gst_web_stream_src_unlock_stop;
 
   gst_element_class_add_pad_template (
       element_class, gst_static_pad_template_get (&srcpadtemplate));

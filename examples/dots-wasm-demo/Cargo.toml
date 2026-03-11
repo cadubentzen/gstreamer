@@ -1,0 +1,57 @@
+[package]
+name = "gst-dots-wasm-demo"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+
+[workspace]
+
+[dependencies]
+gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs", branch = "main", version = "0.26.0-alpha" }
+
+[build-dependencies]
+system-deps = "7"
+
+[package.metadata.system-deps.gstreamer_1_0]
+name = "gstreamer-1.0"
+version = "0"
+
+[package.metadata.system-deps.gstreamer_base_1_0]
+name = "gstreamer-base-1.0"
+version = "0"
+
+[package.metadata.system-deps.gstreamer_video_1_0]
+name = "gstreamer-video-1.0"
+version = "0"
+
+[package.metadata.system-deps.gstreamer_gl_1_0]
+name = "gstreamer-gl-1.0"
+version = "0"
+
+[package.metadata.system-deps.gstcoreelements]
+name = "gstcoreelements"
+version = "0"
+
+[package.metadata.system-deps.gstcoretracers]
+name = "gstcoretracers"
+version = "0"
+
+[package.metadata.system-deps.gstvideotestsrc]
+name = "gstvideotestsrc"
+version = "0"
+
+[package.metadata.system-deps.gstvideoconvertscale]
+name = "gstvideoconvertscale"
+version = "0"
+
+[package.metadata.system-deps.gstopengl]
+name = "gstopengl"
+version = "0"
+
+[package.metadata.system-deps.gstautodetect]
+name = "gstautodetect"
+version = "0"
+
+[package.metadata.system-deps.gstrstracers]
+name = "gstrstracers"
+version = "0"

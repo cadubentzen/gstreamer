@@ -5,7 +5,8 @@ const TerserPlugin = require('terser-webpack-plugin');
 module.exports = {
   mode: 'production',
   entry: {
-    bundle: './bundle-entry.js'
+    bundle: './bundle-entry.js',
+    'gst-dots-wasm-bundle': './wasm-bundle-entry.js'
   },
   output: {
     path: path.resolve(__dirname, 'static/dist'),

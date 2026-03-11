@@ -63,10 +63,10 @@
 
 #include "gstleaks.h"
 
-#ifdef G_OS_UNIX
+#if defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)
 #include <glib-unix.h>
 #include <pthread.h>
-#endif /* G_OS_UNIX */
+#endif /* G_OS_UNIX && !__EMSCRIPTEN__ */
 
 GST_DEBUG_CATEGORY_STATIC (gst_leaks_debug);
 #define GST_CAT_DEFAULT gst_leaks_debug
@@ -133,7 +133,7 @@ static GstStructure *gst_leaks_tracer_activity_get_checkpoint (GstLeaksTracer *
 static void gst_leaks_tracer_activity_log_checkpoint (GstLeaksTracer * self);
 static void gst_leaks_tracer_activity_stop_tracking (GstLeaksTracer * self);
 
-#ifdef G_OS_UNIX
+#if defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)
 static void gst_leaks_tracer_setup_signals (GstLeaksTracer * leaks);
 static void gst_leaks_tracer_cleanup_signals (GstLeaksTracer * leaks);
 #endif
@@ -480,11 +480,11 @@ gst_leaks_tracer_init (GstLeaksTracer * self)
       (GDestroyNotify) object_refing_infos_free);
 
   if (g_getenv ("GST_LEAKS_TRACER_SIG")) {
-#ifdef G_OS_UNIX
+#if defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)
     gst_leaks_tracer_setup_signals (self);
 #else
     g_warning ("System doesn't support POSIX signals");
-#endif /* G_OS_UNIX */
+#endif /* G_OS_UNIX && !__EMSCRIPTEN__ */
   }
 
   G_LOCK (instances);
@@ -756,7 +756,7 @@ gst_leaks_tracer_finalize (GObject * object)
   g_queue_remove (&instances, self);
   G_UNLOCK (instances);
 
-#ifdef G_OS_UNIX
+#if defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)
   gst_leaks_tracer_cleanup_signals (self);
 #endif
 
@@ -791,7 +791,7 @@ gst_leaks_tracer_finalize (GObject * object)
         "type", G_TYPE_GTYPE, G_TYPE_STRING, \
         NULL)
 
-#ifdef G_OS_UNIX
+#if defined(G_OS_UNIX) && !defined(__EMSCRIPTEN__)
 static gboolean
 sig_usr1_handler (gpointer data)
 {
@@ -962,7 +962,7 @@ gst_leaks_tracer_cleanup_signals (GstLeaksTracer * leaks)
 
 #else
 #define setup_signals() g_warning ("System doesn't support POSIX signals");
-#endif /* G_OS_UNIX */
+#endif /* G_OS_UNIX && !__EMSCRIPTEN__ */
 
 static GstStructure *
 gst_leaks_tracer_get_live_objects (GstLeaksTracer * self)

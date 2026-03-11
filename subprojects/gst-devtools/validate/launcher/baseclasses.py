@@ -1855,6 +1855,7 @@ class _TestsLauncher(Loggable):
         self.total_num_tests = 0
         self.current_progress = -1
         self.server = None
+        self.ws_server = None
         self.httpsrv = None
         self.vfb_server = None
 
@@ -2178,6 +2179,20 @@ class _TestsLauncher(Loggable):
 
         self.server.serve_forever(poll_interval=0.05)
 
+    def ws_server_wrapper(self, ready):
+        from launcher.wsserver import (GstValidateWebSocketServer,
+                                       GstValidateWebSocketHandler)
+        self.ws_server = GstValidateWebSocketServer(
+            ('localhost', 0), GstValidateWebSocketHandler)
+        self.ws_server.socket.settimeout(None)
+        self.ws_server.launcher = self
+        self.ws_serverport = self.ws_server.socket.getsockname()[1]
+        self.info("%s WebSocket server port: %s" %
+                  (self, self.ws_serverport))
+        ready.set()
+
+        self.ws_server.serve_forever(poll_interval=0.05)
+
     def _start_server(self):
         self.info("Starting TCP Server")
         ready = threading.Event()
@@ -2187,12 +2202,27 @@ class _TestsLauncher(Loggable):
         ready.wait()
         os.environ["GST_VALIDATE_SERVER"] = "tcp://localhost:%s" % self.serverport
 
+        self.info("Starting WebSocket Server")
+        ws_ready = threading.Event()
+        self.ws_server_thread = threading.Thread(
+            target=self.ws_server_wrapper, kwargs={'ready': ws_ready})
+        self.ws_server_thread.start()
+        ws_ready.wait()
+        os.environ["GST_VALIDATE_WS_SERVER"] = \
+            "ws://localhost:%s" % self.ws_serverport
+
     def _stop_server(self):
         if self.server:
             self.server.shutdown()
             self.server_thread.join()
             self.server.server_close()
             self.server = None
+
+        if getattr(self, 'ws_server', None):
+            self.ws_server.shutdown()
+            self.ws_server_thread.join()
+            self.ws_server.server_close()
+            self.ws_server = None
 
     def test_wait(self):
         while True:

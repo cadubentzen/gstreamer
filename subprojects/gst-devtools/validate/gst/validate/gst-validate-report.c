@@ -54,12 +54,28 @@ static GHashTable *_gst_validate_issues = NULL;
 static FILE **log_files = NULL;
 static gboolean output_is_tty = TRUE;
 
-/* Tcp server for communications with gst-validate-launcher */
+/* Server for communications with gst-validate-launcher */
+#ifdef __EMSCRIPTEN__
+#include <emscripten/websocket.h>
+static EMSCRIPTEN_WEBSOCKET_T server_ws = 0;
+static gboolean ws_connected = FALSE;
+#else
 GSocketClient *socket_client = NULL;
 GSocketConnection *server_connection = NULL;
 GOutputStream *server_ostream = NULL;
+#endif
 
 static GType _gst_validate_report_type = 0;
+
+static inline gboolean
+_server_is_connected (void)
+{
+#ifdef __EMSCRIPTEN__
+  return ws_connected;
+#else
+  return server_ostream != NULL;
+#endif
+}
 
 static JsonNode *
 gst_validate_report_serialize (GstValidateReport * report)
@@ -568,13 +584,33 @@ gst_validate_report_load_issues (void)
 gboolean
 gst_validate_send (JsonNode * root)
 {
-  gboolean res = FALSE;
   JsonGenerator *jgen;
   gsize message_length;
-  gchar *object, *message;
+  gchar *object;
+
+#ifdef __EMSCRIPTEN__
+  if (!ws_connected)
+    goto done;
+
+  jgen = json_generator_new ();
+  json_generator_set_root (jgen, root);
+  object = json_generator_to_data (jgen, &message_length);
+
+  /* WebSocket has built-in framing, no need for 4-byte length prefix */
+  EMSCRIPTEN_RESULT ws_res =
+      emscripten_websocket_send_utf8_text (server_ws, object);
+  if (ws_res != EMSCRIPTEN_RESULT_SUCCESS) {
+    GST_ERROR ("Failed to send WebSocket message: %d", ws_res);
+  }
+
+  g_free (object);
+  g_object_unref (jgen);
+#else
+  gboolean res = FALSE;
+  gchar *message;
   GError *error = NULL;
 
-  if (!server_ostream)
+  if (!_server_is_connected ())
     goto done;
 
   jgen = json_generator_new ();
@@ -610,6 +646,7 @@ gst_validate_send (JsonNode * root)
   g_object_unref (jgen);
   if (error)
     g_error_free (error);
+#endif
 
 done:
   json_node_free (root);
@@ -658,8 +695,40 @@ gst_validate_report_init (void)
     GST_INFO ("No GST_VALIDATE_UUID specified !");
   } else if (server_env) {
     GstUri *server_uri = gst_uri_from_string (server_env);
+    const gchar *scheme = server_uri ? gst_uri_get_scheme (server_uri) : NULL;
 
-    if (server_uri && !g_strcmp0 (gst_uri_get_scheme (server_uri), "tcp")) {
+#ifdef __EMSCRIPTEN__
+    if (server_uri && !g_strcmp0 (scheme, "ws")) {
+      EmscriptenWebSocketCreateAttributes ws_attrs = {
+        .url = server_env,
+        .protocols = NULL,
+        .createOnMainThread = EM_TRUE,
+      };
+
+      server_ws = emscripten_websocket_new (&ws_attrs);
+      if (server_ws > 0) {
+        JsonBuilder *jbuilder;
+
+        ws_connected = TRUE;
+
+        jbuilder = json_builder_new ();
+        json_builder_begin_object (jbuilder);
+        json_builder_set_member_name (jbuilder, "uuid");
+        json_builder_add_string_value (jbuilder, uuid);
+        json_builder_set_member_name (jbuilder, "started");
+        json_builder_add_boolean_value (jbuilder, TRUE);
+        json_builder_end_object (jbuilder);
+
+        gst_validate_send (json_builder_get_root (jbuilder));
+        g_object_unref (jbuilder);
+      } else {
+        GST_ERROR ("Failed to create WebSocket: %d", server_ws);
+      }
+
+      gst_uri_unref (server_uri);
+    }
+#else
+    if (server_uri && !g_strcmp0 (scheme, "tcp")) {
       JsonBuilder *jbuilder;
       GError *err = NULL;
       socket_client = g_socket_client_new ();
@@ -688,7 +757,9 @@ gst_validate_report_init (void)
       }
 
       gst_uri_unref (server_uri);
-    } else {
+    }
+#endif
+    else {
       GST_ERROR ("Server URI not valid: %s", server_env);
     }
   }
@@ -738,6 +809,14 @@ gst_validate_report_init (void)
 void
 gst_validate_report_deinit (void)
 {
+#ifdef __EMSCRIPTEN__
+  if (ws_connected) {
+    emscripten_websocket_close (server_ws, 1000, "shutdown");
+    emscripten_websocket_delete (server_ws);
+    server_ws = 0;
+    ws_connected = FALSE;
+  }
+#else
   if (server_ostream) {
     g_output_stream_close (server_ostream, NULL, NULL);
     server_ostream = NULL;
@@ -745,6 +824,7 @@ gst_validate_report_deinit (void)
 
   g_clear_object (&socket_client);
   g_clear_object (&server_connection);
+#endif
 }
 
 /**
@@ -1418,7 +1498,7 @@ gst_validate_print_position (GstClockTime position, GstClockTime duration,
       " speed: %f %s/>%c", GST_TIME_ARGS (position), GST_TIME_ARGS (duration),
       rate, extra_info ? extra_info : "", output_is_tty ? '\r' : '\n');
 
-  if (!server_ostream)
+  if (!_server_is_connected ())
     return;
 
   jbuilder = json_builder_new ();
@@ -1450,7 +1530,7 @@ gst_validate_skip_test (const gchar * format, ...)
   tmp = gst_info_strdup_vprintf (format, va_args);
   va_end (va_args);
 
-  if (!server_ostream) {
+  if (!_server_is_connected ()) {
     gchar *f = g_strconcat ("ok 1 # SKIP ", tmp, NULL);
 
     g_free (tmp);

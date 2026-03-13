@@ -1,0 +1,231 @@
+From d3008dc322a06b2018e375c6996a5bbdcbc1525f Mon Sep 17 00:00:00 2001
+From: Thibault Saunier <tsaunier@igalia.com>
+Date: Fri, 13 Mar 2026 12:21:39 +0000
+Subject: [PATCH] wasm: fix ffi_call with EMULATE_FUNCTION_POINTER_CASTS
+
+When emscripten's -sEMULATE_FUNCTION_POINTER_CASTS is active, the
+--fpcast-emu wasm-opt pass rewrites all indirect function table entries
+to use a canonical (i64, i64, ...) -> i64 ABI. This also sets DYNCALLS=1,
+which provides dynCall_<sig> wrappers that handle ABI translation.
+
+ffi_call_js was using getWasmTableEntry(fn).apply(null, args) to perform
+indirect calls through function pointers. With fpcast-emu active, the
+table entry returned by getWasmTableEntry() expects BigInt (i64) arguments,
+but ffi_call_js pushes plain JS Numbers for i32/pointer/float types,
+causing:
+
+    TypeError: Cannot convert <N> to a BigInt
+
+Fix this by detecting when dynCall is available (which indicates DYNCALLS
+mode) and routing indirect calls through it instead. dynCall uses the
+exported dynCall_<sig> trampolines that correctly handle the canonical
+ABI conversion. When dynCall is not available, the original direct table
+call path is preserved.
+
+The signature string needed by dynCall is built from the ffi_cif type
+information, following the same logic already used in
+ffi_prep_closure_loc_js.
+
+Also add $dynCall to EM_JS_DEPS so emscripten includes it in the output.
+
+A test case (emscripten_fpcast_emu.c) is included that exercises ffi_call
+with various argument types (int, pointer, double, void return) through
+function pointers, which triggers the fpcast-emu code path.
+---
+ src/wasm/ffi.c                                |  43 ++++++-
+ testsuite/libffi.call/emscripten_fpcast_emu.c | 109 ++++++++++++++++++
+ testsuite/meson.build                         |   1 +
+ 3 files changed, 151 insertions(+), 2 deletions(-)
+ create mode 100644 testsuite/libffi.call/emscripten_fpcast_emu.c
+
+diff --git a/src/wasm/ffi.c b/src/wasm/ffi.c
+index 486ffa7..aeec9d2 100644
+--- a/src/wasm/ffi.c
++++ b/src/wasm/ffi.c
+@@ -41,7 +41,7 @@
+ 
+ #define EM_JS_MACROS(ret, name, args, body...) EM_JS(ret, name, args, body)
+ 
+-EM_JS_DEPS(libffi, "$getWasmTableEntry,$setWasmTableEntry,$getEmptyTableSlot,$convertJsFunctionToWasm");
++EM_JS_DEPS(libffi, "$getWasmTableEntry,$setWasmTableEntry,$getEmptyTableSlot,$convertJsFunctionToWasm,$dynCall");
+ 
+ #define DEREF_U8(addr, offset) HEAPU8[addr + offset]
+ #define DEREF_S8(addr, offset) HEAP8[addr + offset]
+@@ -419,7 +419,46 @@ ffi_call_js, (ffi_cif *cif, ffi_fp fn, void *rvalue, void **avalue),
+   stackRestore(cur_stack_ptr);
+   stackAlloc(0); // stackAlloc enforces alignment invariants on the stack pointer
+   LOG_DEBUG("CALL_FUNC_PTR", "fn:", fn, "args:", args);
+-  var result = getWasmTableEntry(fn).apply(null, args);
++  // When EMULATE_FUNCTION_POINTER_CASTS is active, table entries use a
++  // canonical (i64, i64, ...) ABI. Calling getWasmTableEntry(fn) directly
++  // would pass JS Numbers where BigInts are expected, causing TypeError.
++  // Use dynCall which goes through exported dynCall_xxx wrappers that handle
++  // the ABI conversion correctly.
++  var result;
++  if (typeof dynCall !== 'undefined') {
++    // Build signature string for dynCall
++    var sig;
++    if (ret_by_arg) {
++      sig = 'v' + PTR_SIG;
++    } else {
++      switch (rtype_id) {
++      case FFI_TYPE_VOID: sig = 'v'; break;
++      case FFI_TYPE_FLOAT: sig = 'f'; break;
++      case FFI_TYPE_DOUBLE: sig = 'd'; break;
++      case FFI_TYPE_UINT64: case FFI_TYPE_SINT64: sig = 'j'; break;
++      case FFI_TYPE_POINTER: sig = PTR_SIG; break;
++      default: sig = 'i'; break;
++      }
++    }
++    for (var i = 0; i < nfixedargs; i++) {
++      var arg_unboxed = unbox_small_structs(DEREF_PTR(arg_types_ptr, i));
++      var arg_type_id = arg_unboxed[1];
++      switch (arg_type_id) {
++      case FFI_TYPE_FLOAT: sig += 'f'; break;
++      case FFI_TYPE_DOUBLE: sig += 'd'; break;
++      case FFI_TYPE_UINT64: case FFI_TYPE_SINT64: sig += 'j'; break;
++      case FFI_TYPE_LONGDOUBLE: sig += 'jj'; break;
++      case FFI_TYPE_STRUCT: case FFI_TYPE_POINTER: sig += PTR_SIG; break;
++      default: sig += 'i'; break;
++      }
++    }
++    if (flags & VARARGS_FLAG) {
++      sig += PTR_SIG;
++    }
++    result = dynCall(sig, fn, args);
++  } else {
++    result = getWasmTableEntry(fn).apply(null, args);
++  }
+   // Put the stack pointer back (we moved it if there were any struct args or we
+   // made a varargs call)
+   stackRestore(orig_stack_ptr);
+diff --git a/testsuite/libffi.call/emscripten_fpcast_emu.c b/testsuite/libffi.call/emscripten_fpcast_emu.c
+new file mode 100644
+index 0000000..7e8d836
+--- /dev/null
++++ b/testsuite/libffi.call/emscripten_fpcast_emu.c
+@@ -0,0 +1,109 @@
++/* Area:	ffi_call
++   Purpose:	Verify ffi_call works with -sEMULATE_FUNCTION_POINTER_CASTS.
++   Limitations:	Emscripten only.
++   PR:		none.
++   Originator:	Thibault Saunier <tsaunier@igalia.com>
++
++   When emscripten's EMULATE_FUNCTION_POINTER_CASTS is active, the
++   --fpcast-emu wasm-opt pass rewrites all indirect function table
++   entries to use a canonical (i64, i64, ...) -> i64 ABI.  Calling
++   getWasmTableEntry(fn) directly from JS then returns a wrapper that
++   expects BigInt arguments, but ffi_call_js was pushing plain JS
++   Numbers, producing:
++
++       TypeError: Cannot convert <N> to a BigInt
++
++   The fix routes indirect calls through dynCall() which uses the
++   exported dynCall_<sig> trampolines that handle the ABI translation.
++
++   This test calls a function pointer through ffi_call with various
++   argument types (int, pointer, double) to exercise the code path.  */
++
++/* { dg-do run } */
++#include "ffitest.h"
++
++/* A simple function that takes an int, a pointer, and a double,
++   and returns an int derived from all three arguments. */
++static int ABI_ATTR
++mixed_args(int a, void *b, double c)
++{
++  /* Use the pointer value and double to produce a deterministic result. */
++  return a + (int)(uintptr_t)b + (int)c;
++}
++
++/* A function that takes two ints, returns their sum.
++   Simplest possible indirect call through ffi. */
++static int ABI_ATTR
++add_ints(int a, int b)
++{
++  return a + b;
++}
++
++/* A void function that modifies a value through a pointer.
++   Tests void return with pointer arg. */
++static void ABI_ATTR
++set_through_ptr(int *out, int val)
++{
++  *out = val;
++}
++
++int main(void)
++{
++  ffi_cif cif;
++  ffi_type *args[MAX_ARGS];
++  void *values[MAX_ARGS];
++  int result;
++
++  /* Test 1: ffi_call with two int arguments */
++  {
++    int a = 17, b = 25;
++    args[0] = &ffi_type_sint;
++    args[1] = &ffi_type_sint;
++    values[0] = &a;
++    values[1] = &b;
++
++    CHECK(ffi_prep_cif(&cif, ABI_NUM, 2, &ffi_type_sint, args) == FFI_OK);
++    ffi_call(&cif, FFI_FN(add_ints), &result, values);
++    printf("add_ints(17, 25) = %d\n", result);
++    CHECK(result == 42);
++  }
++
++  /* Test 2: ffi_call with int, pointer, double (mixed types) */
++  {
++    int a = 10;
++    void *b = (void *)(uintptr_t)20;
++    double c = 12.0;
++
++    args[0] = &ffi_type_sint;
++    args[1] = &ffi_type_pointer;
++    args[2] = &ffi_type_double;
++    values[0] = &a;
++    values[1] = &b;
++    values[2] = &c;
++
++    CHECK(ffi_prep_cif(&cif, ABI_NUM, 3, &ffi_type_sint, args) == FFI_OK);
++    ffi_call(&cif, FFI_FN(mixed_args), &result, values);
++    printf("mixed_args(10, 20, 12.0) = %d\n", result);
++    CHECK(result == 42);
++  }
++
++  /* Test 3: ffi_call with void return, pointer and int args */
++  {
++    int out = 0;
++    int *out_ptr = &out;
++    int val = 99;
++
++    args[0] = &ffi_type_pointer;
++    args[1] = &ffi_type_sint;
++    values[0] = &out_ptr;
++    values[1] = &val;
++
++    CHECK(ffi_prep_cif(&cif, ABI_NUM, 2, &ffi_type_void, args) == FFI_OK);
++    ffi_call(&cif, FFI_FN(set_through_ptr), NULL, values);
++    printf("set_through_ptr: out = %d\n", out);
++    CHECK(out == 99);
++  }
++
++  printf("All fpcast-emu tests passed.\n");
++  exit(0);
++}
+diff --git a/testsuite/meson.build b/testsuite/meson.build
+index ea01bbc..45ee762 100644
+--- a/testsuite/meson.build
++++ b/testsuite/meson.build
+@@ -73,6 +73,7 @@ tests = {
+     'va_struct2.c',
+     'va_struct3.c',
+     'x32.c',
++    'emscripten_fpcast_emu.c',
+   ],
+   'closures': [
+     'closure_fn0.c',
+-- 
+2.49.0
+

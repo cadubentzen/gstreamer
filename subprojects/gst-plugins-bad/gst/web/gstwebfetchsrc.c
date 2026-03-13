@@ -411,6 +411,7 @@ gst_web_fetch_src_do_seek (GstBaseSrc *bsrc, GstSegment *segment)
   self->download_offset = segment->start;
   self->download_end =
       GST_CLOCK_TIME_IS_VALID (segment->stop) ? segment->stop : 0;
+  self->in_eos = FALSE;
   GST_OBJECT_UNLOCK (self);
 
   return TRUE;

@@ -107,14 +107,23 @@ gst_web_task_pool_push (GstTaskPool *pool, GstTaskPoolFunction func,
 static void
 gst_web_task_pool_join (GstTaskPool *pool, gpointer id)
 {
-  /* TODO what to do here? */
-  /* g_main_loop_quit () */
+  GstWebTaskPoolData *data = id;
+
+  GST_DEBUG_OBJECT (pool, "Joining task thread on id %p", id);
+  g_main_loop_quit (data->loop);
+  g_thread_join (data->thread);
+  data->thread = NULL;
 }
 
 static void
 gst_web_task_pool_dispose_handle (GstTaskPool *pool, gpointer id)
 {
   GstWebTaskPoolData *data = id;
+
+  if (data->loop)
+    g_main_loop_unref (data->loop);
+  if (data->ctx)
+    g_main_context_unref (data->ctx);
   g_cond_clear (&data->create_cond);
   g_mutex_clear (&data->create_lock);
   g_free (data);

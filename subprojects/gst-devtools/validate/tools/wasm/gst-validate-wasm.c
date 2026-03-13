@@ -246,14 +246,16 @@ exit:
   gst_validate_printf (NULL, "\n=======> Test %s (Return value: %i)\n\n",
       ret == 0 ? "PASSED" : "FAILED", ret);
 
-  /* Signal result to browser */
+  gst_validate_deinit ();
+  gst_deinit ();
+
+  /* Signal result to browser — must happen after deinit so all cleanup
+   * is done.  Use the synchronous variant so the worker thread stays
+   * alive until the main thread has processed the assignment. */
   /* clang-format off */
-  MAIN_THREAD_ASYNC_EM_ASM({
+  MAIN_THREAD_EM_ASM({
     window._gstValidateResult = $0;
   }, ret);
   /* clang-format on */
-
-  gst_validate_deinit ();
-  gst_deinit ();
   return ret;
 }

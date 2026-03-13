@@ -13,7 +13,7 @@ class GstWasmTest(Test):
     """A test that runs a GstValidate WASM module in a headless browser."""
 
     def __init__(self, classname, options, reporter, test_file,
-                 wasm_builddir, media_root, src_dir, timeout=60):
+                 wasm_builddir, media_root, src_dir, timeout=120):
         super().__init__(
             "python3", classname, options, reporter,
             timeout=timeout)

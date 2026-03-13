@@ -5,5 +5,9 @@ meta,
     }
 
 set-state, state=playing
-pause, playback-time=1.0, duration=2000000000
-stop, playback-time=4.0
+wait, duration=2.0
+set-state, state=paused
+wait, duration=1.0
+set-state, state=playing
+wait, duration=2.0
+stop

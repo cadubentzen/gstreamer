@@ -1,0 +1,14 @@
+meta,
+    handles-states=true,
+    args = {
+        "webstreamsrc location=\"$(GST_WASM_MEDIA_URL)/mp4/qr_h264.mp4\" ! qtdemux name=demux demux.video_0 ! video/x-h264 ! webcodecsviddech264sw ! webdownload ! videoconvert ! video/x-raw,format=I420 ! fakesink name=sink enable-last-sample=true sync=true",
+    }
+
+# Play for 2s, then pause and seek back to 0.
+# The last rendered frame should be from position 0 (TIMESTAMP=0).
+set-state, state=playing
+wait, duration=2.0
+set-state, state=paused
+seek, start=0.0, flags=flush+accurate
+check-last-frame-qrcode, sink-name=sink, expected-json-fields=[fields,TIMESTAMP=0]
+stop

@@ -1,0 +1,13 @@
+meta,
+    handles-states=true,
+    args = {
+        "webstreamsrc location=\"$(GST_WASM_MEDIA_URL)/mp4/qr_h264.mp4\" ! qtdemux name=demux demux.video_0 ! video/x-h264 ! webcodecsviddech264sw ! webdownload ! videoconvert ! video/x-raw,format=I420 ! fakesink name=sink enable-last-sample=true sync=true",
+    }
+
+# Play for 3s, then pause, seek back to 1s, verify QR frame.
+set-state, state=playing
+wait, duration=3.0
+set-state, state=paused
+seek, start=1.0, flags=flush+accurate
+check-last-frame-qrcode, sink-name=sink, expected-json-fields=[fields,TIMESTAMP=999999990]
+stop

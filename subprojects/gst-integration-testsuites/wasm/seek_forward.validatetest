@@ -1,9 +1,0 @@
-meta,
-    handles-states=true,
-    args = {
-        "webstreamsrc location=\"$(GST_WASM_MEDIA_URL)/mp4/raw_h264.0.mp4\" ! qtdemux name=demux demux.video_0 ! video/x-h264 ! webcodecsviddech264sw ! webcanvassink",
-    }
-
-set-state, state=playing
-seek, playback-time=2.0, start=5.0, flags=flush+key-unit
-stop, playback-time=8.0

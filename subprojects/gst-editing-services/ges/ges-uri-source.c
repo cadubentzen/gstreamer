@@ -426,8 +426,20 @@ uridecodepoolsrc_get_initial_seek_cb (GstElement * uridecodepoolsrc,
 
   GList *toplevel_src_node = g_list_last (parent_sources_copy);
   GESTimeline *toplevel_timeline = toplevel_src_node ?
-      GES_TIMELINE_ELEMENT_TIMELINE (((GESUriSource *)
-          toplevel_src_node->data)->element) : NULL;
+      ges_timeline_element_get_timeline (GES_TIMELINE_ELEMENT (((GESUriSource *)
+              toplevel_src_node->data)->element)) : NULL;
+
+  GESTimeline *effective_timeline = toplevel_timeline ? toplevel_timeline :
+      ges_timeline_element_get_timeline (GES_TIMELINE_ELEMENT (self->element));
+
+  if (!effective_timeline) {
+    GST_INFO_OBJECT (uridecodepoolsrc,
+        "No timeline for %s - element is likely being removed, "
+        "skipping initial seek", GES_TIMELINE_ELEMENT_NAME (self->element));
+    g_list_free_full (parent_sources_copy,
+        (GDestroyNotify) unref_parent_source);
+    return NULL;
+  }
 
   GstSeekFlags seek_flags = GST_SEEK_FLAG_FLUSH | GST_SEEK_FLAG_ACCURATE;
   if (ABS (rate) > 1.0) {
@@ -439,9 +451,9 @@ uridecodepoolsrc_get_initial_seek_cb (GstElement * uridecodepoolsrc,
       GST_SEEK_TYPE_SET,
       0,
       GST_SEEK_TYPE_SET,
-      ges_timeline_get_duration (toplevel_timeline ? toplevel_timeline :
-          GES_TIMELINE_ELEMENT_TIMELINE (self->element))
+      ges_timeline_get_duration (effective_timeline)
       );
+  gst_object_unref (effective_timeline);
 
   /* TODO time-effect: Also add time effect support in ges_pipeline_pool_manager_prepare_pipelines_around */
   for (GList * tmp = toplevel_src_node; tmp; tmp = tmp->prev) {

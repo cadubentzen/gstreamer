@@ -216,7 +216,10 @@ gst_web_codecs_video_decoder_on_output (guintptr self_, val video_frame)
 
   flow = gst_video_decoder_finish_frame (dec, frame);
   frame = NULL;
-  if (flow != GST_FLOW_OK) {
+  if (flow == GST_FLOW_FLUSHING) {
+    GST_DEBUG_OBJECT (self, "Flushing, dropping frame");
+    goto done;
+  } else if (flow != GST_FLOW_OK) {
     GST_ERROR_OBJECT (self, "Flow error: %d", flow);
     goto done;
   }
@@ -232,9 +235,14 @@ static void
 gst_web_codecs_video_decoder_on_error (guintptr self_, val error)
 {
   GstWebCodecsVideoDecoder *self = (GstWebCodecsVideoDecoder *) self_;
+  std::string msg = error["message"].as<std::string> ();
 
-  /* TODO handle this */
-  GST_ERROR ("Error received");
+  GST_ERROR_OBJECT (self, "WebCodecs error: %s", msg.c_str ());
+
+  g_mutex_lock (&self->dequeue_lock);
+  self->has_error = TRUE;
+  g_cond_signal (&self->dequeue_cond);
+  g_mutex_unlock (&self->dequeue_lock);
 }
 
 static void
@@ -294,6 +302,19 @@ gst_web_codecs_video_decoder_decode (gpointer data)
   gst_buffer_map (frame->input_buffer, &map, GST_MAP_READ);
   val buffer_data = val (typed_memory_view (map.size, map.data));
   options.set ("data", buffer_data);
+
+  /* Check decoder state before calling decode() — pending async decode
+   * operations may still be queued after the decoder has been closed by an
+   * error or reset. Calling decode() on a closed codec throws an uncaught
+   * exception that crashes the worker thread. */
+  std::string state = self->decoder["state"].as<std::string> ();
+  if (state != "configured") {
+    GST_WARNING_OBJECT (self,
+        "Decoder state is '%s', skipping decode", state.c_str ());
+    gst_buffer_unmap (frame->input_buffer, &map);
+    gst_video_codec_frame_unref (frame);
+    return;
+  }
 
   val chunk = chunkclass.new_ (options);
   self->decoder.call<void> ("decode", chunk);
@@ -421,14 +442,27 @@ gst_web_codecs_video_decoder_handle_frame (
   GstFlowReturn res = GST_FLOW_OK;
 
   GST_DEBUG_OBJECT (decoder, "Handling frame");
-  /* Wait until there is nothing pending to be to dequeued or there is a buffer
-   */
+  /* Wait until the decode queue has room, or we are interrupted by
+   * a flush or error. */
   GST_VIDEO_DECODER_STREAM_UNLOCK (self);
   g_mutex_lock (&self->dequeue_lock);
-  while (self->dequeue_size >= GST_WEB_CODECS_VIDEO_DECODER_MAX_DEQUEUE) {
+  while (self->dequeue_size >= GST_WEB_CODECS_VIDEO_DECODER_MAX_DEQUEUE
+      && !self->flushing && !self->has_error) {
     GST_DEBUG_OBJECT (self, "Reached queue limit [%d/%d], waiting for dequeue",
         self->dequeue_size, GST_WEB_CODECS_VIDEO_DECODER_MAX_DEQUEUE);
     g_cond_wait (&self->dequeue_cond, &self->dequeue_lock);
+  }
+  if (self->flushing) {
+    g_mutex_unlock (&self->dequeue_lock);
+    GST_VIDEO_DECODER_STREAM_LOCK (self);
+    gst_video_codec_frame_unref (frame);
+    return GST_FLOW_FLUSHING;
+  }
+  if (self->has_error) {
+    g_mutex_unlock (&self->dequeue_lock);
+    GST_VIDEO_DECODER_STREAM_LOCK (self);
+    gst_video_codec_frame_unref (frame);
+    return GST_FLOW_ERROR;
   }
   self->dequeue_size++;
   g_mutex_unlock (&self->dequeue_lock);
@@ -450,6 +484,23 @@ gst_web_codecs_video_decoder_handle_frame (
   GST_DEBUG_OBJECT (decoder, "Handle frame done");
 
   return res;
+}
+
+static gboolean
+gst_web_codecs_video_decoder_sink_event (
+    GstVideoDecoder *decoder, GstEvent *event)
+{
+  GstWebCodecsVideoDecoder *self = GST_WEB_CODECS_VIDEO_DECODER (decoder);
+
+  if (GST_EVENT_TYPE (event) == GST_EVENT_FLUSH_START) {
+    GST_DEBUG_OBJECT (self, "FLUSH_START — unblocking handle_frame");
+    g_mutex_lock (&self->dequeue_lock);
+    self->flushing = TRUE;
+    g_cond_signal (&self->dequeue_cond);
+    g_mutex_unlock (&self->dequeue_lock);
+  }
+
+  return GST_VIDEO_DECODER_CLASS (parent_class)->sink_event (decoder, event);
 }
 
 static gboolean
@@ -593,10 +644,13 @@ gst_web_codecs_video_decoder_do_reset (gpointer data)
       (GstWebCodecsVideoDecoderConfigureData *) data;
   GstWebCodecsVideoDecoder *self = conf_data->self;
 
-  GST_DEBUG_OBJECT (self, "Calling WebCodecs reset()");
-  self->decoder.call<void> ("reset");
+  /* The decoder may be in "closed" state (e.g. from an error during flush),
+   * in which case reset() would throw.  Recreate the decoder entirely to
+   * guarantee a clean state. */
+  GST_DEBUG_OBJECT (self, "Recreating WebCodecs decoder for flush");
+  gst_web_codecs_video_decoder_ctor (self);
 
-  GST_DEBUG_OBJECT (self, "Reconfiguring after reset");
+  GST_DEBUG_OBJECT (self, "Reconfiguring after recreate");
   gst_web_codecs_video_decoder_configure (data);
 }
 
@@ -628,9 +682,12 @@ gst_web_codecs_video_decoder_flush (GstVideoDecoder *decoder)
   gst_object_unref (runner);
 
   /* reset() clears the decode queue without firing on_dequeue callbacks,
-   * so we must reset the counter ourselves to unblock handle_frame. */
+   * so we must reset the counter ourselves to unblock handle_frame.
+   * Also clear the flushing and error flags so handle_frame resumes. */
   g_mutex_lock (&self->dequeue_lock);
   self->dequeue_size = 0;
+  self->flushing = FALSE;
+  self->has_error = FALSE;
   g_cond_signal (&self->dequeue_cond);
   g_mutex_unlock (&self->dequeue_lock);
 
@@ -666,6 +723,12 @@ gst_web_codecs_video_decoder_start (GstVideoDecoder *decoder)
   gboolean ret = FALSE;
 
   GST_DEBUG_OBJECT (self, "Start");
+
+  g_mutex_lock (&self->dequeue_lock);
+  self->flushing = FALSE;
+  self->has_error = FALSE;
+  g_mutex_unlock (&self->dequeue_lock);
+
   runner = gst_web_canvas_get_runner (self->canvas);
   if (!gst_web_runner_run (runner, NULL)) {
     GST_ERROR_OBJECT (self, "Impossible to run the runner");
@@ -685,7 +748,14 @@ gst_web_codecs_video_decoder_stop (GstVideoDecoder *decoder)
   GstWebCodecsVideoDecoder *self = GST_WEB_CODECS_VIDEO_DECODER (decoder);
 
   GST_DEBUG_OBJECT (self, "Stop");
-  /* TODO Call reset */
+
+  /* Unblock handle_frame if it is waiting on the decode queue — the
+   * streaming thread may be blocked there while the state-change thread
+   * is tearing us down. */
+  g_mutex_lock (&self->dequeue_lock);
+  self->flushing = TRUE;
+  g_cond_signal (&self->dequeue_cond);
+  g_mutex_unlock (&self->dequeue_lock);
 
   if (self->output_format) {
     g_free (self->output_format);
@@ -832,6 +902,8 @@ gst_web_codecs_video_decoder_class_init (
       GST_DEBUG_FUNCPTR (gst_web_codecs_video_decoder_finish);
   video_decoder_class->flush =
       GST_DEBUG_FUNCPTR (gst_web_codecs_video_decoder_flush);
+  video_decoder_class->sink_event =
+      GST_DEBUG_FUNCPTR (gst_web_codecs_video_decoder_sink_event);
   video_decoder_class->set_format =
       GST_DEBUG_FUNCPTR (gst_web_codecs_video_decoder_set_format);
   video_decoder_class->handle_frame =

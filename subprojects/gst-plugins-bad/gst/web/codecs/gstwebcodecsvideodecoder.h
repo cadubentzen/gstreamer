@@ -75,6 +75,8 @@ struct _GstWebCodecsVideoDecoder
   emscripten::val decoder;
   /* Amount of the output frames pending to be dequeued */
   gint dequeue_size;
+  gboolean flushing;   /* protected by dequeue_lock */
+  gboolean has_error;  /* protected by dequeue_lock */
   GMutex dequeue_lock;
   GCond dequeue_cond;
 };

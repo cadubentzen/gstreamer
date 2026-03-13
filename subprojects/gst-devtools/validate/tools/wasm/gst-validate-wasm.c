@@ -38,8 +38,9 @@ static gint ret = 0;
 static GMainLoop *mainloop;
 static GstElement *pipeline;
 
-/* No manual element registration needed — gst-full's
- * gst_init_static_plugins() handles everything */
+#ifdef HAVE_RSVALIDATE
+void gst_plugin_rsvalidate_register (void);
+#endif
 
 typedef struct
 {
@@ -165,6 +166,10 @@ main (int argc, char **argv)
     gst_validate_abort ("No 'args' in test file meta");
 
   gst_validate_init ();
+
+#ifdef HAVE_RSVALIDATE
+  gst_plugin_rsvalidate_register ();
+#endif
 
   runner = gst_validate_runner_new ();
   if (!runner) {

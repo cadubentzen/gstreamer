@@ -10,7 +10,7 @@ gst_tools += {'gst-validate-wasm': {
     'deps': [validate_dep, gio_dep, gstopengl_dep,
              gstweb_dep, gstopenal_dep, gstaudioconvert_dep, gstisomp4_dep],
     'include_directories': inc_dirs,
-    'extra_c_args': ['-DG_LOG_DOMAIN="gst-validate-wasm"'],
+    'extra_c_args': [],
     'name_suffix': 'js',
     'extra_link_args': [
       '-sERROR_ON_UNDEFINED_SYMBOLS=0',
@@ -24,6 +24,8 @@ gst_tools += {'gst-validate-wasm': {
       '-sOFFSCREENCANVAS_SUPPORT',
       '-lwebsocket.js',
       '-sFORCE_FILESYSTEM=1',
+      '-sSTACK_SIZE=1048576',
+      '-sDEFAULT_PTHREAD_STACK_SIZE=1048576',
     ],
   }
 }

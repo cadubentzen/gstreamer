@@ -5,14 +5,11 @@
 # Test manager for running GstValidate WASM tests in a browser.
 
 import os
-import signal
-import subprocess
-import sys
 
-from launcher.baseclasses import GstValidateTest, TestsManager
+from launcher.baseclasses import Test, TestsManager
 
 
-class GstWasmTest(GstValidateTest):
+class GstWasmTest(Test):
     """A test that runs a GstValidate WASM module in a headless browser."""
 
     def __init__(self, classname, options, reporter, test_file,
@@ -34,20 +31,11 @@ class GstWasmTest(GstValidateTest):
             "--src-dir", self.src_dir,
         )
 
-        ws_server = os.environ.get("GST_VALIDATE_WS_SERVER")
-        if ws_server:
-            self.add_arguments("--ws-server", ws_server)
-
-        uuid = self.get_uuid()
-        if uuid:
-            self.add_arguments("--uuid", uuid)
-
     def get_subproc_env(self):
         env = super().get_subproc_env()
-        # The WASM app connects via WebSocket, not TCP
-        ws_server = os.environ.get("GST_VALIDATE_WS_SERVER")
-        if ws_server:
-            env["GST_VALIDATE_SERVER"] = ws_server
+        # Remove validate server vars — WASM tests can't connect
+        # to the host WebSocket from inside the browser.
+        env.pop("GST_VALIDATE_SERVER", None)
         return env
 
 
@@ -66,19 +54,9 @@ class GstWasmTestsManager(TestsManager):
         pass
 
     def list_tests(self):
-        # Find the WASM build directory and source directory
-        wasm_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        src_dir = wasm_dir
-
-        # The builddir and media_root need to be configured
-        # Look for them relative to the source tree
-        top_srcdir = wasm_dir
-        for _ in range(6):  # Walk up to find the top-level
-            parent = os.path.dirname(top_srcdir)
-            if os.path.exists(os.path.join(parent, "meson.build")):
-                top_srcdir = parent
-            else:
-                break
+        # Find the top-level source directory
+        top_srcdir = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
 
         wasm_builddir = os.environ.get(
             "GST_WASM_BUILDDIR",
@@ -88,9 +66,16 @@ class GstWasmTestsManager(TestsManager):
             os.path.join(top_srcdir, "subprojects",
                          "gst-integration-testsuites", "media", "defaults"))
 
-        # Find .validatetest files
-        tests_dir = src_dir
-        for f in os.listdir(tests_dir):
+        src_dir = os.path.join(top_srcdir, "subprojects",
+                               "gst-devtools", "validate", "tools", "wasm")
+
+        # Find .validatetest files in gst-integration-testsuites/wasm/
+        tests_dir = os.path.join(top_srcdir, "subprojects",
+                                 "gst-integration-testsuites", "wasm")
+        if not os.path.isdir(tests_dir):
+            return self.tests
+
+        for f in sorted(os.listdir(tests_dir)):
             if f.endswith(".validatetest"):
                 test_file = os.path.join(tests_dir, f)
                 classname = "wasm.%s" % os.path.splitext(f)[0]

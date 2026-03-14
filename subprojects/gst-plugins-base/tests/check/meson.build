@@ -1,6 +1,8 @@
 have_registry = true # FIXME get_option('registry')
 
 # name, condition when to skip the test and extra dependencies
+is_emscripten = host_machine.system() == 'emscripten'
+
 base_tests = [
   [ 'gst/typefindfunctions.c', not have_registry ],
   [ 'libs/audio.c' ],
@@ -38,7 +40,8 @@ base_tests = [
   [ 'elements/audiointerleave.c', get_option('audiomixer').disabled()],
   [ 'elements/audiomixer.c', get_option('audiomixer').disabled(), [ gst_controller_dep ] ],
   [ 'elements/audiorate.c', get_option('audiorate').disabled()],
-  [ 'elements/audiotestsrc.c', get_option('audiotestsrc').disabled()],
+  # test_layout deadlocks on Emscripten (test clock + live source + threading)
+  [ 'elements/audiotestsrc.c', is_emscripten or get_option('audiotestsrc').disabled()],
   [ 'elements/audioresample.c', get_option('audioresample').disabled()],
   [ 'elements/compositor.c', get_option('compositor').disabled()],
   [ 'elements/decodebin.c', get_option('playback').disabled()],
@@ -58,7 +61,8 @@ base_tests = [
   [ 'pipelines/simple-launch-lines.c' ],
   [ 'pipelines/basetime.c' ],
   [ 'pipelines/capsfilter-renegotiation.c' ],
-  [ 'pipelines/gio.c' ],
+  # gio source element not available on Emscripten
+  [ 'pipelines/gio.c', is_emscripten ],
   [ 'pipelines/streamsynchronizer.c' ],
 ]
 
@@ -66,20 +70,23 @@ base_tests = [
 if host_machine.system() != 'windows'
   base_tests += [
     [ 'libs/allocators.c', host_machine.system() != 'linux' ],
-    [ 'libs/rtspconnection.c' ],
+    # rtspconnection links gio which has duplicate symbol issues on Emscripten
+    [ 'libs/rtspconnection.c', is_emscripten ],
     [ 'elements/libvisual.c', not is_variable('libvisual_dep') or not libvisual_dep.found() ],
     [ 'elements/encodebin.c', not theoraenc_dep.found() or not vorbisenc_dep.found() ],
-    [ 'elements/multifdsink.c', not core_conf.has('HAVE_SYS_SOCKET_H') or not core_conf.has('HAVE_UNISTD_H') ],
-    # FIXME: multisocketsink test on windows/msvc
-    [ 'elements/multisocketsink.c', not core_conf.has('HAVE_SYS_SOCKET_H') or not core_conf.has('HAVE_UNISTD_H') ],
+    # multifdsink element not available on Emscripten
+    [ 'elements/multifdsink.c', is_emscripten or not core_conf.has('HAVE_SYS_SOCKET_H') or not core_conf.has('HAVE_UNISTD_H') ],
+    # multisocketsink links gio which has duplicate symbol issues on Emscripten
+    [ 'elements/multisocketsink.c', is_emscripten or not core_conf.has('HAVE_SYS_SOCKET_H') or not core_conf.has('HAVE_UNISTD_H') ],
     [ 'elements/playbin-complex.c', not ogg_dep.found() ],
     [ 'elements/textoverlay.c', not pango_dep.found() ],
     [ 'elements/theoradec.c', not ogg_dep.found() or not theoradec_dep.found() ],
-    [ 'elements/vorbisdec.c', not vorbis_dep.found(), [ vorbis_dep, vorbisenc_dep ] ],
+    # vorbisdec crashes on Emscripten (fpcast-emu proxy_sync memory access OOB)
+    [ 'elements/vorbisdec.c', is_emscripten or not vorbis_dep.found(), [ vorbis_dep, vorbisenc_dep ] ],
     [ 'elements/vorbistag.c', not vorbisenc_dep.found(), [ vorbis_dep, vorbisenc_dep ] ],
     [ 'pipelines/oggmux.c', not ogg_dep.found(), [ ogg_dep, ] ],
-    # FIXME: tcp test on windows/msvc
-    [ 'pipelines/tcp.c', not core_conf.has('HAVE_SYS_SOCKET_H') or not core_conf.has('HAVE_UNISTD_H'), [giounix_dep] ],
+    # tcp test links gio which has duplicate symbol issues on Emscripten
+    [ 'pipelines/tcp.c', is_emscripten or not core_conf.has('HAVE_SYS_SOCKET_H') or not core_conf.has('HAVE_UNISTD_H'), [giounix_dep] ],
     [ 'pipelines/theoraenc.c', not theoraenc_dep.found(), [ theoraenc_dep ] ],
     [ 'pipelines/vorbisenc.c', not vorbisenc_dep.found() ],
     [ 'pipelines/vorbisdec.c', not vorbisenc_dep.found() ],
@@ -87,7 +94,8 @@ if host_machine.system() != 'windows'
 endif
 
 # FIXME: Unstable on Windows
-if build_gstgl and host_machine.system() != 'windows'
+# GL tests require a WebGL context, unavailable in Node.js on Emscripten
+if build_gstgl and host_machine.system() != 'windows' and not is_emscripten
   base_tests += [
     [ 'libs/gstglapi.c', not build_gstgl, [gstgl_dep]],
     [ 'libs/gstglcolorconvert.c', not build_gstgl, [gstgl_dep, gstglproto_dep]],
@@ -120,12 +128,13 @@ if have_cxx
 endif
 
 fsmod = import('fs')
+test_files_path = fsmod.as_posix(meson.project_source_root() / 'tests' / 'files')
 test_defines = [
   '-UG_DISABLE_ASSERT',
   '-UG_DISABLE_CAST_CHECKS',
   '-DGST_CHECK_TEST_ENVIRONMENT_BEACON="GST_PLUGIN_LOADING_WHITELIST"',
-  '-DGST_TEST_FILES_PATH="' + fsmod.as_posix(meson.current_source_dir()) + '/../files"',
-  '-DGST_TEST_FILE="' + fsmod.as_posix(meson.current_source_dir()) + '/../files/partialframe.mjpeg"', # for libs/discoverer
+  '-DGST_TEST_FILES_PATH="' + test_files_path + '"',
+  '-DGST_TEST_FILE="' + test_files_path + '/partialframe.mjpeg"', # for libs/discoverer
   '-DGST_USE_UNSTABLE_API',
 ]
 
@@ -139,8 +148,15 @@ test_deps = [gst_dep, gst_base_dep, gst_net_dep, gst_check_dep, audio_dep,
 
 if host_machine.system() != 'emscripten'
   link_args = []
+  extra_link_with = []
 else
-  link_args = ['--pre-js', join_paths(meson.global_source_root(), 'tests', 'emscripten', 'pre-js.js'), '-sEXPORTED_FUNCTIONS=_free']
+  link_args = [
+    '--pre-js', join_paths(meson.global_source_root(), 'tests', 'emscripten', 'pre-js.js'),
+    '-sEXPORTED_FUNCTIONS=_free',
+    '--embed-file', test_files_path + '@' + test_files_path,
+  ]
+  # Static plugins must be linked directly in WASM builds
+  extra_link_with = plugins + gst_proj.get_variable('plugins')
 endif
 
 foreach t : base_tests
@@ -158,10 +174,15 @@ foreach t : base_tests
   endif
 
   if not skip_test
-    exe = executable(test_name, fname,
+    test_sources = [fname]
+    if host_machine.system() == 'emscripten'
+      test_sources += ['emscripten_stubs.c']
+    endif
+    exe = executable(test_name, test_sources,
       include_directories : [configinc],
       c_args : ['-DHAVE_CONFIG_H=1' ] + test_defines,
       cpp_args : gst_plugins_base_args,
+      link_with : extra_link_with,
       link_args : link_args,
       dependencies : [libm] + test_deps + extra_deps,
     )
@@ -183,9 +204,14 @@ endforeach
 # videoscale tests (split in groups)
 foreach group : [1, 2, 3, 4, 5, 6]
   vscale_test_name = 'elements-videoscale-@0@'.format(group)
-  exe = executable(vscale_test_name, join_paths('elements', 'videoscale.c'),
+  vscale_sources = [join_paths('elements', 'videoscale.c')]
+  if host_machine.system() == 'emscripten'
+    vscale_sources += ['emscripten_stubs.c']
+  endif
+  exe = executable(vscale_test_name, vscale_sources,
       include_directories : [configinc],
       c_args : ['-DHAVE_CONFIG_H=1', '-DVSCALE_TEST_GROUP=@0@'.format(group) ] + test_defines,
+      link_with : extra_link_with,
       link_args : link_args,
       dependencies : [libm] + test_deps + extra_deps)
 

@@ -1,4 +1,4 @@
-if get_option('tests').disabled() or static_build
+if get_option('tests').disabled() or (static_build and host_machine.system() != 'emscripten')
   subdir_done()
 endif
 
@@ -13,8 +13,13 @@ gst_plugin_scanner_path = join_paths(gst_plugin_scanner_dir, 'gst-plugin-scanner
 
 if gst_check_dep.found()
   subdir('check')
-  subdir('interactive')
-  subdir('validate')
+  if host_machine.system() != 'emscripten'
+    subdir('interactive')
+  endif
+  # gst-tester links against gio which has duplicate symbol issues on Emscripten
+  if host_machine.system() != 'emscripten'
+    subdir('validate')
+  endif
 endif
 if not get_option('examples').disabled()
   subdir('examples')

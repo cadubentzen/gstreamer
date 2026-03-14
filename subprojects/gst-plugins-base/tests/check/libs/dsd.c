@@ -291,7 +291,7 @@ GST_START_TEST (test_dsd_info_from_caps)
       "rate", G_TYPE_INT, GST_DSD_MAKE_DSD_RATE_44x (128),
       "channels", G_TYPE_INT, 2,
       "layout", G_TYPE_STRING, "non-interleaved",
-      "channel-mask", GST_TYPE_BITMASK, 0x3, NULL);
+      "channel-mask", GST_TYPE_BITMASK, (guint64) 0x3, NULL);
   fail_unless (gst_dsd_info_from_caps (&info, full_caps));
   fail_unless_equals_int (info.format, GST_DSD_FORMAT_U16LE);
   fail_unless_equals_int (info.rate, GST_DSD_MAKE_DSD_RATE_44x (128));

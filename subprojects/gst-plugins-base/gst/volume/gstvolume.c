@@ -294,13 +294,13 @@ volume_update_volume (GstVolume * self, const GstAudioInfo * info,
      * VOLUME_MAX_INT32, *and* don't have UB on FP->int cast overflow,
      * `2 * VOLUME_MAX_INT32` achieves both of these points.
      */
-    self->current_vol_i8 = (glong) (CLAMP (current_fp_vol_i8, (gdouble) 0,
+    self->current_vol_i8 = (gint64) (CLAMP (current_fp_vol_i8, (gdouble) 0,
             (gdouble) 2 * VOLUME_MAX_INT32));
-    self->current_vol_i16 = (glong) (CLAMP (current_fp_vol_i16, (gdouble) 0,
+    self->current_vol_i16 = (gint64) (CLAMP (current_fp_vol_i16, (gdouble) 0,
             (gdouble) 2 * VOLUME_MAX_INT32));
-    self->current_vol_i24 = (glong) (CLAMP (current_fp_vol_i24, (gdouble) 0,
+    self->current_vol_i24 = (gint64) (CLAMP (current_fp_vol_i24, (gdouble) 0,
             (gdouble) 2 * VOLUME_MAX_INT32));
-    self->current_vol_i32 = (glong) (CLAMP (current_fp_vol_i32, (gdouble) 0,
+    self->current_vol_i32 = (gint64) (CLAMP (current_fp_vol_i32, (gdouble) 0,
             (gdouble) 2 * VOLUME_MAX_INT32));
 
     switch (GST_AUDIO_INFO_FORMAT (info)) {

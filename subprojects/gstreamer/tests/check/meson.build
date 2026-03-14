@@ -33,13 +33,13 @@ core_tests = [
   [ 'gst/gstparamspecs.c' ],
   [ 'gst/gstprintf.c', not gst_debug, printf_lib],
   [ 'gst/gstpipeline.c', not gst_registry ],
-  [ 'gst/gstpoll.c' ],
+  [ 'gst/gstpoll.c', host_machine.system() == 'emscripten' ],
   [ 'gst/gstplugin.c', not gst_registry ],
   [ 'gst/gstpreset.c' ],
   [ 'gst/gstprotection.c' ],
   [ 'gst/gstquery.c', not gst_registry ],
   [ 'gst/gstregistry.c', not gst_registry ],
-  [ 'gst/gstpromise.c'],
+  [ 'gst/gstpromise.c', host_machine.system() == 'emscripten'],
   [ 'gst/gstsegment.c' ],
   [ 'gst/gststream.c' ],
   [ 'gst/gststructure.c' ],
@@ -53,11 +53,11 @@ core_tests = [
   [ 'gst/gsturi.c' ],
   [ 'gst/gstutils.c', not gst_registry ],
   [ 'gst/gstvalue.c' ],
-  [ 'gst/gstvecdeque.c' ],
+  [ 'gst/gstvecdeque.c', host_machine.system() == 'emscripten'],
   [ 'generic/states.c', not gst_registry ],
   [ 'libs/adapter.c' ],
-  [ 'libs/aggregator.c' ],
-  [ 'libs/baseparse.c' ],
+  [ 'libs/aggregator.c', host_machine.system() == 'emscripten' ],
+  [ 'libs/baseparse.c', host_machine.system() == 'emscripten' ],
   [ 'libs/basesrc.c', not gst_registry ],
   [ 'libs/basesink.c', not gst_registry ],
   [ 'libs/bitreader.c' ],
@@ -79,16 +79,16 @@ core_tests = [
   [ 'libs/transform1.c' ],
   [ 'libs/transform2.c' ],
   [ 'libs/typefindhelper.c' ],
-  [ 'libs/queuearray.c' ],
+  [ 'libs/queuearray.c', host_machine.system() == 'emscripten'],
   [ 'elements/capsfilter.c', not gst_registry ],
   [ 'elements/clocksync.c', not gst_registry or not gst_parse ],
   [ 'elements/concat.c', not gst_registry ],
   [ 'elements/dataurisrc.c', not gst_registry ],
   [ 'elements/fakesrc.c', not gst_registry ],
   # FIXME: blocked forever on Windows due to missing fcntl (.. O_NONBLOCK)
-  [ 'elements/fdsrc.c', not gst_registry or host_system == 'windows' ],
+  [ 'elements/fdsrc.c', not gst_registry or host_system == 'windows' or host_machine.system() == 'emscripten' ],
   [ 'elements/filesink.c', not gst_registry ],
-  [ 'elements/filesrc.c', not gst_registry ],
+  [ 'elements/filesrc.c', not gst_registry or host_machine.system() == 'emscripten' ],
   [ 'elements/funnel.c', not gst_registry ],
   [ 'elements/identity.c', not gst_registry or not gst_parse ],
   [ 'elements/leaks.c', not tracer_hooks or not gst_debug ],
@@ -149,16 +149,23 @@ foreach t : core_tests
 
   if host_machine.system() != 'emscripten'
     link_args = []
+    extra_link_with = []
   else
     link_args = ['--pre-js', join_paths(meson.global_source_root(), 'tests', 'emscripten', 'pre-js.js'), '-sEXPORTED_FUNCTIONS=_free']
+    # Static plugins must be linked directly in WASM builds
+    extra_link_with = plugins
   endif
 
   if not skip_test
-    exe = executable(test_name, fname,
+    test_sources = [fname]
+    if host_machine.system() == 'emscripten'
+      test_sources += ['emscripten_stubs.c']
+    endif
+    exe = executable(test_name, test_sources,
         c_args : gst_c_args + test_defines,
         cpp_args : gst_c_args + test_defines,
         include_directories : [configinc],
-        link_with : link_with_libs,
+        link_with : [link_with_libs] + extra_link_with,
         link_args : link_args,
         dependencies : gst_deps + test_deps,
     )

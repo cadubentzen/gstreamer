@@ -240,8 +240,8 @@ G_STMT_START {                        \
 static void __testname (int G_GNUC_UNUSED __i__) \
 {\
   GST_DEBUG ("test start"); \
-  GST_DO_CHECK_TEST_ENVIRONMENT; \
-  tcase_fn_start (""# __testname, __FILE__, __LINE__);
+  tcase_fn_start (""# __testname, __FILE__, __LINE__); \
+  GST_DO_CHECK_TEST_ENVIRONMENT;
 
 #define GST_END_TEST GST_LOG ("cleaning up tasks"); \
                      gst_task_cleanup_all (); \

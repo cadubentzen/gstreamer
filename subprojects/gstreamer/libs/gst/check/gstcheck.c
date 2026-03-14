@@ -38,6 +38,10 @@
 
 #include "gstcheck.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 GST_DEBUG_CATEGORY (check_debug);
 
 /* logging function for tests
@@ -1138,6 +1142,12 @@ gst_check_run_suite (Suite * suite, const gchar * name, const gchar * fname)
   g_free (xmlfilename);
   srunner_free (sr);
   g_thread_pool_stop_unused_threads ();
+#ifdef __EMSCRIPTEN__
+  /* On Emscripten with PROXY_TO_PTHREAD, the process hangs at exit waiting
+   * for worker threads (GLib thread pool, GStreamer debug threads) to be
+   * joined. Force immediate exit after printing results. */
+  emscripten_force_exit (nf > 0 ? 1 : 0);
+#endif
   return nf;
 }
 

@@ -248,7 +248,6 @@ srunner_iterate_tcase_tfuns (SRunner * sr, TCase * tc)
         default:
           eprintf ("Bad fork status in SRunner", __FILE__, __LINE__);
       }
-
       if (NULL != tr) {
         srunner_add_failure (sr, tr);
         log_test_end (sr, tr);

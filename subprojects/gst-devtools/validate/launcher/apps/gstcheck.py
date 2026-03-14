@@ -57,7 +57,13 @@ class MesonTest(Test):
         self.child_env = child_env
 
         timeout = int(test_infos['timeout'])
-        Test.__init__(self, test_infos['cmd'][0], name, options,
+        cmd = test_infos['cmd']
+        # For WASM .js test binaries, use node as the application
+        if cmd[0].endswith('.js'):
+            application = 'node'
+        else:
+            application = cmd[0]
+        Test.__init__(self, application, name, options,
                       reporter, timeout=timeout, hard_timeout=timeout,
                       is_parallel=test_infos.get('is_parallel', True),
                       workdir=test_infos['workdir'])
@@ -65,7 +71,12 @@ class MesonTest(Test):
         self.test_infos = test_infos
 
     def build_arguments(self):
-        self.add_arguments(*self.test_infos['cmd'][1:])
+        cmd = self.test_infos['cmd']
+        # For WASM .js binaries, the .js file is the first argument to node
+        if cmd[0].endswith('.js'):
+            self.add_arguments(*cmd)
+        else:
+            self.add_arguments(*cmd[1:])
 
     def get_subproc_env(self):
         env = os.environ.copy()
@@ -130,8 +141,13 @@ class GstValidateCheckTest(GstValidateTest):
         self.child_env = child_env
 
         timeout = int(test_infos['timeout'])
+        cmd = test_infos['cmd']
+        if cmd[0].endswith('.js'):
+            application = 'node'
+        else:
+            application = cmd[0]
         super().__init__(
-            test_infos['cmd'][0], name, options,
+            application, name, options,
             reporter, timeout=timeout, hard_timeout=timeout,
             is_parallel=test_infos.get('is_parallel', True),
             workdir=test_infos['workdir']
@@ -140,7 +156,11 @@ class GstValidateCheckTest(GstValidateTest):
         self.test_infos = test_infos
 
     def build_arguments(self):
-        self.add_arguments(*self.test_infos['cmd'][1:])
+        cmd = self.test_infos['cmd']
+        if cmd[0].endswith('.js'):
+            self.add_arguments(*cmd)
+        else:
+            self.add_arguments(*cmd[1:])
 
     def get_subproc_env(self):
         env = super().get_subproc_env()
@@ -313,18 +333,52 @@ class GstCheckTestsManager(MesonTestsManager):
 
         return last_touched, []
 
-    def _list_gst_check_tests(self, test, recurse=False):
-        binary = test['cmd'][0]
+    @staticmethod
+    def _get_test_binary(test):
+        """Return the actual test binary path from a test command.
 
-        self.tests_info[binary] = self.check_binary_ts(binary)
+        When an exe_wrapper is used (e.g. node for WASM), the binary
+        is the second element of cmd rather than the first.
+        """
+        cmd = test['cmd']
+        if len(cmd) > 1 and os.path.basename(cmd[0]) == 'node':
+            return cmd[1]
+        return cmd[0]
+
+    @staticmethod
+    def _get_test_cmd(test):
+        """Return the command to run a test.
+
+        For WASM .js test binaries, prepend 'node' to the command
+        since meson introspect does not include the exe_wrapper.
+        """
+        cmd = test['cmd']
+        if cmd[0].endswith('.js'):
+            return ['node'] + cmd
+        return cmd
+
+    def _list_gst_check_tests(self, test, recurse=False):
+        binary = self._get_test_binary(test)
+
+        check_result = self.check_binary_ts(binary)
+        if check_result is True:
+            return
+        self.tests_info[binary] = check_result
 
         tmpenv = os.environ.copy()
         tmpenv['GST_DEBUG'] = "0"
-        pe = subprocess.Popen([binary, '--list-tests'],
+        cmd = self._get_test_cmd(test) + ['--list-tests']
+        pe = subprocess.Popen(cmd,
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               env=tmpenv)
 
-        output = pe.communicate()[0].decode()
+        try:
+            output = pe.communicate(timeout=30)[0].decode()
+        except subprocess.TimeoutExpired:
+            pe.kill()
+            pe.communicate()
+            self.debug("%s timed out listing tests" % binary)
+            return
         if pe.returncode != 0:
             self.debug("%s not able to list tests" % binary)
             return
@@ -400,17 +454,27 @@ class GstCheckTestsManager(MesonTestsManager):
             if sublauncher_tests:
                 all_sublaunchers_tests |= sublauncher_tests
                 continue
-            binary = test['cmd'][0]
+            binary = self._get_test_binary(test)
             test_info = self.check_binary_ts(binary)
             if test_info is True:
                 continue
             elif test_info is None:
                 test_info = self.check_binary_ts(binary)
                 if test_info is None:
+                    if self.options.meson_no_rebuild:
+                        printc("WARNING: Test binary %s does not exist, skipping\n" % binary,
+                               Colors.WARNING)
+                        continue
                     raise RuntimeError("Test binary %s does not exist"
                                        " even after a full rebuild" % binary)
 
-            with open(binary, 'rb') as f:
+            # For WASM .js files, check the companion .wasm for the marker
+            if binary.endswith('.js'):
+                wasm_binary = binary[:-3] + '.wasm'
+                check_path = wasm_binary if os.path.exists(wasm_binary) else binary
+            else:
+                check_path = binary
+            with open(check_path, 'rb') as f:
                 if b"gstcheck" not in f.read():
                     self.tests_info[binary] = [0, []]
                     continue
@@ -431,7 +495,10 @@ class GstCheckTestsManager(MesonTestsManager):
             name = self.get_test_name(test)
             if name in all_sublaunchers_tests:
                 continue
-            gst_tests = self.tests_info[test['cmd'][0]][1]
+            binary = self._get_test_binary(test)
+            if binary not in self.tests_info:
+                continue
+            gst_tests = self.tests_info[binary][1]
             if os.path.basename(test['cmd'][0]) in \
                     ['gst-tester-1.0', 'gst-tester-1.0.exe']:
                 fpath = test['cmd'][1]

@@ -4,6 +4,7 @@ have_registry = true # FIXME get_option('registry')
 is_emscripten = host_machine.system() == 'emscripten'
 
 base_tests = [
+  # SRT typefinder requires subparse plugin (not built on Emscripten)
   [ 'gst/typefindfunctions.c', not have_registry ],
   [ 'libs/audio.c' ],
   [ 'libs/audiocdsrc.c' ],
@@ -20,7 +21,8 @@ base_tests = [
   [ 'libs/pbutils.c' ],
   [ 'libs/profile.c' ],
   [ 'libs/rtp.c' ],
-  [ 'libs/rtpbasedepayload.c' ],
+  # static variable persistence in nofork mode causes failures on Emscripten
+  [ 'libs/rtpbasedepayload.c', is_emscripten ],
   [ 'libs/rtpbasepayload.c' ],
   [ 'libs/rtphdrext.c' ],
   [ 'libs/rtpmeta.c' ],
@@ -78,7 +80,8 @@ if host_machine.system() != 'windows'
     [ 'elements/multifdsink.c', is_emscripten or not core_conf.has('HAVE_SYS_SOCKET_H') or not core_conf.has('HAVE_UNISTD_H') ],
     # multisocketsink links gio which has duplicate symbol issues on Emscripten
     [ 'elements/multisocketsink.c', is_emscripten or not core_conf.has('HAVE_SYS_SOCKET_H') or not core_conf.has('HAVE_UNISTD_H') ],
-    [ 'elements/playbin-complex.c', not ogg_dep.found() ],
+    # missing adder + timeout on Emscripten
+    [ 'elements/playbin-complex.c', is_emscripten or not ogg_dep.found() ],
     [ 'elements/textoverlay.c', not pango_dep.found() ],
     [ 'elements/theoradec.c', not ogg_dep.found() or not theoradec_dep.found() ],
     # vorbisdec crashes on Emscripten (fpcast-emu proxy_sync memory access OOB)
@@ -197,6 +200,15 @@ foreach t : base_tests
         'gst-plugins-base@' + meson.project_build_root())
     env.set('GST_REGISTRY', join_paths(meson.current_build_dir(), '@0@.registry'.format(test_name)))
     env.set('GST_PLUGIN_SCANNER_1_0', gst_plugin_scanner_path)
+    if is_emscripten
+      if fname == 'gst/typefindfunctions.c'
+        # subparse plugin not built on Emscripten, SRT detected as text/plain
+        env.set('GST_CHECKS_IGNORE', 'test_subparse')
+      elif fname == 'libs/pbutils.c'
+        # getpwuid_r() not implemented in Emscripten
+        env.set('GST_CHECKS_IGNORE', 'test_pb_utils_install_plugins')
+      endif
+    endif
     test(test_name, exe, env: env, timeout: 3 * 60)
   endif
 endforeach

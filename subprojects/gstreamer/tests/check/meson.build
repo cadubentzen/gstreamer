@@ -10,7 +10,8 @@ core_tests = [
   [ 'gst/gstbufferpool.c' ],
   [ 'gst/gstchildproxy.c', not gst_registry ],
   [ 'gst/gstclock.c' ],
-  [ 'gst/gstcontext.c' ],
+  # fpcast-emu signature mismatch in g_list_free_full on Emscripten
+  [ 'gst/gstcontext.c', host_machine.system() == 'emscripten' ],
   [ 'gst/gstcontroller.c' ],
   [ 'gst/gstcaps.c' ],
   [ 'gst/gstcapsfeatures.c' ],
@@ -87,7 +88,8 @@ core_tests = [
   [ 'elements/fakesrc.c', not gst_registry ],
   # FIXME: blocked forever on Windows due to missing fcntl (.. O_NONBLOCK)
   [ 'elements/fdsrc.c', not gst_registry or host_system == 'windows' or host_machine.system() == 'emscripten' ],
-  [ 'elements/filesink.c', not gst_registry ],
+  # fpcast-emu signature mismatch in gst_writev_buffer_list on Emscripten
+  [ 'elements/filesink.c', not gst_registry or host_machine.system() == 'emscripten' ],
   [ 'elements/filesrc.c', not gst_registry or host_machine.system() == 'emscripten' ],
   [ 'elements/funnel.c', not gst_registry ],
   [ 'elements/identity.c', not gst_registry or not gst_parse ],

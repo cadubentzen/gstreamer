@@ -141,7 +141,22 @@ if get_option('check').disabled()
   endif
 endif
 
+is_emscripten = host_machine.system() == 'emscripten'
 gst_deps = [gst_dep, gst_base_dep, gst_check_dep, gst_net_dep, gst_controller_dep, gio_dep, gmodule_dep, network_deps]
+
+if static_build
+  generate_static_plugins_init = find_program(
+    join_paths(meson.global_source_root(), 'scripts', 'generate_static_plugins_init.py'))
+  plugin_names = []
+  foreach p : plugins
+    plugin_names += p.name().substring(3) # strip 'gst' prefix
+  endforeach
+  static_plugins_init_c = custom_target('static-plugins-init',
+    output: 'static-plugins-init.c',
+    command: [generate_static_plugins_init,
+              '-o', '@OUTPUT@',
+              '-p', ';'.join(plugin_names)])
+endif
 
 foreach t : core_tests
   fname = t[0]
@@ -149,19 +164,20 @@ foreach t : core_tests
   skip_test = t.get(1, false)
   link_with_libs = t.get(2, [])
 
-  if host_machine.system() != 'emscripten'
-    link_args = []
-    extra_link_with = []
-  else
+  link_args = []
+  extra_link_with = []
+  if is_emscripten
     link_args = ['--pre-js', join_paths(meson.global_source_root(), 'tests', 'emscripten', 'pre-js.js'), '-sEXPORTED_FUNCTIONS=_free']
-    # Static plugins must be linked directly in WASM builds
+  endif
+  if static_build
+    # Static plugins must be linked directly
     extra_link_with = plugins
   endif
 
   if not skip_test
     test_sources = [fname]
-    if host_machine.system() == 'emscripten'
-      test_sources += ['emscripten_stubs.c']
+    if static_build
+      test_sources += [static_plugins_init_c]
     endif
     exe = executable(test_name, test_sources,
         c_args : gst_c_args + test_defines,

@@ -48,9 +48,12 @@ gst_sub_parse_data_format_autodetect_regex_once (GstSubParseRegex regtype)
   GError *gerr = NULL;
   GRegexCompileFlags jit_flags = G_REGEX_OPTIMIZE | G_REGEX_RAW;
 
+#if defined(HAVE_VALGRIND) || defined(__EMSCRIPTEN__)
 #ifdef HAVE_VALGRIND
-  if (RUNNING_ON_VALGRIND) {
-    /* jitted regex confuse valgrind */
+  if (RUNNING_ON_VALGRIND)
+#endif
+  {
+    /* jitted regex confuse valgrind, JIT unavailable on Emscripten */
     jit_flags &= ~G_REGEX_OPTIMIZE;
   }
 #endif

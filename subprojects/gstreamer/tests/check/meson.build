@@ -1,4 +1,5 @@
 have_debug = true # FIXME
+is_emscripten = host_machine.system() == 'emscripten'
 
 # tests and condition when to skip the test
 core_tests = [
@@ -10,8 +11,9 @@ core_tests = [
   [ 'gst/gstbufferpool.c' ],
   [ 'gst/gstchildproxy.c', not gst_registry ],
   [ 'gst/gstclock.c' ],
-  # fpcast-emu signature mismatch in g_list_free_full on Emscripten
-  [ 'gst/gstcontext.c', host_machine.system() == 'emscripten' ],
+  # FIXME: binaryen fpcast-emu generates incorrect wrapper for gst_mini_object_unref
+  # passed as GDestroyNotify to g_list_free_full — crashes with 'unreachable' even with LTO
+  [ 'gst/gstcontext.c', is_emscripten ],
   [ 'gst/gstcontroller.c' ],
   [ 'gst/gstcaps.c' ],
   [ 'gst/gstcapsfeatures.c' ],
@@ -88,8 +90,8 @@ core_tests = [
   [ 'elements/fakesrc.c', not gst_registry ],
   # FIXME: blocked forever on Windows due to missing fcntl (.. O_NONBLOCK)
   [ 'elements/fdsrc.c', not gst_registry or host_system == 'windows' or host_machine.system() == 'emscripten' ],
-  # fpcast-emu signature mismatch in gst_writev_buffer_list on Emscripten
-  [ 'elements/filesink.c', not gst_registry or host_machine.system() == 'emscripten' ],
+  # FIXME: memory access OOB in gst_memory_unmap with LTO, fpcast-emu crash without
+  [ 'elements/filesink.c', not gst_registry or is_emscripten ],
   [ 'elements/filesrc.c', not gst_registry or host_machine.system() == 'emscripten' ],
   [ 'elements/funnel.c', not gst_registry ],
   [ 'elements/identity.c', not gst_registry or not gst_parse ],
@@ -141,7 +143,6 @@ if get_option('check').disabled()
   endif
 endif
 
-is_emscripten = host_machine.system() == 'emscripten'
 gst_deps = [gst_dep, gst_base_dep, gst_check_dep, gst_net_dep, gst_controller_dep, gio_dep, gmodule_dep, network_deps]
 
 if static_build

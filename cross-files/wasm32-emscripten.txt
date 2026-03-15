@@ -11,10 +11,10 @@ cpu = 'wasm32'
 endian = 'little'
 
 [built-in options]
-c_args = ['-msimd128', '-DWASM_SIMD_COMPAT_SLOW', '-DWASM_BIGINT', '-O2', '-pthread', '-fexceptions', '-mnontrapping-fptoint', '-fPIC']
-cpp_args = ['-msimd128', '-DWASM_SIMD_COMPAT_SLOW', '-DWASM_BIGINT', '-O2', '-pthread', '-fexceptions', '-mnontrapping-fptoint', '-fPIC']
-c_link_args = ['-sOFFSCREEN_FRAMEBUFFER', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sFULL_ES3', '-sPTHREAD_POOL_SIZE=32', '-sPROXY_TO_PTHREAD', '-sALLOW_MEMORY_GROWTH=1', '-sEXIT_RUNTIME=1', '-sEMULATE_FUNCTION_POINTER_CASTS', '-sASYNCIFY', '--profiling-funcs', '-O2', '-pthread', '-fexceptions']
-cpp_link_args = ['-sOFFSCREEN_FRAMEBUFFER', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sFULL_ES3', '-sPTHREAD_POOL_SIZE=32', '-sPROXY_TO_PTHREAD', '-sALLOW_MEMORY_GROWTH=1', '-sEXIT_RUNTIME=1', '-sEMULATE_FUNCTION_POINTER_CASTS', '-sASYNCIFY', '--profiling-funcs', '-O2', '-pthread', '-fexceptions']
+c_args = ['-msimd128', '-DWASM_SIMD_COMPAT_SLOW', '-DWASM_BIGINT', '-O2', '-pthread', '-fexceptions', '-mnontrapping-fptoint', '-fPIC', '-flto']
+cpp_args = ['-msimd128', '-DWASM_SIMD_COMPAT_SLOW', '-DWASM_BIGINT', '-O2', '-pthread', '-fexceptions', '-mnontrapping-fptoint', '-fPIC', '-flto']
+c_link_args = ['-sOFFSCREEN_FRAMEBUFFER', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sFULL_ES3', '-sPTHREAD_POOL_SIZE=32', '-sPROXY_TO_PTHREAD', '-sALLOW_MEMORY_GROWTH=1', '-sEXIT_RUNTIME=1', '-sEMULATE_FUNCTION_POINTER_CASTS', '-sASYNCIFY', '--profiling-funcs', '-O2', '-pthread', '-fexceptions', '-flto']
+cpp_link_args = ['-sOFFSCREEN_FRAMEBUFFER', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sFULL_ES3', '-sPTHREAD_POOL_SIZE=32', '-sPROXY_TO_PTHREAD', '-sALLOW_MEMORY_GROWTH=1', '-sEXIT_RUNTIME=1', '-sEMULATE_FUNCTION_POINTER_CASTS', '-sASYNCIFY', '--profiling-funcs', '-O2', '-pthread', '-fexceptions', '-flto']
 c_thread_count = 0
 cpp_thread_count = 0
 default_library = 'static'

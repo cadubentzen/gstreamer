@@ -21,8 +21,7 @@ base_tests = [
   [ 'libs/pbutils.c' ],
   [ 'libs/profile.c' ],
   [ 'libs/rtp.c' ],
-  # static variable persistence in nofork mode causes failures on Emscripten
-  [ 'libs/rtpbasedepayload.c', is_emscripten ],
+  [ 'libs/rtpbasedepayload.c' ],
   [ 'libs/rtpbasepayload.c' ],
   [ 'libs/rtphdrext.c' ],
   [ 'libs/rtpmeta.c' ],
@@ -80,8 +79,7 @@ if host_machine.system() != 'windows'
     [ 'elements/multifdsink.c', is_emscripten or not core_conf.has('HAVE_SYS_SOCKET_H') or not core_conf.has('HAVE_UNISTD_H') ],
     # multisocketsink links gio which has duplicate symbol issues on Emscripten
     [ 'elements/multisocketsink.c', is_emscripten or not core_conf.has('HAVE_SYS_SOCKET_H') or not core_conf.has('HAVE_UNISTD_H') ],
-    # missing adder + timeout on Emscripten
-    [ 'elements/playbin-complex.c', is_emscripten or not ogg_dep.found() ],
+    [ 'elements/playbin-complex.c', not ogg_dep.found() ],
     [ 'elements/textoverlay.c', not pango_dep.found() ],
     [ 'elements/theoradec.c', not ogg_dep.found() or not theoradec_dep.found() ],
     # vorbisdec crashes on Emscripten (fpcast-emu proxy_sync memory access OOB)
@@ -215,16 +213,16 @@ foreach t : base_tests
         'gst-plugins-base@' + meson.project_build_root())
     env.set('GST_REGISTRY', join_paths(meson.current_build_dir(), '@0@.registry'.format(test_name)))
     env.set('GST_PLUGIN_SCANNER_1_0', gst_plugin_scanner_path)
+    test_timeout = 3 * 60
     if is_emscripten
-      if fname == 'gst/typefindfunctions.c'
-        # subparse plugin not built on Emscripten, SRT detected as text/plain
-        env.set('GST_CHECKS_IGNORE', 'test_subparse')
-      elif fname == 'libs/pbutils.c'
-        # getpwuid_r() not implemented in Emscripten
+      if fname == 'libs/pbutils.c'
+        # gst_install_plugins_sync/async require subprocess spawning
         env.set('GST_CHECKS_IGNORE', 'test_pb_utils_install_plugins')
+      elif fname == 'elements/opus.c' or fname == 'elements/playbin-complex.c'
+        test_timeout = 10 * 60
       endif
     endif
-    test(test_name, exe, env: env, timeout: 3 * 60)
+    test(test_name, exe, env: env, timeout: test_timeout)
   endif
 endforeach
 

@@ -1863,22 +1863,22 @@ hdr_ext_caps_change_chain_func (GstPad * pad, GstObject * parent,
   GstFlowReturn res;
   GstCaps *caps;
   guint val;
-  static guint expected_caps_val = 0;
+  guint expected_caps_val;
+  guint n_buffers;
 
   res = gst_check_chain_func (pad, parent, buffer);
   if (res != GST_FLOW_OK) {
     return res;
   }
 
+  n_buffers = g_list_length (buffers);
   caps = gst_pad_get_current_caps (pad);
 
   fail_unless (gst_structure_get_uint (gst_caps_get_structure (caps, 0),
           "dummy-hdrext-val", &val));
 
   /* Every fifth buffer increments "dummy-hdrext-val". */
-  if (g_list_length (buffers) % 5 == 1) {
-    expected_caps_val++;
-  }
+  expected_caps_val = (n_buffers + 4) / 5;
 
   fail_unless_equals_int (expected_caps_val, val);
 
@@ -1929,14 +1929,15 @@ hdr_ext_aggregate_chain_func (GstPad * pad, GstObject * parent,
   guint val;
   GstPad *srcpad;
   GstElement *depay;
-  static gboolean first = TRUE;
-  static guint expected_caps_val = 0;
+  guint expected_caps_val;
+  guint n_buffers;
 
   res = gst_check_chain_func (pad, parent, buffer);
   if (res != GST_FLOW_OK) {
     return res;
   }
 
+  n_buffers = g_list_length (buffers);
   caps = gst_pad_get_current_caps (pad);
 
   fail_unless (gst_structure_get_uint (gst_caps_get_structure (caps, 0),
@@ -1950,14 +1951,12 @@ hdr_ext_aggregate_chain_func (GstPad * pad, GstObject * parent,
       /* Every fifth buffer increments "dummy-hdrext-val", but we
          aggregate 5 buffers per output buffer so we increment for every
          output buffer. */
-      expected_caps_val++;
+      expected_caps_val = n_buffers;
       break;
     case GST_RTP_DUMMY_PUSH_AGGREGATE_DROP:
       /* We aggregate 5 buffers per output buffer but drop 4 of them
          from the buffer cache. */
-      if (g_list_length (buffers) % 5 == 1) {
-        expected_caps_val++;
-      }
+      expected_caps_val = (n_buffers + 4) / 5;
       break;
     case GST_RTP_DUMMY_PUSH_AGGREGATE_DELAYED:
       /* We aggregate 6 buffers per output buffer but delay the 6th one
@@ -1965,19 +1964,15 @@ hdr_ext_aggregate_chain_func (GstPad * pad, GstObject * parent,
          output buffer will process 5 header extensions (val increments
          by one) whereas the 2nd buffer will process 6 (val increments
          by two)! */
-      if (first) {
-        first = FALSE;
-        expected_caps_val++;
-      } else {
-        expected_caps_val += 2;
-      }
+      expected_caps_val = 1 + (n_buffers - 1) * 2;
       break;
     case GST_RTP_DUMMY_PUSH_AGGREGATE_FLUSH:
       /* We aggregate 5 buffers per output buffer but flush 4 of them
          from the hdr ext buffer cache. */
-      if (g_list_length (buffers) % 5 == 1) {
-        expected_caps_val++;
-      }
+      expected_caps_val = (n_buffers + 4) / 5;
+      break;
+    default:
+      expected_caps_val = 0;
       break;
   }
 
@@ -2091,6 +2086,7 @@ rtp_basepayloading_suite (void)
   TCase *tc_chain = tcase_create ("depayloading tests");
 
   tcase_set_timeout (tc_chain, 60);
+  tcase_add_unchecked_fixture (tc_chain, NULL, drop_events);
 
   suite_add_tcase (s, tc_chain);
   tcase_add_test (tc_chain, rtp_base_depayload_buffer_test);

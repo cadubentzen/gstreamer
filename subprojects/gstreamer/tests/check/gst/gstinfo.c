@@ -583,6 +583,9 @@ GST_START_TEST (info_context_log)
   gst_debug_remove_log_function (gst_debug_log_default);
   gst_debug_add_log_function (context_log_counter_func, NULL, NULL);
   gst_debug_set_default_threshold (GST_LEVEL_DEBUG);
+  /* Ensure the check category picks up the new default threshold, in case
+   * a per-category override was applied earlier (e.g. by static plugin init) */
+  gst_debug_category_set_threshold (GST_CAT_DEFAULT, GST_LEVEL_DEBUG);
   GST_DEBUG_CATEGORY_INIT (cat, "contextcat", 0, "Log context test category");
 
   GST_LOG_CONTEXT_INIT (ctx, GST_LOG_CONTEXT_FLAG_THROTTLE);
@@ -617,6 +620,7 @@ GST_START_TEST (info_context_log_once)
 
   /* Enable debug logging to ensure our logs get processed */
   gst_debug_set_default_threshold (GST_LEVEL_DEBUG);
+  gst_debug_category_set_threshold (GST_CAT_DEFAULT, GST_LEVEL_DEBUG);
   GST_DEBUG_CATEGORY_INIT (cat, "contextcat", 0, "Log context test category");
   GST_LOG_CONTEXT_INIT (ctx, GST_LOG_CONTEXT_FLAG_THROTTLE);
 
@@ -651,6 +655,7 @@ GST_START_TEST (info_context_log_periodic)
   gst_debug_remove_log_function (gst_debug_log_default);
   gst_debug_add_log_function (context_log_counter_func, NULL, NULL);
   gst_debug_set_default_threshold (GST_LEVEL_DEBUG);
+  gst_debug_category_set_threshold (GST_CAT_DEFAULT, GST_LEVEL_DEBUG);
   GST_DEBUG_CATEGORY_INIT (cat, "contextcat", 0, "Log context test category");
 
   GST_LOG_CONTEXT_INIT (ctx, GST_LOG_CONTEXT_FLAG_THROTTLE, {
@@ -701,6 +706,7 @@ GST_START_TEST (info_context_log_static)
   gst_debug_remove_log_function (gst_debug_log_default);
   gst_debug_add_log_function (context_log_counter_func, NULL, NULL);
   gst_debug_set_default_threshold (GST_LEVEL_DEBUG);
+  gst_debug_category_set_threshold (GST_CAT_DEFAULT, GST_LEVEL_DEBUG);
   GST_DEBUG_CATEGORY_INIT (cat, "contextcat", 0, "Log context test category");
 
   context_log_count = 0;
@@ -737,6 +743,7 @@ GST_START_TEST (info_context_log_flags)
 
   /* Enable debug logging to ensure our logs get processed */
   gst_debug_set_default_threshold (GST_LEVEL_DEBUG);
+  gst_debug_category_set_threshold (GST_CAT_DEFAULT, GST_LEVEL_DEBUG);
   GST_DEBUG_CATEGORY_INIT (cat, "contextcat", 0, "Log context test category");
 
   /* Create an element for object-based logging */

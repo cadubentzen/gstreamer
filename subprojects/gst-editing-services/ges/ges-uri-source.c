@@ -223,7 +223,11 @@ ges_uri_source_translate_composition_seek_cb (GstElement * nlesource,
   GESClip *parent_clip =
       GES_CLIP (ges_timeline_element_get_parent (GES_TIMELINE_ELEMENT
           (self->element)));
-  g_assert (parent_clip);
+  if (!parent_clip) {
+    GST_INFO_OBJECT (nlesource,
+        "Element no longer has a parent clip, skipping seek translation");
+    return NULL;
+  }
 
   gdouble rate;
   gint64 start, stop;
@@ -1000,6 +1004,22 @@ ges_uri_source_dispose (GESUriSource * self)
 {
   ges_uri_source_disconnect_bus_sync (self);
   g_weak_ref_set (&self->toplevel_pipeline, NULL);
+  if (self->decodebin) {
+    g_signal_handlers_disconnect_by_func (self->decodebin,
+        uridecodepoolsrc_pipeline_notify_cb, self);
+    g_signal_handlers_disconnect_by_func (self->decodebin,
+        uridecodepoolsrc_get_initial_seek_cb, self);
+  }
+  if (self->element) {
+    GstElement *nle_source =
+        ges_track_element_get_nleobject (self->element);
+    if (nle_source) {
+      g_signal_handlers_disconnect_by_func (nle_source,
+          ges_uri_source_translate_composition_seek_cb, self);
+      g_signal_handlers_disconnect_by_func (nle_source,
+          ges_uri_source_can_seek_in_ready_cb, self);
+    }
+  }
   if (self->uridecodepool_pipeline) {
     g_signal_handlers_disconnect_by_func (self->uridecodepool_pipeline,
         uridecodepoolsrc_deep_element_added_cb, self);

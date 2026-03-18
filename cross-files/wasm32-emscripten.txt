@@ -11,18 +11,18 @@ cpu = 'wasm32'
 endian = 'little'
 
 [built-in options]
-c_args = ['-msimd128', '-DWASM_SIMD_COMPAT_SLOW', '-DWASM_BIGINT', '-O2', '-pthread', '-fexceptions', '-mnontrapping-fptoint', '-fPIC', '-flto']
-cpp_args = ['-msimd128', '-DWASM_SIMD_COMPAT_SLOW', '-DWASM_BIGINT', '-O2', '-pthread', '-fexceptions', '-mnontrapping-fptoint', '-fPIC', '-flto']
-c_link_args = ['-sOFFSCREEN_FRAMEBUFFER', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sFULL_ES3', '-sPTHREAD_POOL_SIZE=32', '-sPROXY_TO_PTHREAD', '-sALLOW_MEMORY_GROWTH=1', '-sEXIT_RUNTIME=1', '-sEMULATE_FUNCTION_POINTER_CASTS', '-sASYNCIFY', '--profiling-funcs', '-O2', '-pthread', '-fexceptions', '-flto']
-cpp_link_args = ['-sOFFSCREEN_FRAMEBUFFER', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sFULL_ES3', '-sPTHREAD_POOL_SIZE=32', '-sPROXY_TO_PTHREAD', '-sALLOW_MEMORY_GROWTH=1', '-sEXIT_RUNTIME=1', '-sEMULATE_FUNCTION_POINTER_CASTS', '-sASYNCIFY', '--profiling-funcs', '-O2', '-pthread', '-fexceptions', '-flto']
+c_args = ['-msimd128', '-DWASM_SIMD_COMPAT_SLOW', '-DWASM_BIGINT', '-pthread', '-mnontrapping-fptoint', '-fPIC']
+cpp_args = ['-msimd128', '-DWASM_SIMD_COMPAT_SLOW', '-DWASM_BIGINT', '-pthread', '-mnontrapping-fptoint', '-fPIC']
+c_link_args = ['-sOFFSCREEN_FRAMEBUFFER', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sFULL_ES3', '-sPTHREAD_POOL_SIZE=32', '-sPROXY_TO_PTHREAD', '-sALLOW_MEMORY_GROWTH=1', '-sEXIT_RUNTIME=1', '-sEMULATE_FUNCTION_POINTER_CASTS', '-sASYNCIFY', '-sASYNCIFY_IMPORTS=_emscripten_receive_on_main_thread_js', '-sNODE_HOST_ENV=1', '-sNODERAWFS=1', '-sBINARYEN_EXTRA_PASSES=--pass-arg=max-func-params@30', '-sSTACK_SIZE=8388608', '-sDEFAULT_PTHREAD_STACK_SIZE=8388608', '--profiling-funcs', '-pthread', '-sDISABLE_EXCEPTION_CATCHING', '-Wl,--allow-multiple-definition']
+cpp_link_args = ['-sOFFSCREEN_FRAMEBUFFER', '-sMIN_WEBGL_VERSION=2', '-sMAX_WEBGL_VERSION=2', '-sFULL_ES3', '-sPTHREAD_POOL_SIZE=32', '-sPROXY_TO_PTHREAD', '-sALLOW_MEMORY_GROWTH=1', '-sEXIT_RUNTIME=1', '-sEMULATE_FUNCTION_POINTER_CASTS', '-sASYNCIFY', '-sASYNCIFY_IMPORTS=_emscripten_receive_on_main_thread_js', '-sNODE_HOST_ENV=1', '-sNODERAWFS=1', '-sBINARYEN_EXTRA_PASSES=--pass-arg=max-func-params@30', '-sSTACK_SIZE=8388608', '-sDEFAULT_PTHREAD_STACK_SIZE=8388608', '--profiling-funcs', '-pthread', '-sDISABLE_EXCEPTION_CATCHING', '-Wl,--allow-multiple-definition']
 c_thread_count = 0
 cpp_thread_count = 0
 default_library = 'static'
 wrap_mode = 'forcefallback'
 
 [binaries]
-c = 'emcc'
-cpp = 'em++'
+c = ['ccache', 'emcc']
+cpp = ['ccache', 'em++']
 ar = 'emar'
 nm = 'llvm-nm'
 ranlib = 'emranlib'
@@ -56,7 +56,7 @@ sharp = 'disabled'
 tls = 'disabled'
 libnice = 'disabled'
 gtk = 'disabled'
-tests = 'enabled'
+tests = 'disabled'
 examples = 'disabled'
 tools = 'enabled'
 doc = 'disabled'
@@ -134,6 +134,13 @@ qt5 = 'disabled'
 qt6 = 'disabled'
 v4l2 = 'disabled'
 videofilter = 'enabled'
+deinterlace = 'enabled'
+imagefreeze = 'enabled'
+multifile = 'enabled'
+smpte = 'enabled'
+effectv = 'enabled'
+audiofx = 'enabled'
+alpha = 'enabled'
 ximagesrc = 'disabled'
 
 [gst-plugins-bad:project options]
@@ -217,3 +224,7 @@ dtrace = 'false'
 
 [libxml2:project options]
 output = 'enabled'
+tests = 'false'
+
+[libffi:project options]
+tests = 'false'

@@ -153,7 +153,7 @@ if is_emscripten
   link_args += [
     '--pre-js', join_paths(meson.global_source_root(), 'tests', 'emscripten', 'pre-js.js'),
     '-sEXPORTED_FUNCTIONS=_free',
-    '--embed-file', test_files_path + '@' + test_files_path,
+    '-sNODERAWFS',
   ]
 endif
 

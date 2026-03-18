@@ -15,6 +15,12 @@ if not add_languages('rust', required: false, native: false)
   subdir_done()
 endif
 
+gstrstracers_dep = dependency('gstrstracers', required: false)
+if not gstrstracers_dep.found()
+  subdir_done()
+endif
+
+
 rustc = meson.get_compiler('rust')
 rustc_cmd = ' '.join(rustc.cmd_array())
 rustc_cmd += ' -C target-feature=+atomics,+bulk-memory -C link-arg=-fexceptions -C link-arg=-pthread -C panic=abort'
@@ -35,11 +41,16 @@ if pkg_config.found()
   wasm_demo_env += {'PKG_CONFIG': pkg_config.full_path()}
 endif
 
+# The demo requires gstrstracers from gst-plugins-rs
+# Get the Rust plugins custom target so ninja builds it before the demo
+rs_plugins_target = subproject('gst-plugins-rs').get_variable('rs_plugins')
+
 custom_target('gst-dots-wasm-demo',
   build_by_default: true,
   output: 'gst-dots-wasm-demo.js',
   console: true,
   install: false,
+  depends: [rs_plugins_target],
   depfile: 'gst-dots-wasm-demo.dep',
   env: wasm_demo_env,
   command: [cargo_wrapper,

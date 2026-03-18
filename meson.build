@@ -142,9 +142,9 @@ subprojects = [
   ['gstreamer-sharp', { 'option': get_option('sharp') }],
   ['pygobject', { 'option': get_option('python'), 'match_gst_version': false, 'sysdep': 'pygobject-3.0', 'sysdep_version': '>= 3.8' }],
   ['gst-python', { 'option': gst_python_option}],
+  ['gst-plugins-rs', { 'option': get_option('rs'), 'build-hotdoc': true, 'match_gst_version': false}],
   ['gst-examples', { 'option': get_option('gst-examples'), 'match_gst_versions': false}],
   ['gtk', {'option': get_option('gtk'), 'match_gst_version': false, 'subproject_options': gtk_options}],
-  ['gst-plugins-rs', { 'option': get_option('rs'), 'build-hotdoc': true, 'match_gst_version': false}],
 ]
 
 if get_option('build-tools-source') == 'subproject'

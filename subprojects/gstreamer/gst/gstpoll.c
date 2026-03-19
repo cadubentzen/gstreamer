@@ -689,7 +689,11 @@ gst_poll_new (gboolean controllable)
   {
     gint control_sock[2];
 
+#ifdef __EMSCRIPTEN__
+    if (pipe (control_sock) < 0)
+#else
     if (socketpair (PF_UNIX, SOCK_STREAM, 0, control_sock) < 0)
+#endif
       goto no_socket_pair;
 
     nset->control_read_fd.fd = control_sock[0];

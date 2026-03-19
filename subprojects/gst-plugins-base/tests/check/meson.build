@@ -1,10 +1,7 @@
 have_registry = true # FIXME get_option('registry')
 
 # name, condition when to skip the test and extra dependencies
-is_emscripten = host_machine.system() == 'emscripten'
-
 base_tests = [
-  # SRT typefinder requires subparse plugin (not built on Emscripten)
   [ 'gst/typefindfunctions.c', not have_registry ],
   [ 'libs/audio.c' ],
   [ 'libs/audiocdsrc.c' ],
@@ -41,8 +38,7 @@ base_tests = [
   [ 'elements/audiointerleave.c', get_option('audiomixer').disabled()],
   [ 'elements/audiomixer.c', get_option('audiomixer').disabled(), [ gst_controller_dep ] ],
   [ 'elements/audiorate.c', get_option('audiorate').disabled()],
-  # test_layout deadlocks on Emscripten (test clock + live source + threading)
-  [ 'elements/audiotestsrc.c', is_emscripten or get_option('audiotestsrc').disabled()],
+  [ 'elements/audiotestsrc.c', get_option('audiotestsrc').disabled()],
   [ 'elements/audioresample.c', get_option('audioresample').disabled()],
   [ 'elements/compositor.c', get_option('compositor').disabled()],
   [ 'elements/decodebin.c', get_option('playback').disabled()],
@@ -62,8 +58,7 @@ base_tests = [
   [ 'pipelines/simple-launch-lines.c' ],
   [ 'pipelines/basetime.c' ],
   [ 'pipelines/capsfilter-renegotiation.c' ],
-  # gio source element not available on Emscripten
-  [ 'pipelines/gio.c', is_emscripten ],
+  [ 'pipelines/gio.c' ],
   [ 'pipelines/streamsynchronizer.c' ],
 ]
 
@@ -71,23 +66,20 @@ base_tests = [
 if host_machine.system() != 'windows'
   base_tests += [
     [ 'libs/allocators.c', host_machine.system() != 'linux' ],
-    # rtspconnection links gio which has duplicate symbol issues on Emscripten
-    [ 'libs/rtspconnection.c', is_emscripten ],
+    [ 'libs/rtspconnection.c' ],
     [ 'elements/libvisual.c', not is_variable('libvisual_dep') or not libvisual_dep.found() ],
     [ 'elements/encodebin.c', not theoraenc_dep.found() or not vorbisenc_dep.found() ],
-    # multifdsink element not available on Emscripten
-    [ 'elements/multifdsink.c', is_emscripten or not core_conf.has('HAVE_SYS_SOCKET_H') or not core_conf.has('HAVE_UNISTD_H') ],
-    # multisocketsink links gio which has duplicate symbol issues on Emscripten
-    [ 'elements/multisocketsink.c', is_emscripten or not core_conf.has('HAVE_SYS_SOCKET_H') or not core_conf.has('HAVE_UNISTD_H') ],
+    [ 'elements/multifdsink.c', not core_conf.has('HAVE_SYS_SOCKET_H') or not core_conf.has('HAVE_UNISTD_H') ],
+    # FIXME: multisocketsink test on windows/msvc
+    [ 'elements/multisocketsink.c', not core_conf.has('HAVE_SYS_SOCKET_H') or not core_conf.has('HAVE_UNISTD_H') ],
     [ 'elements/playbin-complex.c', not ogg_dep.found() ],
     [ 'elements/textoverlay.c', not pango_dep.found() ],
     [ 'elements/theoradec.c', not ogg_dep.found() or not theoradec_dep.found() ],
-    # vorbisdec crashes on Emscripten (fpcast-emu proxy_sync memory access OOB)
-    [ 'elements/vorbisdec.c', is_emscripten or not vorbis_dep.found(), [ vorbis_dep, vorbisenc_dep ] ],
+    [ 'elements/vorbisdec.c', not vorbis_dep.found(), [ vorbis_dep, vorbisenc_dep ] ],
     [ 'elements/vorbistag.c', not vorbisenc_dep.found(), [ vorbis_dep, vorbisenc_dep ] ],
     [ 'pipelines/oggmux.c', not ogg_dep.found(), [ ogg_dep, ] ],
-    # tcp test links gio which has duplicate symbol issues on Emscripten
-    [ 'pipelines/tcp.c', is_emscripten or not core_conf.has('HAVE_SYS_SOCKET_H') or not core_conf.has('HAVE_UNISTD_H'), [giounix_dep] ],
+    # FIXME: tcp test on windows/msvc
+    [ 'pipelines/tcp.c', not core_conf.has('HAVE_SYS_SOCKET_H') or not core_conf.has('HAVE_UNISTD_H'), [giounix_dep] ],
     [ 'pipelines/theoraenc.c', not theoraenc_dep.found(), [ theoraenc_dep ] ],
     [ 'pipelines/vorbisenc.c', not vorbisenc_dep.found() ],
     [ 'pipelines/vorbisdec.c', not vorbisenc_dep.found() ],
@@ -95,8 +87,7 @@ if host_machine.system() != 'windows'
 endif
 
 # FIXME: Unstable on Windows
-# GL tests require a WebGL context, unavailable in Node.js on Emscripten
-if build_gstgl and host_machine.system() != 'windows' and not is_emscripten
+if build_gstgl and host_machine.system() != 'windows'
   base_tests += [
     [ 'libs/gstglapi.c', not build_gstgl, [gstgl_dep]],
     [ 'libs/gstglcolorconvert.c', not build_gstgl, [gstgl_dep, gstglproto_dep]],
@@ -129,13 +120,12 @@ if have_cxx
 endif
 
 fsmod = import('fs')
-test_files_path = fsmod.as_posix(meson.project_source_root() / 'tests' / 'files')
 test_defines = [
   '-UG_DISABLE_ASSERT',
   '-UG_DISABLE_CAST_CHECKS',
   '-DGST_CHECK_TEST_ENVIRONMENT_BEACON="GST_PLUGIN_LOADING_WHITELIST"',
-  '-DGST_TEST_FILES_PATH="' + test_files_path + '"',
-  '-DGST_TEST_FILE="' + test_files_path + '/partialframe.mjpeg"', # for libs/discoverer
+  '-DGST_TEST_FILES_PATH="' + fsmod.as_posix(meson.current_source_dir()) + '/../files"',
+  '-DGST_TEST_FILE="' + fsmod.as_posix(meson.current_source_dir()) + '/../files/partialframe.mjpeg"', # for libs/discoverer
   '-DGST_USE_UNSTABLE_API',
 ]
 
@@ -149,7 +139,7 @@ test_deps = [gst_dep, gst_base_dep, gst_net_dep, gst_check_dep, audio_dep,
 
 link_args = []
 extra_link_with = []
-if is_emscripten
+if host_machine.system() == 'emscripten'
   link_args += [
     '--pre-js', join_paths(meson.global_source_root(), 'tests', 'emscripten', 'pre-js.js'),
     '-sEXPORTED_FUNCTIONS=_free',
@@ -175,34 +165,52 @@ if static_build
               '-p', ';'.join(plugin_names)])
 endif
 
-foreach t : base_tests
-  fname = t.get(0)
-  test_name = fname.split('.').get(0).underscorify()
-  skip_test = false
-  extra_deps = [ ]
+if host_machine.system() == 'emscripten'
+  # Combined test binary approach: build one executable with all tests
+  combined_sources = []
+  combined_tests_map = {}
+  combined_extra_deps = []
 
-  if t.length() >= 3
-    extra_deps = t.get(2)
-  endif
+  foreach t : base_tests
+    fname = t.get(0)
+    test_name = fname.split('.').get(0).underscorify()
+    skip_test = false
+    extra_deps = [ ]
 
-  if t.length() >= 2
-    skip_test = t.get(1)
-  endif
-
-  if not skip_test
-    test_sources = [fname]
-    if static_build
-      test_sources += [static_plugins_init_c]
+    if t.length() >= 3
+      extra_deps = t.get(2)
     endif
-    exe = executable(test_name, test_sources,
-      include_directories : [configinc],
-      c_args : ['-DHAVE_CONFIG_H=1' ] + test_defines,
-      cpp_args : gst_plugins_base_args,
-      link_with : extra_link_with,
-      link_args : link_args,
-      dependencies : [libm] + test_deps + extra_deps,
-    )
 
+    if t.length() >= 2
+      skip_test = t.get(1)
+    endif
+
+    if not skip_test
+      combined_sources += files(fname)
+      combined_tests_map += {test_name: fname}
+      foreach d : extra_deps
+        if combined_extra_deps.contains(d) == false
+          combined_extra_deps += d
+        endif
+      endforeach
+    endif
+  endforeach
+
+  if static_build
+    combined_sources += [static_plugins_init_c]
+  endif
+
+  combined_exe = executable('gst-check-combined',
+    combined_sources + files('combined_main.c'),
+    include_directories : [configinc],
+    c_args : ['-DHAVE_CONFIG_H=1'] + test_defines + ['-DGST_CHECK_COMBINED_BUILD'],
+    cpp_args : gst_plugins_base_args + ['-DGST_CHECK_COMBINED_BUILD'],
+    link_with : extra_link_with,
+    link_args : link_args,
+    dependencies : [libm] + test_deps + combined_extra_deps,
+  )
+
+  foreach test_name, fname : combined_tests_map
     env = environment()
     env.set('GST_PLUGIN_PATH_1_0', meson.global_build_root(), pluginsdirs)
     env.set('GST_PLUGIN_SYSTEM_PATH_1_0', '')
@@ -214,30 +222,98 @@ foreach t : base_tests
     env.set('GST_REGISTRY', join_paths(meson.current_build_dir(), '@0@.registry'.format(test_name)))
     env.set('GST_PLUGIN_SCANNER_1_0', gst_plugin_scanner_path)
     test_timeout = 3 * 60
-    if is_emscripten
-      if fname == 'libs/pbutils.c'
-        # gst_install_plugins_sync/async require subprocess spawning
-        env.set('GST_CHECKS_IGNORE', 'test_pb_utils_install_plugins')
-      elif fname == 'elements/opus.c' or fname == 'elements/playbin-complex.c'
-        test_timeout = 10 * 60
-      endif
+
+    if fname == 'libs/pbutils.c'
+      env.set('GST_CHECKS_IGNORE', 'test_pb_utils_install_plugins')
+    elif fname == 'elements/opus.c'
+      test_timeout = 10 * 60
+    elif fname == 'elements/playbin-complex.c'
+      test_timeout = 10 * 60
+      env.set('GST_CHECKS_IGNORE', 'test_raw_raw_audio_stream_adder_manual_sink,test_autoplug_decoder_sink_combination,test_compressed_audio_video_stream_demuxer_manual_sink,test_compressed_single_audio_stream_demuxer_manual_sink,test_compressed_single_audio_stream_manual_sink,test_compressed_single_video_stream_demuxer_manual_sink,test_compressed_single_video_stream_manual_sink,test_raw_audio_video_stream_demuxer_manual_sink,test_raw_compressed_audio_stream_demuxer_manual_sink,test_raw_compressed_video_stream_demuxer_manual_sink,test_raw_single_audio_stream_demuxer_manual_sink,test_raw_single_audio_stream_manual_sink,test_raw_single_video_stream_demuxer_manual_sink,test_raw_single_video_stream_manual_sink')
+    elif fname == 'elements/decodebin.c'
+      env.set('GST_CHECKS_IGNORE', 'test_buffering_aggregation,test_reuse_without_decoders,test_text_plain_streams')
+    elif fname == 'elements/playbin.c'
+      env.set('GST_CHECKS_IGNORE', 'test_missing_suburisource_handler,test_missing_urisource_handler,test_missing_primary_decoder')
+    elif fname == 'elements/audioresample.c'
+      env.set('GST_CHECKS_IGNORE', 'test_pipelines,test_timestamp_drift')
+    elif fname == 'elements/videotestsrc.c'
+      env.set('GST_CHECKS_IGNORE', 'test_backward_playback')
+    elif fname == 'gst/typefindfunctions.c'
+      env.set('GST_CHECKS_IGNORE', 'test_subparse')
+    elif fname == 'libs/discoverer.c'
+      env.set('GST_CHECKS_IGNORE', 'test_disco_async_custom_context,test_disco_async,test_disco_async_reuse')
+    elif fname == 'libs/video.c'
+      env.set('GST_CHECKS_IGNORE', 'test_convert_frame_async_error,test_convert_frame_async')
+    elif fname == 'libs/audiodecoder.c'
+      env.set('GST_CHECKS_IGNORE', 'audiodecoder_plc_on_gap_event_with_delay')
+    elif fname == 'libs/videodecoder.c'
+      env.set('GST_CHECKS_IGNORE', 'videodecoder_backwards_buffer_after_segment')
+    elif fname == 'libs/rtpbasedepayload.c'
+      env.set('GST_CHECKS_IGNORE', 'rtp_base_depayload_multiple_exts')
+    elif fname == 'generic/states.c'
+      env.set('GST_CHECKS_IGNORE', 'test_state_changes_down_seq,test_state_changes_up_and_down_seq,test_state_changes_up_seq')
+    elif fname == 'pipelines/basetime.c'
+      env.set('GST_CHECKS_IGNORE', 'test_basetime_calculation')
+    elif fname == 'pipelines/oggmux.c'
+      env.set('GST_CHECKS_IGNORE', 'test_vorbis')
+    elif fname == 'pipelines/simple-launch-lines.c'
+      env.set('GST_CHECKS_IGNORE', 'test_basetransform_based,test_element_negotiation')
+    elif fname == 'pipelines/vorbisdec.c'
+      env.set('GST_CHECKS_IGNORE', 'test_timestamps')
     endif
-    test(test_name, exe, env: env, timeout: test_timeout)
-  endif
-endforeach
+
+    test(test_name, combined_exe, args: [test_name], env: env, timeout: test_timeout)
+  endforeach
+else
+  foreach t : base_tests
+    fname = t.get(0)
+    test_name = fname.split('.').get(0).underscorify()
+    skip_test = false
+    extra_deps = [ ]
+
+    if t.length() >= 3
+      extra_deps = t.get(2)
+    endif
+
+    if t.length() >= 2
+      skip_test = t.get(1)
+    endif
+
+    if not skip_test
+      test_sources = [fname]
+      if static_build
+        test_sources += [static_plugins_init_c]
+      endif
+      exe = executable(test_name, test_sources,
+        include_directories : [configinc],
+        c_args : ['-DHAVE_CONFIG_H=1' ] + test_defines,
+        cpp_args : gst_plugins_base_args,
+        link_with : extra_link_with,
+        link_args : link_args,
+        dependencies : [libm] + test_deps + extra_deps,
+      )
+
+      env = environment()
+      env.set('GST_PLUGIN_PATH_1_0', meson.global_build_root(), pluginsdirs)
+      env.set('GST_PLUGIN_SYSTEM_PATH_1_0', '')
+      env.set('GST_STATE_IGNORE_ELEMENTS', 'cdio cdparanoiasrc libvisual_ alsasrc alsasink')
+      env.set('CK_DEFAULT_TIMEOUT', '30')
+      env.set('GST_TAG_LICENSE_TRANSLATIONS_DICT', join_paths(gst_tag_dir, 'license-translations.dict'))
+      env.set('GST_PLUGIN_LOADING_WHITELIST', 'gstreamer',
+          'gst-plugins-base@' + meson.project_build_root())
+      env.set('GST_REGISTRY', join_paths(meson.current_build_dir(), '@0@.registry'.format(test_name)))
+      env.set('GST_PLUGIN_SCANNER_1_0', gst_plugin_scanner_path)
+      test(test_name, exe, env: env, timeout: 3 * 60)
+    endif
+  endforeach
+endif
 
 # videoscale tests (split in groups)
 foreach group : [1, 2, 3, 4, 5, 6]
   vscale_test_name = 'elements-videoscale-@0@'.format(group)
-  vscale_sources = [join_paths('elements', 'videoscale.c')]
-  if static_build
-    vscale_sources += [static_plugins_init_c]
-  endif
-  exe = executable(vscale_test_name, vscale_sources,
+  exe = executable(vscale_test_name, join_paths('elements', 'videoscale.c'),
       include_directories : [configinc],
       c_args : ['-DHAVE_CONFIG_H=1', '-DVSCALE_TEST_GROUP=@0@'.format(group) ] + test_defines,
-      link_with : extra_link_with,
-      link_args : link_args,
       dependencies : [libm] + test_deps + extra_deps)
 
   # TODO Use env.copy when it is in meson

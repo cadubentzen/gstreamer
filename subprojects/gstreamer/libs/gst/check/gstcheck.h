@@ -37,6 +37,24 @@
 
 G_BEGIN_DECLS
 
+/**
+ * GstCheckSuiteFunc:
+ *
+ * Function type for test suite constructors registered with
+ * _gst_check_register_suite().
+ *
+ * Returns: a check Suite pointer
+ *
+ * Since: 1.26
+ */
+typedef Suite* (*GstCheckSuiteFunc)(void);
+
+GST_CHECK_API
+void _gst_check_register_suite (const char *name, GstCheckSuiteFunc func, const char *file);
+
+GST_CHECK_API
+int gst_check_combined_main (int argc, char **argv);
+
 GST_CHECK_API GstDebugCategory *check_debug;
 #define GST_CAT_DEFAULT check_debug
 
@@ -732,6 +750,13 @@ fail_unless (gst_element_set_state (GST_ELEMENT(element),       \
   state) == ret,                                                \
   "could not change state to " #state);
 
+#ifdef GST_CHECK_COMBINED_BUILD
+#define GST_CHECK_MAIN(name)                                    \
+static void __attribute__((constructor))                        \
+_gst_check_register_##name(void) {                              \
+    _gst_check_register_suite(# name, name##_suite, __FILE__);  \
+}
+#else
 #define GST_CHECK_MAIN(name)                                    \
 int main (int argc, char **argv)                                \
 {                                                               \
@@ -740,6 +765,7 @@ int main (int argc, char **argv)                                \
   s = name ## _suite ();                                        \
   return gst_check_run_suite (s, # name, __FILE__);             \
 }
+#endif
 
 /* Hack to allow run-time selection of unit tests to run via the
  * GST_CHECKS environment variable (test function names globs, comma

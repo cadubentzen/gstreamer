@@ -50,6 +50,72 @@ GST_DEBUG_CATEGORY (check_debug);
  * messages
  */
 
+/* Combined test binary suite registry */
+typedef struct _GstCheckSuiteEntry {
+  const char *name;
+  GstCheckSuiteFunc func;
+  const char *file;
+  struct _GstCheckSuiteEntry *next;
+} GstCheckSuiteEntry;
+
+static GstCheckSuiteEntry *_gst_check_suite_registry = NULL;
+
+void
+_gst_check_register_suite (const char *name, GstCheckSuiteFunc func,
+    const char *file)
+{
+  GstCheckSuiteEntry *entry = g_new0 (GstCheckSuiteEntry, 1);
+  entry->name = name;
+  entry->func = func;
+  entry->file = file;
+  entry->next = _gst_check_suite_registry;
+  _gst_check_suite_registry = entry;
+}
+
+int
+gst_check_combined_main (int argc, char **argv)
+{
+  GstCheckSuiteEntry *entry;
+
+  if (argc >= 2 && strcmp (argv[1], "--list") == 0) {
+    for (entry = _gst_check_suite_registry; entry; entry = entry->next) {
+      g_print ("%s\n", entry->name);
+    }
+    return 0;
+  }
+
+  if (argc < 2) {
+    g_printerr ("Usage: %s <suite-name> [check-args...]\n", argv[0]);
+    g_printerr ("Available suites:\n");
+    for (entry = _gst_check_suite_registry; entry; entry = entry->next) {
+      g_printerr ("  %s\n", entry->name);
+    }
+    return 1;
+  }
+
+  for (entry = _gst_check_suite_registry; entry; entry = entry->next) {
+    if (strcmp (entry->name, argv[1]) == 0) {
+      Suite *s;
+
+      /* Shift argv so the suite doesn't see the suite name argument */
+      argv[1] = argv[0];
+      argc--;
+      argv++;
+
+      gst_check_init (&argc, &argv);
+      s = entry->func ();
+      return gst_check_run_suite (s, entry->name, entry->file);
+    }
+  }
+
+  g_printerr ("Unknown suite: %s\n", argv[1]);
+  g_printerr ("Available suites:\n");
+  for (entry = _gst_check_suite_registry; entry; entry = entry->next) {
+    g_printerr ("  %s\n", entry->name);
+  }
+  return 1;
+}
+
 gboolean _gst_check_threads_running = FALSE;
 GList *thread_list = NULL;
 GMutex mutex;

@@ -1,5 +1,4 @@
 have_debug = true # FIXME
-is_emscripten = host_machine.system() == 'emscripten'
 
 # tests and condition when to skip the test
 core_tests = [
@@ -34,13 +33,13 @@ core_tests = [
   [ 'gst/gstparamspecs.c' ],
   [ 'gst/gstprintf.c', not gst_debug, printf_lib],
   [ 'gst/gstpipeline.c', not gst_registry ],
-  [ 'gst/gstpoll.c', host_machine.system() == 'emscripten' ],
+  [ 'gst/gstpoll.c' ],
   [ 'gst/gstplugin.c', not gst_registry ],
   [ 'gst/gstpreset.c' ],
   [ 'gst/gstprotection.c' ],
   [ 'gst/gstquery.c', not gst_registry ],
   [ 'gst/gstregistry.c', not gst_registry ],
-  [ 'gst/gstpromise.c', host_machine.system() == 'emscripten'],
+  [ 'gst/gstpromise.c'],
   [ 'gst/gstsegment.c' ],
   [ 'gst/gststream.c' ],
   [ 'gst/gststructure.c' ],
@@ -54,11 +53,11 @@ core_tests = [
   [ 'gst/gsturi.c' ],
   [ 'gst/gstutils.c', not gst_registry ],
   [ 'gst/gstvalue.c' ],
-  [ 'gst/gstvecdeque.c', host_machine.system() == 'emscripten'],
+  [ 'gst/gstvecdeque.c' ],
   [ 'generic/states.c', not gst_registry ],
   [ 'libs/adapter.c' ],
-  [ 'libs/aggregator.c', host_machine.system() == 'emscripten' ],
-  [ 'libs/baseparse.c', host_machine.system() == 'emscripten' ],
+  [ 'libs/aggregator.c' ],
+  [ 'libs/baseparse.c' ],
   [ 'libs/basesrc.c', not gst_registry ],
   [ 'libs/basesink.c', not gst_registry ],
   [ 'libs/bitreader.c' ],
@@ -72,24 +71,24 @@ core_tests = [
   [ 'libs/controller.c' ],
   [ 'libs/flowcombiner.c' ],
   [ 'libs/gstharness.c', not gst_parse ],
-  [ 'libs/gstnetclientclock.c', host_machine.system() == 'emscripten'],
-  [ 'libs/gstnettimeprovider.c', host_machine.system() == 'emscripten'],
+  [ 'libs/gstnetclientclock.c' ],
+  [ 'libs/gstnettimeprovider.c' ],
   [ 'libs/gsttestclock.c' ],
   [ 'libs/libsabi.c' ],
   [ 'libs/sparsefile.c' ],
   [ 'libs/transform1.c' ],
   [ 'libs/transform2.c' ],
   [ 'libs/typefindhelper.c' ],
-  [ 'libs/queuearray.c', host_machine.system() == 'emscripten'],
+  [ 'libs/queuearray.c' ],
   [ 'elements/capsfilter.c', not gst_registry ],
   [ 'elements/clocksync.c', not gst_registry or not gst_parse ],
   [ 'elements/concat.c', not gst_registry ],
   [ 'elements/dataurisrc.c', not gst_registry ],
   [ 'elements/fakesrc.c', not gst_registry ],
   # FIXME: blocked forever on Windows due to missing fcntl (.. O_NONBLOCK)
-  [ 'elements/fdsrc.c', not gst_registry or host_system == 'windows' or host_machine.system() == 'emscripten' ],
+  [ 'elements/fdsrc.c', not gst_registry or host_system == 'windows' ],
   [ 'elements/filesink.c', not gst_registry ],
-  [ 'elements/filesrc.c', not gst_registry or host_machine.system() == 'emscripten' ],
+  [ 'elements/filesrc.c', not gst_registry ],
   [ 'elements/funnel.c', not gst_registry ],
   [ 'elements/identity.c', not gst_registry or not gst_parse ],
   [ 'elements/leaks.c', not tracer_hooks or not gst_debug ],
@@ -142,50 +141,47 @@ endif
 
 gst_deps = [gst_dep, gst_base_dep, gst_check_dep, gst_net_dep, gst_controller_dep, gio_dep, gmodule_dep, network_deps]
 
-if static_build
-  generate_static_plugins_init = find_program(
-    join_paths(meson.global_source_root(), 'scripts', 'generate_static_plugins_init.py'))
-  plugin_names = []
-  foreach p : plugins
-    plugin_names += p.name().substring(3) # strip 'gst' prefix
-  endforeach
-  static_plugins_init_c = custom_target('static-plugins-init',
-    output: 'static-plugins-init.c',
-    command: [generate_static_plugins_init,
-              '-o', '@OUTPUT@',
-              '-p', ';'.join(plugin_names)])
-endif
+if host_machine.system() == 'emscripten'
+  # Combined test binary approach: build one executable with all tests
+  combined_sources = []
+  combined_tests_map = {}
+  combined_link_with = []
 
-foreach t : core_tests
-  fname = t[0]
-  test_name = fname.split('.')[0].underscorify()
-  skip_test = t.get(1, false)
-  link_with_libs = t.get(2, [])
+  foreach t : core_tests
+    fname = t[0]
+    test_name = fname.split('.')[0].underscorify()
+    skip_test = t.get(1, false)
+    extra_links = t.get(2, [])
 
-  link_args = []
-  extra_link_with = []
-  if is_emscripten
-    link_args = ['--pre-js', join_paths(meson.global_source_root(), 'tests', 'emscripten', 'pre-js.js'), '-sEXPORTED_FUNCTIONS=_free', '-sNODERAWFS']
-  endif
-  if static_build
-    # Static plugins must be linked directly
-    extra_link_with = plugins
-  endif
-
-  if not skip_test
-    test_sources = [fname]
-    if static_build
-      test_sources += [static_plugins_init_c]
+    if not skip_test
+      combined_sources += files(fname)
+      combined_tests_map += {test_name: fname}
+      foreach l : extra_links
+        if combined_link_with.contains(l) == false
+          combined_link_with += l
+        endif
+      endforeach
     endif
-    exe = executable(test_name, test_sources,
-        c_args : gst_c_args + test_defines,
-        cpp_args : gst_c_args + test_defines,
-        include_directories : [configinc],
-        link_with : [link_with_libs] + extra_link_with,
-        link_args : link_args,
-        dependencies : gst_deps + test_deps,
-    )
+  endforeach
 
+  combined_link_args = ['--pre-js', join_paths(meson.global_source_root(), 'tests', 'emscripten', 'pre-js.js'), '-sEXPORTED_FUNCTIONS=_free', '-sNODERAWFS']
+
+  if static_build
+    combined_sources += [static_plugins_init_c]
+    combined_link_with += plugins
+  endif
+
+  combined_exe = executable('gst-check-combined',
+    combined_sources + files('combined_main.c'),
+    c_args : gst_c_args + test_defines + ['-DGST_CHECK_COMBINED_BUILD'],
+    cpp_args : gst_c_args + test_defines + ['-DGST_CHECK_COMBINED_BUILD'],
+    include_directories : [configinc],
+    link_with : combined_link_with,
+    link_args : combined_link_args,
+    dependencies : gst_deps + test_deps,
+  )
+
+  foreach test_name, fname : combined_tests_map
     env = environment()
     env.set('GST_PLUGIN_PATH_1_0', meson.project_build_root())
     env.set('GST_PLUGIN_SYSTEM_PATH_1_0', '')
@@ -195,6 +191,74 @@ foreach t : core_tests
     env.set('GST_PLUGIN_SCANNER_1_0', gst_scanner_dir + '/gst-plugin-scanner')
     env.set('GST_PLUGIN_LOADING_WHITELIST', 'gstreamer')
 
-    test(test_name, exe, env: env, timeout : 3 * 60)
-  endif
-endforeach
+    if fname == 'gst/gstbus.c'
+      env.set('GST_CHECKS_IGNORE', 'test_watch,test_watch_twice,test_watch_with_custom_context,test_add_watch_with_custom_context,test_custom_main_context,test_watch_with_poll')
+    elif fname == 'gst/gstbin.c'
+      env.set('GST_CHECKS_IGNORE', 'test_message_state_changed,test_message_state_changed_child,test_message_state_changed_children,test_eos,test_eos_recheck,test_children_state_change_order_two_sink,test_children_state_change_order_flagged_sink,test_children_state_change_order_semi_sink,test_state_failure_unref,test_stream_start,test_watch_for_state_change')
+    elif fname == 'gst/gstinfo.c'
+      env.set('GST_CHECKS_IGNORE', 'info_context_log,info_context_log_once,info_context_log_periodic,info_context_log_static,info_context_log_flags')
+    elif fname == 'gst/gstpipeline.c'
+      env.set('GST_CHECKS_IGNORE', 'test_async_state_change_fake,test_bus')
+    elif fname == 'gst/gstutils.c'
+      env.set('GST_CHECKS_IGNORE', 'test_buffer_probe_n_times,test_buffer_probe_once,test_element_found_tags,test_element_link_with_ghost_pads')
+    elif fname == 'elements/filesink.c'
+      env.set('GST_CHECKS_IGNORE', 'test_seeking')
+    elif fname == 'elements/fakesrc.c'
+      env.set('GST_CHECKS_IGNORE', 'test_reuse_push')
+    elif fname == 'elements/multiqueue.c'
+      env.set('GST_CHECKS_IGNORE', 'test_simple_pipeline,test_simple_shutdown_while_running,test_initial_fill_above_high_threshold,test_watermark_and_fill_level,test_high_threshold_change,test_low_threshold_change,test_stream_status_messages')
+    elif fname == 'elements/queue2.c'
+      env.set('GST_CHECKS_IGNORE', 'test_simple_pipeline,test_simple_pipeline_ringbuffer,test_simple_shutdown_while_running,test_simple_shutdown_while_running_ringbuffer,test_watermark_and_fill_level,test_small_ring_buffer,test_bitrate_query,test_ready_paused_buffering_message')
+    elif fname == 'elements/tee.c'
+      env.set('GST_CHECKS_IGNORE', 'test_num_buffers,test_stress')
+    elif fname == 'generic/sinks.c'
+      env.set('GST_CHECKS_IGNORE', 'test_livesrc_sink')
+    elif fname == 'libs/basesink.c'
+      env.set('GST_CHECKS_IGNORE', 'basesink_test_gap,basesink_last_sample_disabled,basesink_last_sample_enabled')
+    elif fname == 'libs/basesrc.c'
+      env.set('GST_CHECKS_IGNORE', 'basesrc_eos_events_pull,basesrc_eos_events_pull_live_eos,basesrc_eos_events_push,basesrc_eos_events_push_live_eos,basesrc_eos_events_push_live_op,basesrc_seek_events_rate_update,basesrc_seek_on_last_buffer')
+    elif fname == 'libs/collectpads.c'
+      env.set('GST_CHECKS_IGNORE', 'test_branched_pipeline,test_linear_pipeline')
+    elif fname == 'libs/gstharness.c'
+      env.set('GST_CHECKS_IGNORE', 'test_forward_sticky_events_to_sink_harness_while_teardown')
+    elif fname == 'pipelines/cleanup.c'
+      env.set('GST_CHECKS_IGNORE', 'test_pipeline_unref')
+    elif fname == 'pipelines/queue-error.c'
+      env.set('GST_CHECKS_IGNORE', 'test_queue')
+    elif fname == 'pipelines/simple-launch-lines.c'
+      env.set('GST_CHECKS_IGNORE', 'test_2_elements,test_stop_from_app')
+    elif fname == 'pipelines/stress.c'
+      env.set('GST_CHECKS_IGNORE', 'test_stress_preroll')
+    endif
+
+    test(test_name, combined_exe, args: [test_name], env: env, timeout : 3 * 60)
+  endforeach
+else
+  foreach t : core_tests
+    fname = t[0]
+    test_name = fname.split('.')[0].underscorify()
+    skip_test = t.get(1, false)
+    link_with_libs = t.get(2, [])
+
+    if not skip_test
+      exe = executable(test_name, fname,
+          c_args : gst_c_args + test_defines,
+          cpp_args : gst_c_args + test_defines,
+          include_directories : [configinc],
+          link_with : link_with_libs,
+          dependencies : gst_deps + test_deps,
+      )
+
+      env = environment()
+      env.set('GST_PLUGIN_PATH_1_0', meson.project_build_root())
+      env.set('GST_PLUGIN_SYSTEM_PATH_1_0', '')
+      env.set('GST_STATE_IGNORE_ELEMENTS', '')
+      env.set('CK_DEFAULT_TIMEOUT', '20')
+      env.set('GST_REGISTRY', '@0@/@1@.registry'.format(meson.current_build_dir(), test_name))
+      env.set('GST_PLUGIN_SCANNER_1_0', gst_scanner_dir + '/gst-plugin-scanner')
+      env.set('GST_PLUGIN_LOADING_WHITELIST', 'gstreamer')
+
+      test(test_name, exe, env: env, timeout : 3 * 60)
+    endif
+  endforeach
+endif

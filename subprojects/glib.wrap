@@ -1,6 +1,6 @@
 [wrap-git]
 directory = glib
-url = https://github.com/fluendo/glib.git
+url = https://gitlab.gnome.org/thiblahute/glib.git
 revision = gst.wasm
 depth = 1
 

@@ -36,6 +36,7 @@
 #include "config.h"
 #endif
 
+#include <stdio.h>
 #include "gstcheck.h"
 
 #ifdef __EMSCRIPTEN__
@@ -79,8 +80,9 @@ gst_check_combined_main (int argc, char **argv)
 
   if (argc >= 2 && strcmp (argv[1], "--list") == 0) {
     for (entry = _gst_check_suite_registry; entry; entry = entry->next) {
-      g_print ("%s\n", entry->name);
+      fprintf (stdout, "%s\n", entry->name);
     }
+    fflush (stdout);
     return 0;
   }
 
@@ -94,7 +96,49 @@ gst_check_combined_main (int argc, char **argv)
   }
 
   for (entry = _gst_check_suite_registry; entry; entry = entry->next) {
-    if (strcmp (entry->name, argv[1]) == 0) {
+    /* Match by suite name, or by the source file path (underscorified).
+     * Meson generates test names from paths like "libs/audio.c" -> "libs_audio"
+     * while suites register as "audio", so exact match often fails.
+     * We also match against the source file basename (without extension and
+     * directory), underscorified. */
+    const char *arg = argv[1];
+    gboolean matched = (strcmp (entry->name, arg) == 0);
+
+    if (!matched && entry->file) {
+      /* Extract basename from __FILE__ path, e.g.
+       * "/path/to/libs/audio.c" -> "audio" or
+       * "/path/to/gst/gstbuffer.c" -> "gstbuffer"
+       * Then also try the dir/basename form: "libs_audio", "gst_gstbuffer" */
+      const char *slash = strrchr (entry->file, '/');
+      const char *base = slash ? slash + 1 : entry->file;
+      /* Remove .c/.cc extension */
+      size_t base_len = strlen (base);
+      const char *dot = strrchr (base, '.');
+      if (dot)
+        base_len = dot - base;
+
+      /* Try matching "libs_audio" against dir_basename like "libs_audio" */
+      if (!matched && slash) {
+        /* Build dir_base: find previous slash for directory component */
+        const char *dir_start = slash - 1;
+        while (dir_start > entry->file && *dir_start != '/')
+          dir_start--;
+        if (*dir_start == '/')
+          dir_start++;
+        /* dir_start points to "libs/audio.c", build "libs_audio" equivalent */
+        size_t dir_base_len = dot ? (size_t) (dot - dir_start) : strlen (dir_start);
+        gchar *dir_base = g_strndup (dir_start, dir_base_len);
+        /* Replace '/' with '_' */
+        for (gchar * p = dir_base; *p; p++) {
+          if (*p == '/' || *p == '-')
+            *p = '_';
+        }
+        matched = (strcmp (dir_base, arg) == 0);
+        g_free (dir_base);
+      }
+    }
+
+    if (matched) {
       Suite *s;
 
       /* Shift argv so the suite doesn't see the suite name argument */
@@ -1211,7 +1255,11 @@ gst_check_run_suite (Suite * suite, const gchar * name, const gchar * fname)
 #ifdef __EMSCRIPTEN__
   /* On Emscripten with PROXY_TO_PTHREAD, the process hangs at exit waiting
    * for worker threads (GLib thread pool, GStreamer debug threads) to be
-   * joined. Force immediate exit after printing results. */
+   * joined. Force immediate exit after printing results.
+   * Flush stdio first — emscripten_force_exit calls _exit() which
+   * does not flush buffers. */
+  fflush (stdout);
+  fflush (stderr);
   emscripten_force_exit (nf > 0 ? 1 : 0);
 #endif
   return nf;

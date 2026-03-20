@@ -78,6 +78,12 @@ foreach arg : [
   endif
 endforeach
 
+libcheck_extra_c_args = []
+if host_machine.system() == 'emscripten'
+  # Work around LLVM ICE "Basic Block has trailing DbgRecords!" in check_run.c
+  libcheck_extra_c_args += ['-g0']
+endif
+
 libcheck = static_library('check',
   libcheck_files,
   include_directories : [configinc, internal_check_h_inc],
@@ -85,5 +91,6 @@ libcheck = static_library('check',
   c_args: gst_c_args + libcheck_visibility_args + no_warn_args +
 	  # Don't want libcompat to think we don't have these and substitute
 	  # replacements since we don't check for or define these. See libcompat.h
-	  ['-DHAVE_VSNPRINTF', '-DHAVE_SNPRINTF', '-DHAVE_MALLOC', '-DHAVE_REALLOC'],
+	  ['-DHAVE_VSNPRINTF', '-DHAVE_SNPRINTF', '-DHAVE_MALLOC', '-DHAVE_REALLOC'] +
+	  libcheck_extra_c_args,
   pic: true)

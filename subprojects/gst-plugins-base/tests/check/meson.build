@@ -112,6 +112,14 @@ if build_gstgl and host_machine.system() != 'windows'
   ]
 endif
 
+# On emscripten, include videoscale (without VSCALE_TEST_GROUP) in the
+# combined binary instead of building 6 separate executables.
+if host_machine.system() == 'emscripten'
+  base_tests += [
+    [ 'elements/videoscale.c' ],
+  ]
+endif
+
 # Make sure our headers are C++ clean
 if have_cxx
   base_tests += [
@@ -142,8 +150,10 @@ extra_link_with = []
 if host_machine.system() == 'emscripten'
   link_args += [
     '--pre-js', join_paths(meson.global_source_root(), 'tests', 'emscripten', 'pre-js.js'),
-    '-sEXPORTED_FUNCTIONS=_free',
+    '-sEXPORTED_FUNCTIONS=_main,_free',
     '-sNODERAWFS',
+    '-sPTHREAD_POOL_SIZE=0',
+    '-sMIN_WEBGL_VERSION=1',
   ]
 endif
 
@@ -309,11 +319,20 @@ else
 endif
 
 # videoscale tests (split in groups)
+# On emscripten, videoscale is included in the combined binary instead.
+if host_machine.system() != 'emscripten'
+vscale_sources_extra = []
+if static_build
+  vscale_sources_extra += [static_plugins_init_c]
+endif
 foreach group : [1, 2, 3, 4, 5, 6]
   vscale_test_name = 'elements-videoscale-@0@'.format(group)
-  exe = executable(vscale_test_name, join_paths('elements', 'videoscale.c'),
+  exe = executable(vscale_test_name,
+      [join_paths('elements', 'videoscale.c')] + vscale_sources_extra,
       include_directories : [configinc],
       c_args : ['-DHAVE_CONFIG_H=1', '-DVSCALE_TEST_GROUP=@0@'.format(group) ] + test_defines,
+      link_with : extra_link_with,
+      link_args : link_args,
       dependencies : [libm] + test_deps + extra_deps)
 
   # TODO Use env.copy when it is in meson
@@ -330,6 +349,7 @@ foreach group : [1, 2, 3, 4, 5, 6]
 
   test(vscale_test_name, exe, env: env, timeout: 3 * 60)
 endforeach
+endif # not emscripten
 
 # orc tests
 orc_tests = [

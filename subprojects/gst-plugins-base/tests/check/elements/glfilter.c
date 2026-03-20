@@ -120,6 +120,9 @@ glfilter_suite (void)
   return s;
 }
 
+#ifdef GST_CHECK_COMBINED_BUILD
+GST_CHECK_MAIN (glfilter)
+#else
 int
 main (int argc, char **argv)
 {
@@ -130,3 +133,4 @@ main (int argc, char **argv)
   s = glfilter_suite ();
   return gst_check_run_suite (s, "glfilter", __FILE__);
 }
+#endif

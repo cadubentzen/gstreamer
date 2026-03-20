@@ -65,6 +65,9 @@ glstereo_suite (void)
   return s;
 }
 
+#ifdef GST_CHECK_COMBINED_BUILD
+GST_CHECK_MAIN (glstereo)
+#else
 int
 main (int argc, char **argv)
 {
@@ -75,3 +78,4 @@ main (int argc, char **argv)
   s = glstereo_suite ();
   return gst_check_run_suite (s, "glstereo", __FILE__);
 }
+#endif

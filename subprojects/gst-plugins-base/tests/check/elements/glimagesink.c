@@ -274,6 +274,9 @@ glimagesink_suite (void)
   return s;
 }
 
+#ifdef GST_CHECK_COMBINED_BUILD
+GST_CHECK_MAIN (glimagesink)
+#else
 int
 main (int argc, char **argv)
 {
@@ -284,3 +287,4 @@ main (int argc, char **argv)
   s = glimagesink_suite ();
   return gst_check_run_suite (s, "glimagesink", __FILE__);
 }
+#endif

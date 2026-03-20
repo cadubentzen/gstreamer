@@ -1184,6 +1184,9 @@ videoscale_suite (void)
   return s;
 }
 
+#ifdef GST_CHECK_COMBINED_BUILD
+GST_CHECK_MAIN (videoscale)
+#else
 /* NOTE:
  * We need to do the filename dance below in order to avoid having
  * multiple parallel tests (identified by VSCALE_TEST_GROUP) going
@@ -1204,3 +1207,4 @@ main (int argc, char **argv)
 #endif
   return gst_check_run_suite (s, "videoscale", FULL_RUN_NAME);
 }
+#endif

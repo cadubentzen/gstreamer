@@ -148,6 +148,13 @@ source_setup_cb (GstElement * decodebin, GstElement * source,
   }
 
   GESTrack *track = ges_track_element_get_track (self->element);
+  if (!track) {
+    GST_WARNING_OBJECT (self->element,
+        "Source has no track, skipping stream selection");
+
+    return;
+  }
+
   GESTimeline *subtimeline;
 
   g_object_get (source, "timeline", &subtimeline, NULL);
@@ -1011,8 +1018,7 @@ ges_uri_source_dispose (GESUriSource * self)
         uridecodepoolsrc_get_initial_seek_cb, self);
   }
   if (self->element) {
-    GstElement *nle_source =
-        ges_track_element_get_nleobject (self->element);
+    GstElement *nle_source = ges_track_element_get_nleobject (self->element);
     if (nle_source) {
       g_signal_handlers_disconnect_by_func (nle_source,
           ges_uri_source_translate_composition_seek_cb, self);

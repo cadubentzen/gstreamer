@@ -513,6 +513,16 @@ leakstracer_suite (void)
   return s;
 }
 
+#ifdef GST_CHECK_COMBINED_BUILD
+static void __attribute__((constructor))
+_gst_check_register_leakstracer(void) {
+  /* Set tracer env before gst_init is called by the combined runner */
+  g_setenv ("GST_TRACERS", "leaks(name=plain,log-leaks-on-deinit=false);"
+      "leaks(name=more,filters=GstPad,check-refs=true,stack-traces-flags=none,log-leaks-on-deinit=false);",
+      TRUE);
+  _gst_check_register_suite ("leakstracer", leakstracer_suite, __FILE__);
+}
+#else
 /* Replacement for GST_CHECK_MAIN (leakstracer); because we need to set the
  * env before gst_init() is called */
 int
@@ -526,3 +536,4 @@ main (int argc, char **argv)
   s = leakstracer_suite ();
   return gst_check_run_suite (s, "leakstracer", __FILE__);
 }
+#endif

@@ -15,13 +15,13 @@ core_tests = [
   [ 'gst/gstcaps.c' ],
   [ 'gst/gstcapsfeatures.c' ],
   [ 'gst/gstdatetime.c' ],
-  [ 'gst/gstdeinit.c' ],
+  [ 'gst/gstdeinit.c', host_machine.system() == 'emscripten' ],
   [ 'gst/gstdevice.c' ],
   [ 'gst/gstelement.c', not gst_registry or not gst_parse],
   [ 'gst/gstelementfactory.c', not gst_registry ],
   [ 'gst/gstghostpad.c', not gst_registry ],
   [ 'gst/gstidstr.c' ],
-  [ 'gst/gstidstr-noinline.c' ],
+  [ 'gst/gstidstr-noinline.c', host_machine.system() == 'emscripten' ],
   [ 'gst/gstinfo.c' ],
   [ 'gst/gstiterator.c' ],
   [ 'gst/gstmessage.c' ],
@@ -31,7 +31,7 @@ core_tests = [
   [ 'gst/gstobject.c' ],
   [ 'gst/gstpad.c', not gst_registry ],
   [ 'gst/gstparamspecs.c' ],
-  [ 'gst/gstprintf.c', not gst_debug, printf_lib],
+  [ 'gst/gstprintf.c', not gst_debug, [printf_lib]],
   [ 'gst/gstpipeline.c', not gst_registry ],
   [ 'gst/gstpoll.c' ],
   [ 'gst/gstplugin.c', not gst_registry ],
@@ -64,15 +64,15 @@ core_tests = [
   [ 'libs/bitwriter.c' ],
   [ 'libs/bytereader.c' ],
   [ 'libs/bytewriter.c' ],
-  [ 'libs/bitreader-noinline.c' ],
-  [ 'libs/bytereader-noinline.c' ],
-  [ 'libs/bytewriter-noinline.c' ],
+  [ 'libs/bitreader-noinline.c', host_machine.system() == 'emscripten' ],
+  [ 'libs/bytereader-noinline.c', host_machine.system() == 'emscripten' ],
+  [ 'libs/bytewriter-noinline.c', host_machine.system() == 'emscripten' ],
   [ 'libs/collectpads.c', not gst_registry ],
   [ 'libs/controller.c' ],
   [ 'libs/flowcombiner.c' ],
   [ 'libs/gstharness.c', not gst_parse ],
-  [ 'libs/gstnetclientclock.c' ],
-  [ 'libs/gstnettimeprovider.c' ],
+  [ 'libs/gstnetclientclock.c', host_machine.system() == 'emscripten' ],
+  [ 'libs/gstnettimeprovider.c', host_machine.system() == 'emscripten' ],
   [ 'libs/gsttestclock.c' ],
   [ 'libs/libsabi.c' ],
   [ 'libs/sparsefile.c' ],
@@ -141,6 +141,20 @@ endif
 
 gst_deps = [gst_dep, gst_base_dep, gst_check_dep, gst_net_dep, gst_controller_dep, gio_dep, gmodule_dep, network_deps]
 
+if static_build
+  generate_static_plugins_init = find_program(
+    join_paths(meson.global_source_root(), 'scripts', 'generate_static_plugins_init.py'))
+  plugin_names = []
+  foreach p : plugins
+    plugin_names += p.name().substring(3) # strip 'gst' prefix
+  endforeach
+  static_plugins_init_c = custom_target('static-plugins-init',
+    output: 'static-plugins-init.c',
+    command: [generate_static_plugins_init,
+              '-o', '@OUTPUT@',
+              '-p', ';'.join(plugin_names)])
+endif
+
 if host_machine.system() == 'emscripten'
   # Combined test binary approach: build one executable with all tests
   combined_sources = []
@@ -156,15 +170,11 @@ if host_machine.system() == 'emscripten'
     if not skip_test
       combined_sources += files(fname)
       combined_tests_map += {test_name: fname}
-      foreach l : extra_links
-        if combined_link_with.contains(l) == false
-          combined_link_with += l
-        endif
-      endforeach
+      combined_link_with += extra_links
     endif
   endforeach
 
-  combined_link_args = ['--pre-js', join_paths(meson.global_source_root(), 'tests', 'emscripten', 'pre-js.js'), '-sEXPORTED_FUNCTIONS=_free', '-sNODERAWFS']
+  combined_link_args = ['--pre-js', join_paths(meson.global_source_root(), 'tests', 'emscripten', 'pre-js.js'), '-sEXPORTED_FUNCTIONS=_main,_free', '-sNODERAWFS', '-sPTHREAD_POOL_SIZE=0', '-sMIN_WEBGL_VERSION=1']
 
   if static_build
     combined_sources += [static_plugins_init_c]

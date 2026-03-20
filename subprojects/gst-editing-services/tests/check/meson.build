@@ -58,36 +58,115 @@ else
 endif
 gst_plugin_scanner_path = join_paths(gst_plugin_scanner_dir, 'gst-plugin-scanner')
 
-foreach t : ges_tests
-  if t.get(0).endswith('.cc')
-    fname = t.get(0)
-  else
-    fname = '@0@.c'.format(t.get(0))
-  endif
-  test_name = t.get(0).underscorify()
-  if t.length() == 2
-    skip_test = t.get(1)
-  else
-    skip_test = false
+link_args = []
+extra_link_with = []
+if host_machine.system() == 'emscripten'
+  link_args += [
+    '--pre-js', join_paths(meson.global_source_root(), 'tests', 'emscripten', 'pre-js.js'),
+    '-sEXPORTED_FUNCTIONS=_main,_free',
+    '-sNODERAWFS',
+    '-sPTHREAD_POOL_SIZE=0',
+    '-sMIN_WEBGL_VERSION=1',
+  ]
+endif
+
+if static_build
+  gst_proj = subproject('gstreamer')
+  gstbase_proj = subproject('gst-plugins-base')
+  gstbad_proj = subproject('gst-plugins-bad')
+  extra_link_with = plugins + gst_proj.get_variable('plugins') + gstbase_proj.get_variable('plugins') + gstbad_proj.get_variable('plugins')
+
+  generate_static_plugins_init = find_program(
+    join_paths(meson.global_source_root(), 'scripts', 'generate_static_plugins_init.py'))
+  all_test_plugins = extra_link_with
+  plugin_names = []
+  foreach p : all_test_plugins
+    plugin_names += p.name().substring(3) # strip 'gst' prefix
+  endforeach
+  static_plugins_init_c = custom_target('static-plugins-init',
+    output: 'static-plugins-init.c',
+    command: [generate_static_plugins_init,
+              '-o', '@OUTPUT@',
+              '-p', ';'.join(plugin_names)])
+endif
+
+if host_machine.system() == 'emscripten'
+  # Combined test binary approach: build one executable with all tests
+  combined_sources = []
+  combined_tests_map = {}
+
+  foreach t : ges_tests
+    if t.get(0).endswith('.cc')
+      fname = t.get(0)
+    else
+      fname = '@0@.c'.format(t.get(0))
+    endif
+    test_name = t.get(0).underscorify()
+    skip_test = t.length() == 2 ? t.get(1) : false
+
+    if not skip_test
+      combined_sources += files(fname)
+      combined_tests_map += {test_name: fname}
+    endif
+  endforeach
+
+  if static_build
+    combined_sources += [static_plugins_init_c]
   endif
 
-  if not skip_test
+  combined_exe = executable('gst-check-combined',
+    combined_sources + files('ges/test-utils.c', 'nle/common.c', 'combined_main.c'),
+    c_args : ges_c_args + test_defines + ['-DGST_CHECK_COMBINED_BUILD'],
+    cpp_args : ges_c_args + test_defines + ['-DGST_CHECK_COMBINED_BUILD'],
+    include_directories : [configinc],
+    link_with : extra_link_with,
+    link_args : link_args,
+    dependencies : libges_deps + [gstcheck_dep, ges_dep],
+  )
+
+  foreach test_name, fname : combined_tests_map
     env = environment()
     env.set('GST_PLUGIN_SYSTEM_PATH_1_0', '')
     env.set('GST_STATE_IGNORE_ELEMENTS', '')
     env.set('CK_DEFAULT_TIMEOUT', '20')
     env.set('GST_REGISTRY', '@0@/@1@.registry'.format(meson.current_build_dir(), test_name))
     env.set('GST_PLUGIN_PATH_1_0', [meson.global_build_root()] + pluginsdirs)
+    env.set('GST_PLUGIN_SCANNER_1_0', gst_plugin_scanner_path)
 
-    exe = executable(test_name, fname,
-        'ges/test-utils.c', 'nle/common.c',
-        c_args : ges_c_args + test_defines,
-        include_directories : [configinc],
-        dependencies : libges_deps + [gstcheck_dep, ges_dep],
-    )
-    test(test_name, exe, env: env, timeout : 3 * 60)
-  endif
-endforeach
+    test(test_name, combined_exe, args: [test_name], env: env, timeout : 3 * 60)
+  endforeach
+else
+  foreach t : ges_tests
+    if t.get(0).endswith('.cc')
+      fname = t.get(0)
+    else
+      fname = '@0@.c'.format(t.get(0))
+    endif
+    test_name = t.get(0).underscorify()
+    if t.length() == 2
+      skip_test = t.get(1)
+    else
+      skip_test = false
+    endif
+
+    if not skip_test
+      env = environment()
+      env.set('GST_PLUGIN_SYSTEM_PATH_1_0', '')
+      env.set('GST_STATE_IGNORE_ELEMENTS', '')
+      env.set('CK_DEFAULT_TIMEOUT', '20')
+      env.set('GST_REGISTRY', '@0@/@1@.registry'.format(meson.current_build_dir(), test_name))
+      env.set('GST_PLUGIN_PATH_1_0', [meson.global_build_root()] + pluginsdirs)
+
+      exe = executable(test_name, fname,
+          'ges/test-utils.c', 'nle/common.c',
+          c_args : ges_c_args + test_defines,
+          include_directories : [configinc],
+          dependencies : libges_deps + [gstcheck_dep, ges_dep],
+      )
+      test(test_name, exe, env: env, timeout : 3 * 60)
+    endif
+  endforeach
+endif
 
 if gstvalidate_dep.found() and not get_option('tools').disabled()
   # filename: is .validatetest

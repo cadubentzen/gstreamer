@@ -289,6 +289,9 @@ ges_suite (void)
   return s;
 }
 
+#ifdef GST_CHECK_COMBINED_BUILD
+GST_CHECK_MAIN (ges)
+#else
 int
 main (int argc, char **argv)
 {
@@ -310,3 +313,4 @@ main (int argc, char **argv)
 
   return nf;
 }
+#endif

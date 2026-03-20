@@ -1,4 +1,4 @@
-if get_option('tests').disabled() or static_build
+if get_option('tests').disabled() or (static_build and host_machine.system() != 'emscripten')
   subdir_done()
 endif
 

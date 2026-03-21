@@ -274,6 +274,20 @@ GST_START_TEST (test_filesource_images)
 GST_END_TEST;
 
 
+static void
+ges_uriclip_setup (void)
+{
+  av_uri = ges_test_get_audio_video_uri ();
+  image_uri = ges_test_get_image_uri ();
+}
+
+static void
+ges_uriclip_teardown (void)
+{
+  g_clear_pointer (&av_uri, g_free);
+  g_clear_pointer (&image_uri, g_free);
+}
+
 static Suite *
 ges_suite (void)
 {
@@ -281,6 +295,8 @@ ges_suite (void)
   TCase *tc_chain = tcase_create ("filesource");
 
   suite_add_tcase (s, tc_chain);
+  tcase_add_checked_fixture (tc_chain, ges_uriclip_setup,
+      ges_uriclip_teardown);
 
   tcase_add_test (tc_chain, test_filesource_basic);
   tcase_add_test (tc_chain, test_filesource_images);
@@ -303,13 +319,7 @@ main (int argc, char **argv)
 
   s = ges_suite ();
 
-  av_uri = ges_test_get_audio_video_uri ();
-  image_uri = ges_test_get_image_uri ();
-
   nf = gst_check_run_suite (s, "ges", __FILE__);
-
-  g_free (av_uri);
-  g_free (image_uri);
 
   return nf;
 }

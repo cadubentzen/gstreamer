@@ -73,8 +73,9 @@ endif
 if static_build
   gst_proj = subproject('gstreamer')
   gstbase_proj = subproject('gst-plugins-base')
+  gstgood_proj = subproject('gst-plugins-good')
   gstbad_proj = subproject('gst-plugins-bad')
-  extra_link_with = plugins + gst_proj.get_variable('plugins') + gstbase_proj.get_variable('plugins') + gstbad_proj.get_variable('plugins')
+  extra_link_with = plugins + gst_proj.get_variable('plugins') + gstbase_proj.get_variable('plugins') + gstgood_proj.get_variable('plugins') + gstbad_proj.get_variable('plugins')
 
   generate_static_plugins_init = find_program(
     join_paths(meson.global_source_root(), 'scripts', 'generate_static_plugins_init.py'))
@@ -101,7 +102,7 @@ if host_machine.system() == 'emscripten'
     else
       fname = '@0@.c'.format(t.get(0))
     endif
-    test_name = t.get(0).underscorify()
+    test_name = t.get(0).split('.')[0].underscorify()
     skip_test = t.length() == 2 ? t.get(1) : false
 
     if not skip_test
@@ -142,7 +143,7 @@ else
     else
       fname = '@0@.c'.format(t.get(0))
     endif
-    test_name = t.get(0).underscorify()
+    test_name = t.get(0).split('.')[0].underscorify()
     if t.length() == 2
       skip_test = t.get(1)
     else

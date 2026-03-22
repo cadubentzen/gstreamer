@@ -223,16 +223,47 @@ gst_web_codecs_video_decoder_on_output (guintptr self_, val video_frame)
     glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    /* Upload VideoFrame to GL texture via JS texImage2D.
-     * The GL context uses PROXY_ALWAYS so this call is proxied
-     * to the main thread where both WebGL and VideoFrame live. */
-    EM_ASM ({
-      var gl = GLctx;
-      var vf = Emval.toValue ($0);
-      gl.texImage2D (gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA,
-          gl.UNSIGNED_BYTE, vf);
-      vf.close ();
-    }, video_frame.as_handle ());
+    /* Upload VideoFrame to GL texture (zero-copy for HW decode).
+     *
+     * gl.texImage2D(videoFrame) lets the browser transfer a GPU-resident
+     * VideoFrame directly to a WebGL texture without CPU readback.
+     * However, the VideoFrame val lives on the runner thread while the
+     * GL context (PROXY_ALWAYS) executes on the main thread.
+     *
+     * Solution: store the VideoFrame in a shared JS global slot on the
+     * worker, then run texImage2D on the main thread (via
+     * emscripten_sync_run_in_main_runtime_thread) which picks up the
+     * VideoFrame from the slot.  Since both the worker and the main
+     * thread share the same JS global scope (SharedArrayBuffer/SAB),
+     * this works without transferring the VideoFrame. */
+    {
+      int w = video_frame["displayWidth"].as<int> ();
+      int h = video_frame["displayHeight"].as<int> ();
+      guintptr gl_handle = gst_gl_context_get_gl_context (self->gl_context);
+
+      /* Store VideoFrame in a global slot and do texImage2D on main
+       * thread where the GL context lives.  The proxied glBindTexture
+       * already bound our texture on the main thread. */
+      EM_ASM ({
+        /* Store the VideoFrame in a global accessible from main thread.
+         * Workers and main thread share the same Module object. */
+        Module._gst_pending_video_frame = Emval.toValue ($0);
+      }, video_frame.as_handle ());
+
+      /* This runs synchronously on the main thread via emscripten proxy */
+      MAIN_THREAD_EM_ASM ({
+        var ctx = GL.contexts[$0];
+        var gl = ctx ? ctx.GLctx : null;
+        var vf = Module._gst_pending_video_frame;
+        Module._gst_pending_video_frame = null;
+        if (gl && vf) {
+          gl.bindTexture (gl.TEXTURE_2D, GL.textures[$1]);
+          gl.texImage2D (gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA,
+              gl.UNSIGNED_BYTE, vf);
+          vf.close ();
+        }
+      }, (int) gl_handle, (int) tex_id);
+    }
 
     glBindTexture (GL_TEXTURE_2D, 0);
 
@@ -520,20 +551,7 @@ gst_web_codecs_video_decoder_negotiate (GstVideoDecoder *decoder)
     gst_caps_set_simple (self->output_state->caps,
         "texture-target", G_TYPE_STRING, "2D", NULL);
 
-    /* Ensure we have a GL context */
-    if (!self->gl_context && self->gl_display) {
-      GstGLContext *other = self->other_gl_context;
-      if (!other)
-        other = gst_gl_display_get_gl_context_for_thread (
-            self->gl_display, NULL);
-      gst_gl_display_create_context (self->gl_display, other,
-          &self->gl_context, NULL);
-      if (other && other != self->other_gl_context)
-        gst_object_unref (other);
-    }
-
-    GST_INFO_OBJECT (self, "Negotiated GL output with context %"
-        GST_PTR_FORMAT, self->gl_context);
+    GST_INFO_OBJECT (self, "Negotiated GL output");
   } else {
     self->output_state = gst_video_decoder_set_output_state (
         decoder, self->format, self->width, self->height, self->input_state);
@@ -982,6 +1000,45 @@ gst_web_codecs_video_decoder_finalize (GObject *object)
   G_OBJECT_CLASS (parent_class)->finalize (object);
 }
 
+static gboolean
+gst_web_codecs_video_decoder_decide_allocation (
+    GstVideoDecoder *decoder, GstQuery *query)
+{
+  GstWebCodecsVideoDecoder *self = GST_WEB_CODECS_VIDEO_DECODER (decoder);
+
+  if (self->output_gl) {
+    /* Get the GL context from downstream (e.g. glimagesink).
+     * This ensures we use the same context for texture creation,
+     * so textures are valid in downstream elements. */
+    gst_clear_object (&self->gl_context);
+
+    if (!gst_gl_query_local_gl_context (GST_ELEMENT (self), GST_PAD_SRC,
+            &self->gl_context)) {
+      /* No context from downstream — try the display */
+      if (self->gl_display) {
+        self->gl_context =
+            gst_gl_display_get_gl_context_for_thread (self->gl_display, NULL);
+        if (!self->gl_context) {
+          gst_gl_display_create_context (self->gl_display,
+              self->other_gl_context, &self->gl_context, NULL);
+        }
+      }
+    }
+
+    if (self->gl_context) {
+      GST_INFO_OBJECT (self, "Using GL context %" GST_PTR_FORMAT
+          " from downstream", self->gl_context);
+    } else {
+      GST_WARNING_OBJECT (self, "No GL context available, "
+          "falling back to WebVideoFrame");
+      self->output_gl = FALSE;
+    }
+  }
+
+  return GST_VIDEO_DECODER_CLASS (parent_class)->decide_allocation (
+      decoder, query);
+}
+
 static void
 gst_web_codecs_video_decoder_init (
     GstWebCodecsVideoDecoder *self, GstWebCodecsVideoDecoderClass g_class)
@@ -1070,6 +1127,8 @@ gst_web_codecs_video_decoder_class_init (
       GST_DEBUG_FUNCPTR (gst_web_codecs_video_decoder_handle_frame);
   video_decoder_class->negotiate =
       GST_DEBUG_FUNCPTR (gst_web_codecs_video_decoder_negotiate);
+  video_decoder_class->decide_allocation =
+      GST_DEBUG_FUNCPTR (gst_web_codecs_video_decoder_decide_allocation);
 
   parent_class = g_type_class_peek_parent (klass);
 }

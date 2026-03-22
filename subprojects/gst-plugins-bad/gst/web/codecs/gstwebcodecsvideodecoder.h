@@ -73,6 +73,7 @@ struct _GstWebCodecsVideoDecoder
   gboolean need_negotiation;
 
   emscripten::val decoder;
+  guint32 decoder_generation;  /* incremented on each decoder recreation */
   /* Amount of the output frames pending to be dequeued */
   gint dequeue_size;
   gboolean flushing;   /* protected by dequeue_lock */

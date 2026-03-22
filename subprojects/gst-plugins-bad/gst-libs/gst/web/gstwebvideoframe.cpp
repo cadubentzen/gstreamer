@@ -70,6 +70,9 @@ struct _GstWebVideoFramePrivate
   GstWebRunner *runner;
   /* The Emscripten's JS VideoFrame */
   val video_frame;
+  /* Raw handle cached at wrap time (on the runner thread) so we can
+   * pass it to async callbacks without triggering val's thread check */
+  EM_VAL video_frame_handle;
   guint8 *data;
 };
 
@@ -261,6 +264,12 @@ gst_web_video_frame_allocator_alloc (
   /* We use a priv structure to ease the C->C++ managing */
   mem->priv = g_new0 (GstWebVideoFramePrivate, 1);
   mem->priv->video_frame = vf_params->video_frame;
+  /* Cache the raw handle on the current (runner) thread so allocator_free
+   * can pass it to async dispatch without triggering val's thread check.
+   * Increment the JS refcount so the handle stays valid even after the
+   * val destructor runs (allocator_free replaces the val with undefined). */
+  mem->priv->video_frame_handle = vf_params->video_frame.as_handle ();
+  internal::_emval_incref (mem->priv->video_frame_handle);
   mem->priv->runner = (GstWebRunner*)gst_object_ref (vf_params->runner);
   mem->priv->data = NULL;
 
@@ -274,15 +283,32 @@ gst_web_video_frame_allocator_alloc (
 }
 
 static void
+gst_web_video_frame_close_async (gpointer data)
+{
+  EM_VAL handle = (EM_VAL) data;
+  val vf = val::take_ownership (handle);
+  vf.call<void> ("close");
+}
+
+static void
 gst_web_video_frame_allocator_free (GstAllocator *allocator, GstMemory *memory)
 {
   GstWebVideoFrame *self = (GstWebVideoFrame *) memory;
+  GstWebRunner *runner = self->priv->runner;
 
-  /* FIXME can be async (RDI-2856) */
-  gst_web_runner_send_message (
-      self->priv->runner, gst_web_video_frame_close, self);
+  /* Close the JS VideoFrame via async dispatch to avoid deadlock:
+   * during flush, the runner thread may be blocked in do_reset (sync
+   * dispatch) while the streaming thread frees buffers.  If we used
+   * sync dispatch here, we'd deadlock waiting for the busy runner. */
+  gst_web_runner_send_message_async (
+      runner, gst_web_video_frame_close_async,
+      (gpointer) self->priv->video_frame_handle, NULL);
 
-  gst_object_unref (self->priv->runner);
+  /* Prevent the val destructor from releasing the JS reference —
+   * ownership was transferred to the async callback above. */
+  new (&self->priv->video_frame) val (val::undefined ());
+
+  gst_object_unref (runner);
   g_free (self->priv->data);
   g_free (self->priv);
 }

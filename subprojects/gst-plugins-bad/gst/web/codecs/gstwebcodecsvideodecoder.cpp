@@ -167,6 +167,7 @@ gst_web_codecs_video_decoder_on_output (guintptr self_, val video_frame)
   if (!frame) {
     GST_WARNING_OBJECT (self, "get_oldest_frame returned NULL");
     GST_VIDEO_DECODER_STREAM_UNLOCK (self);
+    video_frame.call<void> ("close");
     return;
   }
   GST_DEBUG_OBJECT (self,
@@ -373,17 +374,29 @@ gst_web_codecs_video_decoder_ctor (gpointer data)
   val mod = val::global ("Module");
   val options = val::object ();
 
+  self->decoder_generation++;
+  guint32 gen = self->decoder_generation;
+
   /* clang-format off */
   EM_ASM ({
     const self = $0;
     const options = Emval.toValue ($1);
+    const gen = $2;
+    const gen_offset = $3;
     options["output"] = (data) => {
+      /* Stale decoder — drop the frame */
+      if (HEAPU32[(self + gen_offset) >> 2] !== gen) {
+        data.close();
+        return;
+      }
       Module.gst_web_codecs_video_decoder_on_output (self, data);
     };
     options["error"] = (e) => {
+      if (HEAPU32[(self + gen_offset) >> 2] !== gen) return;
       Module.gst_web_codecs_video_decoder_on_error (self, e);
     }
-  }, (guintptr) self, options.as_handle ());
+  }, (guintptr) self, options.as_handle (), gen,
+     (guint32) offsetof (GstWebCodecsVideoDecoder, decoder_generation));
   /* clang-format on */
 
   self->decoder = vdecclass.new_ (options);
@@ -392,14 +405,18 @@ gst_web_codecs_video_decoder_ctor (gpointer data)
   EM_ASM ({
     const self = $0;
     const decoder = Emval.toValue ($1);
+    const gen = $2;
+    const gen_offset = $3;
 
     decoder.addEventListener ("dequeue", (event) => {
+      if (HEAPU32[(self + gen_offset) >> 2] !== gen) return;
       Module.gst_web_codecs_video_decoder_on_dequeue (self, event);
     });
-  }, (guintptr) self, self->decoder.as_handle ());
+  }, (guintptr) self, self->decoder.as_handle (), gen,
+     (guint32) offsetof (GstWebCodecsVideoDecoder, decoder_generation));
   /* clang-format on */
 
-  GST_DEBUG_OBJECT (self, "decoder created successfully");
+  GST_DEBUG_OBJECT (self, "decoder gen=%u created successfully", gen);
 }
 
 /* Called with the streaming lock taken */

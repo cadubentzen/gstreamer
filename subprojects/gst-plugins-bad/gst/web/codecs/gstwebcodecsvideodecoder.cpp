@@ -43,6 +43,7 @@
 #include <gst/gst.h>
 #include <gst/gl/gl.h>
 #include <gst/pbutils/pbutils.h>
+#include <GLES3/gl3.h>
 #include <emscripten.h>
 #include <emscripten/bind.h>
 #include <pthread.h>
@@ -154,6 +155,13 @@ done:
 }
 
 static void
+_gl_delete_texture (gpointer data)
+{
+  GLuint tex_id = GPOINTER_TO_UINT (data);
+  glDeleteTextures (1, &tex_id);
+}
+
+static void
 gst_web_codecs_video_decoder_on_output (guintptr self_, val video_frame)
 {
   GstWebCodecsVideoDecoder *self = (GstWebCodecsVideoDecoder *) self_;
@@ -200,9 +208,53 @@ gst_web_codecs_video_decoder_on_output (guintptr self_, val video_frame)
   gst_web_codecs_video_decoder_video_frame_to_codec_frame (self, video_frame,
       frame);
 #endif
-  /* In this moment we have already negotiated downstream, we can safely push
-   * buffers */
-  {
+  /* Create the output buffer — either GL texture or WebVideoFrame */
+  if (self->output_gl && self->gl_context) {
+    GstBuffer *b;
+    GstGLBaseMemoryAllocator *gl_alloc;
+    GstGLVideoAllocationParams *params;
+    GstGLMemory *gl_mem;
+    GLuint tex_id = 0;
+
+    /* Make GL context current, generate texture, upload VideoFrame */
+    gst_gl_context_activate (self->gl_context, TRUE);
+    glGenTextures (1, &tex_id);
+    glBindTexture (GL_TEXTURE_2D, tex_id);
+    glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    /* Upload VideoFrame to GL texture via JS texImage2D.
+     * The GL context uses PROXY_ALWAYS so this call is proxied
+     * to the main thread where both WebGL and VideoFrame live. */
+    EM_ASM ({
+      var gl = GLctx;
+      var vf = Emval.toValue ($0);
+      gl.texImage2D (gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA,
+          gl.UNSIGNED_BYTE, vf);
+      vf.close ();
+    }, video_frame.as_handle ());
+
+    glBindTexture (GL_TEXTURE_2D, 0);
+
+    /* Wrap the texture as GstGLMemory */
+    gl_alloc = GST_GL_BASE_MEMORY_ALLOCATOR (
+        gst_gl_memory_allocator_get_default (self->gl_context));
+    params = gst_gl_video_allocation_params_new_wrapped_texture (
+        self->gl_context, NULL, &self->output_state->info,
+        0, NULL, GST_GL_TEXTURE_TARGET_2D, GST_GL_RGBA,
+        tex_id, GUINT_TO_POINTER (tex_id), _gl_delete_texture);
+
+    gl_mem = (GstGLMemory *) gst_gl_base_memory_alloc (gl_alloc,
+        (GstGLAllocationParams *) params);
+    gst_gl_allocation_params_free ((GstGLAllocationParams *) params);
+    gst_object_unref (gl_alloc);
+
+    b = gst_buffer_new ();
+    gst_buffer_append_memory (b, GST_MEMORY_CAST (gl_mem));
+    frame->output_buffer = b;
+
+    gst_gl_context_activate (self->gl_context, FALSE);
+  } else {
     GstBuffer *b;
     GstWebRunner *runner;
     GstWebVideoFrame *memory;
@@ -424,6 +476,7 @@ static gboolean
 gst_web_codecs_video_decoder_negotiate (GstVideoDecoder *decoder)
 {
   GstWebCodecsVideoDecoder *self = GST_WEB_CODECS_VIDEO_DECODER (decoder);
+  GstCaps *peer_caps;
 
   /* If we don't know the output format yet, skip this */
   if (!self->need_negotiation)
@@ -436,16 +489,61 @@ gst_web_codecs_video_decoder_negotiate (GstVideoDecoder *decoder)
     self->output_state = NULL;
   }
 
-  self->output_state = gst_video_decoder_set_output_state (
-      decoder, self->format, self->width, self->height, self->input_state);
+  /* Check if downstream accepts GLMemory */
+  self->output_gl = FALSE;
+  peer_caps = gst_pad_peer_query_caps (decoder->srcpad, NULL);
+  if (peer_caps) {
+    GstCapsFeatures *gl_features =
+        gst_caps_features_new (GST_CAPS_FEATURE_MEMORY_GL_MEMORY, NULL);
+    guint i;
+    for (i = 0; i < gst_caps_get_size (peer_caps); i++) {
+      GstCapsFeatures *features = gst_caps_get_features (peer_caps, i);
+      if (features && gst_caps_features_is_equal (features, gl_features)) {
+        self->output_gl = TRUE;
+        break;
+      }
+    }
+    gst_caps_features_free (gl_features);
+    gst_caps_unref (peer_caps);
+  }
 
-  /* FIXME this depends on the downstream negotiation */
-  /* Set the memory type */
-  self->output_state->caps =
-      gst_video_info_to_caps (&self->output_state->info);
-  gst_caps_set_features_simple (self->output_state->caps,
-      gst_caps_features_new (
-          GST_CAPS_FEATURE_MEMORY_WEB_VIDEO_FRAME, (char *) NULL));
+  if (self->output_gl) {
+    /* For GL output, use RGBA format */
+    self->output_state = gst_video_decoder_set_output_state (
+        decoder, GST_VIDEO_FORMAT_RGBA, self->width, self->height,
+        self->input_state);
+    self->output_state->caps =
+        gst_video_info_to_caps (&self->output_state->info);
+    gst_caps_set_features_simple (self->output_state->caps,
+        gst_caps_features_new (
+            GST_CAPS_FEATURE_MEMORY_GL_MEMORY, (char *) NULL));
+    gst_caps_set_simple (self->output_state->caps,
+        "texture-target", G_TYPE_STRING, "2D", NULL);
+
+    /* Ensure we have a GL context */
+    if (!self->gl_context && self->gl_display) {
+      GstGLContext *other = self->other_gl_context;
+      if (!other)
+        other = gst_gl_display_get_gl_context_for_thread (
+            self->gl_display, NULL);
+      gst_gl_display_create_context (self->gl_display, other,
+          &self->gl_context, NULL);
+      if (other && other != self->other_gl_context)
+        gst_object_unref (other);
+    }
+
+    GST_INFO_OBJECT (self, "Negotiated GL output with context %"
+        GST_PTR_FORMAT, self->gl_context);
+  } else {
+    self->output_state = gst_video_decoder_set_output_state (
+        decoder, self->format, self->width, self->height, self->input_state);
+    self->output_state->caps =
+        gst_video_info_to_caps (&self->output_state->info);
+    gst_caps_set_features_simple (self->output_state->caps,
+        gst_caps_features_new (
+            GST_CAPS_FEATURE_MEMORY_WEB_VIDEO_FRAME, (char *) NULL));
+  }
+
   return GST_VIDEO_DECODER_CLASS (parent_class)->negotiate (decoder);
 }
 
@@ -801,6 +899,8 @@ gst_web_codecs_video_decoder_set_context (
   GstWebCodecsVideoDecoder *self = GST_WEB_CODECS_VIDEO_DECODER (element);
 
   gst_web_utils_element_set_context (element, context, &self->canvas);
+  gst_gl_handle_set_context (element, context,
+      &self->gl_display, &self->other_gl_context);
 }
 
 static gboolean
@@ -813,6 +913,10 @@ gst_web_codecs_video_decoder_query (GstElement *element, GstQuery *query)
     case GST_QUERY_CONTEXT:
       ret = gst_web_utils_element_handle_context_query (
           element, query, self->canvas);
+      if (!ret) {
+        ret = gst_gl_handle_context_query (element, query,
+            self->gl_display, self->gl_context, self->other_gl_context);
+      }
       break;
     default:
       break;
@@ -820,6 +924,41 @@ gst_web_codecs_video_decoder_query (GstElement *element, GstQuery *query)
 
   if (!ret)
     ret = GST_ELEMENT_CLASS (parent_class)->query (element, query);
+
+  return ret;
+}
+
+static GstStateChangeReturn
+gst_web_codecs_video_decoder_change_state (
+    GstElement *element, GstStateChange transition)
+{
+  GstWebCodecsVideoDecoder *self = GST_WEB_CODECS_VIDEO_DECODER (element);
+  GstStateChangeReturn ret;
+
+  switch (transition) {
+    case GST_STATE_CHANGE_NULL_TO_READY:
+      if (!gst_gl_ensure_element_data (element, &self->gl_display,
+              &self->other_gl_context))
+        return GST_STATE_CHANGE_FAILURE;
+      break;
+    default:
+      break;
+  }
+
+  ret = GST_ELEMENT_CLASS (parent_class)->change_state (element, transition);
+  if (ret == GST_STATE_CHANGE_FAILURE)
+    return ret;
+
+  switch (transition) {
+    case GST_STATE_CHANGE_READY_TO_NULL:
+      gst_clear_object (&self->gl_context);
+      gst_clear_object (&self->other_gl_context);
+      gst_clear_object (&self->gl_display);
+      self->output_gl = FALSE;
+      break;
+    default:
+      break;
+  }
 
   return ret;
 }
@@ -835,6 +974,9 @@ gst_web_codecs_video_decoder_finalize (GObject *object)
     gst_object_unref (self->canvas);
     self->canvas = NULL;
   }
+  gst_clear_object (&self->gl_context);
+  gst_clear_object (&self->other_gl_context);
+  gst_clear_object (&self->gl_display);
 
   GST_DEBUG_OBJECT (self, "End of finalize");
   G_OBJECT_CLASS (parent_class)->finalize (object);
@@ -903,6 +1045,7 @@ gst_web_codecs_video_decoder_class_init (
 
   gobject_class->finalize = gst_web_codecs_video_decoder_finalize;
   element_class->set_context = gst_web_codecs_video_decoder_set_context;
+  element_class->change_state = gst_web_codecs_video_decoder_change_state;
   element_class->query = gst_web_codecs_video_decoder_query;
   gst_element_class_set_static_metadata (element_class,
       "WebCodecs base video decoder", "Codec/Decoder/Video",

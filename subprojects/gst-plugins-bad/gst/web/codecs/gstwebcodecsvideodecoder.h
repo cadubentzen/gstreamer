@@ -29,6 +29,7 @@
 
 #include <gst/gst.h>
 #include <gst/video/gstvideodecoder.h>
+#include <gst/gl/gl.h>
 #include <emscripten/bind.h>
 #include <string.h>
 #include <gst/web/gstwebcanvas.h>
@@ -71,6 +72,12 @@ struct _GstWebCodecsVideoDecoder
   gint height;
   GstVideoFormat format;
   gboolean need_negotiation;
+
+  /* GL output support */
+  GstGLDisplay *gl_display;
+  GstGLContext *gl_context;
+  GstGLContext *other_gl_context;
+  gboolean output_gl;
 
   emscripten::val decoder;
   guint32 decoder_generation;  /* incremented on each decoder recreation */

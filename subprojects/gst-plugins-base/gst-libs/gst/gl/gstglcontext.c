@@ -1417,6 +1417,21 @@ gst_gl_context_create_thread (GstGLContext * context)
 
   GST_INFO_OBJECT (context, "loop exited");
 
+#ifdef __EMSCRIPTEN__
+  /* On Emscripten, the GL window may run in "shared context" mode where
+   * run() returns immediately because the window's GMainContext is
+   * processed by an external iteration loop (e.g. a WebRunner).  In this
+   * case the GL context must stay alive — skip the teardown. */
+  {
+    gboolean shared = GPOINTER_TO_INT (
+        g_object_get_data (G_OBJECT (context->window), "shared-context"));
+    if (shared) {
+      GST_INFO_OBJECT (context, "shared context mode — keeping alive");
+      return NULL;
+    }
+  }
+#endif
+
   g_mutex_lock (&context->priv->render_lock);
   context->priv->alive = FALSE;
 

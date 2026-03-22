@@ -50,6 +50,13 @@ class GstWasmTestsManager(TestsManager):
     def init(self):
         return True
 
+    def set_settings(self, options, args, reporter):
+        # WASM browser tests need a display for WebGL2 support.
+        # Force --no-display (which starts Xvfb) when no DISPLAY is set.
+        if not os.environ.get("DISPLAY"):
+            options.no_display = True
+        super().set_settings(options, args, reporter)
+
     def populate_testsuite(self):
         pass
 

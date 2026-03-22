@@ -42,8 +42,9 @@ struct _GstGLWindowCanvas {
   gchar *canvas;
   gint canvas_width, canvas_height;
   volatile gboolean running;
+  gboolean shared_context;  /* TRUE when sharing GMainContext with WebRunner */
 
-  gpointer _reserved[GST_PADDING - 1];
+  gpointer _reserved[GST_PADDING - 2];
 };
 
 struct _GstGLWindowCanvasClass {

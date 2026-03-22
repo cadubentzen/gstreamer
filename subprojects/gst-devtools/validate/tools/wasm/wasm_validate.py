@@ -174,22 +174,40 @@ def main():
             context = browser.new_context()
             page = context.new_page()
 
-            # Collect console messages
-            page.on("console", lambda msg: print(
-                f"[browser] {msg.type}: {msg.text}", file=sys.stderr))
+            # Collect console messages and detect test result
+            test_result = [None]
+
+            def on_console(msg):
+                text = msg.text
+                print(f"[browser] {msg.type}: {text}", file=sys.stderr)
+                # Detect result from gst_validate_printf output
+                if "Return value:" in text:
+                    try:
+                        val = int(text.split("Return value:")[1]
+                                  .strip().rstrip(")"))
+                        test_result[0] = val
+                    except (ValueError, IndexError):
+                        pass
+
+            page.on("console", on_console)
 
             url = f"http://localhost:{port}/_gst_validate_wasm_test_{test_id}.html"
             page.goto(url)
 
-            # Wait for test completion
+            # Wait for test completion — try window._gstValidateResult
+            # first (fast path), fall back to console output detection.
             try:
                 page.wait_for_function(
                     "window._gstValidateResult !== undefined",
                     timeout=args.timeout * 1000)
                 ret = page.evaluate("window._gstValidateResult")
             except Exception as e:
-                print(f"Test timed out or failed: {e}", file=sys.stderr)
-                ret = 1
+                if test_result[0] is not None:
+                    ret = test_result[0]
+                else:
+                    print(f"Test timed out or failed: {e}",
+                          file=sys.stderr)
+                    ret = 1
 
             browser.close()
     except ImportError:

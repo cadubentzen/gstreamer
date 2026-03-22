@@ -1,0 +1,4 @@
+meta,
+    args = {
+        "webstreamsrc location=\"$(GST_WASM_MEDIA_URL)/mp4/raw_h264.0.mp4\" ! qtdemux name=demux demux.video_0 ! video/x-h264 ! webcodecsviddech264sw ! glimagesink",
+    }

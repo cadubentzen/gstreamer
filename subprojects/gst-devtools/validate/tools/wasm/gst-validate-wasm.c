@@ -24,8 +24,13 @@
 #include "config.h"
 #endif
 
+#include <stdio.h>
 #include <emscripten.h>
+#include <emscripten/stack.h>
 #include <gst/gst.h>
+#include <gst/video/videooverlay.h>
+#include <gst/gl/gl.h>
+#include <gst/gl/web/gstgldisplay_web.h>
 #include <gst/validate/validate.h>
 #include <gst/validate/gst-validate-scenario.h>
 #include <gst/validate/gst-validate-utils.h>
@@ -48,6 +53,33 @@ typedef struct
   GstValidateMonitor *monitor;
 } BusCallbackData;
 
+static GstGLDisplay *shared_gl_display = NULL;
+
+static int sync_handler_depth = 0;
+
+static GstBusSyncReply
+sync_bus_handler (GstBus * bus, GstMessage * msg, gpointer user_data)
+{
+  if (GST_MESSAGE_TYPE (msg) == GST_MESSAGE_NEED_CONTEXT && shared_gl_display) {
+    const gchar *ctx_type;
+    gst_message_parse_context_type (msg, &ctx_type);
+    if (g_strcmp0 (ctx_type, GST_GL_DISPLAY_CONTEXT_TYPE) == 0) {
+      GstContext *ctx = gst_context_new (GST_GL_DISPLAY_CONTEXT_TYPE, TRUE);
+      gst_context_set_gl_display (ctx, shared_gl_display);
+      sync_handler_depth++;
+      EM_ASM({ console.error("sync_bus_handler depth=" + $0 + " element=" + UTF8ToString($1)); },
+          sync_handler_depth, GST_OBJECT_NAME (GST_MESSAGE_SRC (msg)));
+      gst_element_set_context (GST_ELEMENT (GST_MESSAGE_SRC (msg)), ctx);
+      sync_handler_depth--;
+      gst_context_unref (ctx);
+      GST_DEBUG ("Provided GL display to %" GST_PTR_FORMAT,
+          GST_MESSAGE_SRC (msg));
+      return GST_BUS_DROP;
+    }
+  }
+  return GST_BUS_PASS;
+}
+
 static void
 bus_callback (GstBus * bus, GstMessage * message, gpointer data)
 {
@@ -56,6 +88,20 @@ bus_callback (GstBus * bus, GstMessage * message, gpointer data)
   GstValidateMonitor *monitor = bus_callback_data->monitor;
 
   switch (GST_MESSAGE_TYPE (message)) {
+    case GST_MESSAGE_NEED_CONTEXT:
+    {
+      const gchar *context_type;
+      gst_message_parse_context_type (message, &context_type);
+
+      if (shared_gl_display &&
+          g_strcmp0 (context_type, GST_GL_DISPLAY_CONTEXT_TYPE) == 0) {
+        GstContext *ctx = gst_context_new (GST_GL_DISPLAY_CONTEXT_TYPE, TRUE);
+        gst_context_set_gl_display (ctx, shared_gl_display);
+        gst_element_set_context (GST_ELEMENT (GST_MESSAGE_SRC (message)), ctx);
+        gst_context_unref (ctx);
+      }
+      break;
+    }
     case GST_MESSAGE_ERROR:
     {
       GError *err = NULL;
@@ -147,9 +193,21 @@ main (int argc, char **argv)
 
   g_set_prgname ("gst-validate-" GST_API_VERSION);
 
+  {
+    size_t stack_base = (size_t) emscripten_stack_get_base ();
+    size_t stack_end = (size_t) emscripten_stack_get_end ();
+    size_t stack_size = stack_base - stack_end;
+    printf ("WASM stack: base=%zu end=%zu size=%zu (%.1fMB)\n",
+        stack_base, stack_end, stack_size,
+        (double) stack_size / 1024.0 / 1024.0);
+    fflush (stdout);
+  }
+
   gst_init (NULL, NULL);
   GST_DEBUG_CATEGORY_INIT (validate_wasm_dbg, "validate-wasm", 0,
       "GstValidate WASM runner");
+
+
 
   /* g_main_loop_run() uses emscripten_set_main_loop internally via the
    * GLib ASYNCIFY patch, so no need for gst_emscripten_init(). */
@@ -197,7 +255,32 @@ main (int argc, char **argv)
     pipeline = new_pipeline;
   }
 
+  /* Provide a GL display targeting the dedicated canvas element so that
+   * glimagesink (and any GL element) creates its WebGL context on
+   * #gst-gl-canvas instead of the default #canvas. */
+  {
+    GstGLDisplayWeb *gl_display;
+    GstContext *display_context;
+
+    gl_display = gst_gl_display_web_new ((gpointer) "#canvas");
+    shared_gl_display = GST_GL_DISPLAY (gl_display);
+    display_context = gst_context_new (GST_GL_DISPLAY_CONTEXT_TYPE, TRUE);
+    gst_context_set_gl_display (display_context, shared_gl_display);
+    gst_element_set_context (pipeline, display_context);
+    gst_context_unref (display_context);
+    /* Keep gl_display alive via shared_gl_display — don't unref */
+  }
+
   gst_pipeline_set_auto_flush_bus (GST_PIPELINE (pipeline), FALSE);
+
+  /* Set a sync bus handler so NEED_CONTEXT messages are handled
+   * immediately during state changes (before the main loop runs). */
+  {
+    GstBus *sync_bus = gst_element_get_bus (pipeline);
+    gst_bus_set_sync_handler (sync_bus, sync_bus_handler, NULL, NULL);
+    gst_object_unref (sync_bus);
+  }
+
   gst_validate_spin_on_fault_signals ();
 
   monitor = gst_validate_monitor_factory_create (GST_OBJECT_CAST (pipeline),
@@ -228,17 +311,34 @@ main (int argc, char **argv)
   }
 
   g_main_loop_run (mainloop);
+
+  /* Signal result immediately after mainloop exits.
+   * Use emscripten_dispatch_to_thread_async to post to the main thread
+   * without blocking — MAIN_THREAD_ASYNC_EM_ASM may not fire if the
+   * main thread is busy processing GL proxy calls. */
+  gst_validate_printf (NULL, "\n=======> Test %s (Return value: %i)\n\n",
+      ret == 0 ? "PASSED" : "FAILED", ret);
+
+  /* clang-format off */
+  MAIN_THREAD_ASYNC_EM_ASM({
+    window._gstValidateResult = $0;
+  }, ret);
+  /* clang-format on */
+
   gst_element_set_state (pipeline, GST_STATE_NULL);
   gst_element_get_state (pipeline, NULL, NULL, GST_CLOCK_TIME_NONE);
+
+  rep_err = gst_validate_runner_exit (runner, TRUE);
+  if (ret == 0)
+    ret = rep_err;
+
+  gst_validate_printf (NULL, "\n=======> Test %s (Return value: %i)\n\n",
+      ret == 0 ? "PASSED" : "FAILED", ret);
 
   /* Clean up */
   gst_bus_set_flushing (bus, TRUE);
   gst_bus_remove_signal_watch (bus);
   gst_object_unref (bus);
-
-  rep_err = gst_validate_runner_exit (runner, TRUE);
-  if (ret == 0)
-    ret = rep_err;
 
 exit:
   g_main_loop_unref (mainloop);
@@ -248,19 +348,8 @@ exit:
   g_object_unref (monitor);
   g_strfreev (args);
 
-  gst_validate_printf (NULL, "\n=======> Test %s (Return value: %i)\n\n",
-      ret == 0 ? "PASSED" : "FAILED", ret);
-
   gst_validate_deinit ();
   gst_deinit ();
 
-  /* Signal result to browser — must happen after deinit so all cleanup
-   * is done.  Use the synchronous variant so the worker thread stays
-   * alive until the main thread has processed the assignment. */
-  /* clang-format off */
-  MAIN_THREAD_EM_ASM({
-    window._gstValidateResult = $0;
-  }, ret);
-  /* clang-format on */
   return ret;
 }

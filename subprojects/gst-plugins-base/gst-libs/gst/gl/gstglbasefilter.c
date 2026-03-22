@@ -313,7 +313,11 @@ gst_gl_base_filter_query (GstBaseTransform * trans, GstPadDirection direction,
 
       if (ret)
         return TRUE;
-      break;
+      /* If we can't answer, return FALSE directly.  Chaining to the
+       * parent forwards the query to peer pads which can cause deep
+       * recursion in bins with multiple GL filters (glimagesinkbin).
+       * The bin-level query propagation already handles forwarding. */
+      return FALSE;
     }
     default:
       break;

@@ -133,42 +133,29 @@ gst_gl_window_canvas_finalize (GObject * object)
   G_OBJECT_CLASS (gst_gl_window_canvas_parent_class)->finalize (object);
 }
 
-/*
- * GLib's GWakeup is non-functional on WASM (g_wakeup_new returns NULL,
- * g_wakeup_signal is a no-op). This means g_main_context_invoke from a
- * different thread cannot wake up g_main_loop_run, causing deadlocks
- * when the streaming thread sends synchronous messages to the GL thread.
- *
- * Work around this by using a polling loop with usleep instead of the
- * default g_main_loop_run-based implementation.
- */
 static void
 gst_gl_window_canvas_run (GstGLWindow * window)
 {
   GstGLWindowCanvas *self = GST_GL_WINDOW_CANVAS (window);
 
-  self->running = TRUE;
-  while (self->running)
-    {
-      /* Non-blocking iteration: process any pending sources (idle callbacks
-       * from g_main_context_invoke, etc.) without relying on GWakeup. */
-      while (g_main_context_iteration (window->main_context, FALSE));
+  if (self->shared_context) {
+    /* Shared context mode: the window's GMainContext is processed by
+     * the WebRunner's iteration loop.  Drain any pending callbacks
+     * (like _unlock_create_thread) and return — the GL thread exits
+     * but the context stays alive. */
+    GST_DEBUG_OBJECT (window, "Shared context — draining and returning");
+    while (g_main_context_iteration (window->main_context, FALSE))
+      ;
+    return;
+  }
 
-      if (!self->running)
-        break;
-
-      /* Yield briefly so we don't spin the CPU. */
-      usleep (1000);
-    }
+  GST_GL_WINDOW_CLASS (gst_gl_window_canvas_parent_class)->run (window);
 }
 
 static void
 gst_gl_window_canvas_quit (GstGLWindow * window)
 {
-  GstGLWindowCanvas *self = GST_GL_WINDOW_CANVAS (window);
-
   gst_gl_display_remove_window (window->display, window);
-  self->running = FALSE;
 }
 
 static void
@@ -197,16 +184,9 @@ gst_gl_window_canvas_new (GstGLDisplay * display)
 
   self = g_object_new (GST_TYPE_GL_WINDOW_CANVAS, NULL);
   self->canvas = g_strdup ((gchar *)gst_gl_display_get_handle (display));
-  /* This callbacks are being registered on the calling thread. The window
-   * creation usually happens on the main thread. Compiling with
-   * PROXY_WITH_PTHREAD should make this be registered on the proxy thread
-   * but we still recieve the 'blocking the main thread' warnings
-   */
-  emscripten_set_click_callback(self->canvas, self, FALSE, gst_gl_window_canvas_mouse_cb);
-  emscripten_set_mouseup_callback(self->canvas, self, FALSE, gst_gl_window_canvas_mouse_cb);
-  emscripten_set_mousedown_callback(self->canvas, self, FALSE, gst_gl_window_canvas_mouse_cb);
-  emscripten_set_mousemove_callback(self->canvas, self, FALSE, gst_gl_window_canvas_mouse_cb);
-  /* TODO pending mouseenter, mouseleave, dblclick */
+  /* TODO: register mouse event callbacks on the main thread.
+   * Currently skipped because this runs on the GL context thread
+   * which cannot access DOM elements. */
   gst_object_ref_sink (self);
 
   return self;

@@ -212,6 +212,13 @@ gst_web_runner_default_send_message_async (GstWebRunner *self,
       self->priv->main_context, (GSourceFunc) _run_message_async, message);
 }
 
+GMainContext *
+gst_web_runner_get_main_context (GstWebRunner *self)
+{
+  g_return_val_if_fail (GST_IS_WEB_RUNNER (self), NULL);
+  return self->priv->main_context;
+}
+
 static GThread *
 gst_web_runner_default_create_thread (
     GstWebRunner *self, const gchar *name, GThreadFunc run)

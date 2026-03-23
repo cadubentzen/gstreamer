@@ -223,46 +223,29 @@ gst_web_codecs_video_decoder_on_output (guintptr self_, val video_frame)
     glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-    /* Upload VideoFrame to GL texture (zero-copy for HW decode).
+    /* Upload VideoFrame to GL texture.
      *
-     * gl.texImage2D(videoFrame) lets the browser transfer a GPU-resident
-     * VideoFrame directly to a WebGL texture without CPU readback.
-     * However, the VideoFrame val lives on the runner thread while the
-     * GL context (PROXY_ALWAYS) executes on the main thread.
-     *
-     * Solution: store the VideoFrame in a shared JS global slot on the
-     * worker, then run texImage2D on the main thread (via
-     * emscripten_sync_run_in_main_runtime_thread) which picks up the
-     * VideoFrame from the slot.  Since both the worker and the main
-     * thread share the same JS global scope (SharedArrayBuffer/SAB),
-     * this works without transferring the VideoFrame. */
+     * copyTo() extracts pixels into the WASM heap on the runner thread,
+     * then the proxied glTexImage2D uploads from there. Single copy. */
     {
+      val options = val::object ();
+      options.set ("format", std::string ("RGBA"));
+
       int w = video_frame["displayWidth"].as<int> ();
       int h = video_frame["displayHeight"].as<int> ();
-      guintptr gl_handle = gst_gl_context_get_gl_context (self->gl_context);
+      int alloc_size = w * h * 4;
+      guint8 *pixels = (guint8 *) g_malloc (alloc_size);
 
-      /* Store VideoFrame in a global slot and do texImage2D on main
-       * thread where the GL context lives.  The proxied glBindTexture
-       * already bound our texture on the main thread. */
-      EM_ASM ({
-        /* Store the VideoFrame in a global accessible from main thread.
-         * Workers and main thread share the same Module object. */
-        Module._gst_pending_video_frame = Emval.toValue ($0);
-      }, video_frame.as_handle ());
+      val dest = val::take_ownership ((EM_VAL) EM_ASM_PTR ({
+        return Emval.toHandle (HEAPU8.subarray ($0, $1));
+      }, (int) (uintptr_t) pixels,
+         (int) ((uintptr_t) pixels + alloc_size)));
+      video_frame.call<val> ("copyTo", dest, options).await ();
+      video_frame.call<void> ("close");
 
-      /* This runs synchronously on the main thread via emscripten proxy */
-      MAIN_THREAD_EM_ASM ({
-        var ctx = GL.contexts[$0];
-        var gl = ctx ? ctx.GLctx : null;
-        var vf = Module._gst_pending_video_frame;
-        Module._gst_pending_video_frame = null;
-        if (gl && vf) {
-          gl.bindTexture (gl.TEXTURE_2D, GL.textures[$1]);
-          gl.texImage2D (gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA,
-              gl.UNSIGNED_BYTE, vf);
-          vf.close ();
-        }
-      }, (int) gl_handle, (int) tex_id);
+      glTexImage2D (GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
+          GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+      g_free (pixels);
     }
 
     glBindTexture (GL_TEXTURE_2D, 0);
@@ -935,7 +918,10 @@ gst_web_codecs_video_decoder_query (GstElement *element, GstQuery *query)
         ret = gst_gl_handle_context_query (element, query,
             self->gl_display, self->gl_context, self->other_gl_context);
       }
-      break;
+      /* Never chain context queries to the parent class — GstVideoDecoder
+       * forwards them to pads which query peers, causing infinite recursion
+       * between the decoder and downstream GL elements. */
+      return ret;
     default:
       break;
   }
@@ -958,6 +944,25 @@ gst_web_codecs_video_decoder_change_state (
       if (!gst_gl_ensure_element_data (element, &self->gl_display,
               &self->other_gl_context))
         return GST_STATE_CHANGE_FAILURE;
+
+      /* Attach the WebRunner's GMainContext to the GL display so that
+       * gstglcontext_emscripten can create the GL context on the runner
+       * thread instead of spawning a new one.  This enables zero-copy
+       * texImage2D(videoFrame) since both live on the same thread. */
+      if (self->gl_display && self->canvas) {
+        GstWebRunner *runner = gst_web_canvas_get_runner (self->canvas);
+        if (runner) {
+          GMainContext *runner_ctx = gst_web_runner_get_main_context (runner);
+          static GQuark runner_ctx_quark = 0;
+          if (G_UNLIKELY (runner_ctx_quark == 0))
+            runner_ctx_quark =
+                g_quark_from_static_string ("gst.gl.runner.main-context");
+          g_object_set_qdata (G_OBJECT (self->gl_display),
+              runner_ctx_quark, runner_ctx);
+          GST_INFO_OBJECT (self, "Attached runner GMainContext to GL display");
+          gst_object_unref (runner);
+        }
+      }
       break;
     default:
       break;

@@ -81,6 +81,7 @@ void gst_web_runner_send_message_async (GstWebRunner *self,
     GstWebRunnerCB callback, gpointer data, GDestroyNotify destroy);
 void gst_web_runner_send_message (
     GstWebRunner *self, GstWebRunnerCB callback, gpointer data);
+GMainContext *gst_web_runner_get_main_context (GstWebRunner *self);
 
 G_END_DECLS
 

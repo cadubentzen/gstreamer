@@ -139,7 +139,7 @@ done:
 
 static void
 source_setup_cb (GstElement * decodebin, GstElement * source,
-    GESUriSource * self)
+    GESTrackElement * track_element)
 {
   GstElementFactory *factory = gst_element_get_factory (source);
 
@@ -147,9 +147,9 @@ source_setup_cb (GstElement * decodebin, GstElement * source,
     return;
   }
 
-  GESTrack *track = ges_track_element_get_track (self->element);
+  GESTrack *track = ges_track_element_get_track (track_element);
   if (!track) {
-    GST_WARNING_OBJECT (self->element,
+    GST_WARNING_OBJECT (track_element,
         "Source has no track, skipping stream selection");
 
     return;
@@ -323,7 +323,12 @@ ges_uri_source_query_seek (GESUriSource * self, GstEvent * seek)
       GES_CLIP (ges_timeline_element_get_parent (GES_TIMELINE_ELEMENT
           (self->element)));
 
-  g_assert (parent_clip);
+  if (!parent_clip) {
+    GST_WARNING_OBJECT (self->element,
+        "Element has no parent clip (orphaned by ref), "
+        "returning seek as-is");
+    return gst_event_ref (seek);
+  }
   GstEvent *translated_seek = nle_source_query_seek (nlesrc, seek);
   gint64 start, stop, duration = GST_CLOCK_TIME_NONE;
   gdouble rate;
@@ -508,12 +513,14 @@ uridecodepoolsrc_setup_parent_sources (GstElement * uridecodepoolsrc,
   g_mutex_lock (&child_ges_source->lock);
 
   if (!g_list_find (child_ges_source->parent_ges_uri_sources, self)) {
+    gst_object_ref (self->element);
     child_ges_source->parent_ges_uri_sources =
         g_list_prepend (child_ges_source->parent_ges_uri_sources, self);
   }
 
   for (GList * tmp = self->parent_ges_uri_sources; tmp; tmp = tmp->next) {
     if (!g_list_find (child_ges_source->parent_ges_uri_sources, tmp->data)) {
+      gst_object_ref (((GESUriSource *) tmp->data)->element);
       child_ges_source->parent_ges_uri_sources =
           g_list_append (child_ges_source->parent_ges_uri_sources, tmp->data);
     }
@@ -726,7 +733,8 @@ uridecodepoolsrc_pipeline_notify_cb (GstElement * decodebin,
    * repopulated when deep-element-added discovers the inner GES
    * timeline in the new pipeline. */
   g_mutex_lock (&self->lock);
-  g_list_free (self->parent_ges_uri_sources);
+  g_list_free_full (self->parent_ges_uri_sources,
+      (GDestroyNotify) unref_parent_source);
   self->parent_ges_uri_sources = NULL;
   gst_clear_event (&self->pending_seek_in_ready);
   g_mutex_unlock (&self->lock);
@@ -860,9 +868,8 @@ ges_uri_source_create_uridecodepoolsrc (GESUriSource * self)
         0);
   }
 
-  g_signal_connect (decodebin, "source-setup",
-      G_CALLBACK (source_setup_cb), self);
-
+  g_signal_connect_object (decodebin, "source-setup",
+      G_CALLBACK (source_setup_cb), self->element, 0);
 
   g_object_set (decodebin, "uri", self->uri, "stream-id", wanted_id, "caps",
       caps, NULL);
@@ -920,8 +927,8 @@ ges_uri_source_create_source (GESUriSource * self)
   if (track)
     caps = ges_track_get_caps (track);
 
-  g_signal_connect (decodebin, "source-setup",
-      G_CALLBACK (source_setup_cb), self);
+  g_signal_connect_object (decodebin, "source-setup",
+      G_CALLBACK (source_setup_cb), self->element, 0);
 
   g_object_set (decodebin, "caps", caps,
       "expose-all-streams", FALSE, "uri", self->uri, NULL);
@@ -1033,7 +1040,8 @@ ges_uri_source_dispose (GESUriSource * self)
   gst_clear_object (&self->uridecodepool_pipeline);
   g_mutex_lock (&self->lock);
   gst_clear_event (&self->pending_seek_in_ready);
-  g_list_free (self->parent_ges_uri_sources);
+  g_list_free_full (self->parent_ges_uri_sources,
+      (GDestroyNotify) unref_parent_source);
   self->parent_ges_uri_sources = NULL;
   g_mutex_unlock (&self->lock);
   g_mutex_clear (&self->lock);

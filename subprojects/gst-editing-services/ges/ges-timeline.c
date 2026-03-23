@@ -805,6 +805,7 @@ ges_timeline_change_state (GstElement * element, GstStateChange transition)
     case GST_STATE_CHANGE_READY_TO_PAUSED:
     {
       GESSource *parent_source = timeline_get_parent_uri_source (timeline);
+      LOCK_DYN (timeline);
       if (!timeline->priv->pool_manager) {
         /* Toplevel: create manager */
         timeline->priv->pool_manager = ges_pipeline_pool_manager_new (timeline);
@@ -818,6 +819,7 @@ ges_timeline_change_state (GstElement * element, GstStateChange transition)
       }
       if (!parent_source)
         ges_pipeline_pool_manager_commit (timeline->priv->pool_manager);
+      UNLOCK_DYN (timeline);
       g_clear_object (&parent_source);
       ges_timeline_post_query_is_rendering (timeline);
       break;

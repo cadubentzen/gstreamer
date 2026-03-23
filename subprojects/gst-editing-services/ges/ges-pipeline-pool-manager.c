@@ -334,10 +334,19 @@ list_pooled_sources (GNode * node, ListPooledSourcesData * data)
       GstClockTime clip_start = GES_TIMELINE_ELEMENT_START (clip);
       GstClockTime clip_inpoint = GES_TIMELINE_ELEMENT_INPOINT (clip);
       GstClockTime clip_duration = GES_TIMELINE_ELEMENT_DURATION (clip);
+      GESTrack *track = ges_track_element_get_track (node->data);
+
+      if (!track) {
+        GST_WARNING_OBJECT (data->timeline,
+            "Nested timeline source %" GES_FORMAT " (clip %" GES_FORMAT
+            ") has no track, skipping", GES_ARGS (node->data),
+            GES_ARGS (clip));
+        return FALSE;
+      }
 
       NestedTimelineInfo info = {
         .clip = g_object_ref (clip),
-        .track = ges_track_element_get_track (node->data),
+        .track = track,
         .timeline_inpoint = clip_inpoint,
         .timeline_duration = clip_duration,
         .outer_start = clip_start,
@@ -500,6 +509,14 @@ list_nested_timeline_sources (GNode * node, NestedTimelineTraversalData * data)
     if (is_nested_timeline) {
       GESTrack *nested_track = ges_track_element_get_track (node->data);
 
+      if (!nested_track) {
+        GST_WARNING_OBJECT (data->timeline,
+            "Deeply nested source %" GES_FORMAT " (clip %" GES_FORMAT
+            ") has no track, skipping", GES_ARGS (node->data),
+            GES_ARGS (clip));
+        return FALSE;
+      }
+
       if (nested_track->type != info->track->type) {
         return FALSE;
       }
@@ -562,6 +579,14 @@ list_nested_timeline_sources (GNode * node, NestedTimelineTraversalData * data)
     if (!g_strcmp0 (GST_OBJECT_NAME (gst_element_get_factory (source_element)),
             "uridecodepoolsrc")) {
       GESTrack *nested_track = ges_track_element_get_track (node->data);
+
+      if (!nested_track) {
+        GST_WARNING_OBJECT (data->timeline,
+            "Pool source %" GES_FORMAT " (clip %" GES_FORMAT
+            ") has no track, skipping", GES_ARGS (node->data),
+            GES_ARGS (clip));
+        return FALSE;
+      }
 
       if (nested_track->type != info->track->type) {
         return FALSE;

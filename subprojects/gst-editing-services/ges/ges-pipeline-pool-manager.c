@@ -34,7 +34,7 @@ typedef struct
    * contains this nested timeline.  Not ref'd — only used for pointer
    * comparison so we can identify and remove stale entries when NLE
    * re-activates a nested timeline with a fresh GstBin instance. */
-  GESClip *parent_clip; /* NULL for top-level sources */
+  GESClip *parent_clip;         /* NULL for top-level sources */
 } PooledSource;
 
 struct _GESPipelinePoolManager
@@ -339,8 +339,7 @@ list_pooled_sources (GNode * node, ListPooledSourcesData * data)
       if (!track) {
         GST_WARNING_OBJECT (data->timeline,
             "Nested timeline source %" GES_FORMAT " (clip %" GES_FORMAT
-            ") has no track, skipping", GES_ARGS (node->data),
-            GES_ARGS (clip));
+            ") has no track, skipping", GES_ARGS (node->data), GES_ARGS (clip));
         return FALSE;
       }
 
@@ -512,8 +511,7 @@ list_nested_timeline_sources (GNode * node, NestedTimelineTraversalData * data)
       if (!nested_track) {
         GST_WARNING_OBJECT (data->timeline,
             "Deeply nested source %" GES_FORMAT " (clip %" GES_FORMAT
-            ") has no track, skipping", GES_ARGS (node->data),
-            GES_ARGS (clip));
+            ") has no track, skipping", GES_ARGS (node->data), GES_ARGS (clip));
         return FALSE;
       }
 
@@ -583,8 +581,7 @@ list_nested_timeline_sources (GNode * node, NestedTimelineTraversalData * data)
       if (!nested_track) {
         GST_WARNING_OBJECT (data->timeline,
             "Pool source %" GES_FORMAT " (clip %" GES_FORMAT
-            ") has no track, skipping", GES_ARGS (node->data),
-            GES_ARGS (clip));
+            ") has no track, skipping", GES_ARGS (node->data), GES_ARGS (clip));
         return FALSE;
       }
 
@@ -669,6 +666,14 @@ add_nested_timeline_sources (GESPipelinePoolManager * self,
   parent_clip = GES_CLIP (GES_TIMELINE_ELEMENT_PARENT (parent_source));
   registering_track =
       ges_track_element_get_track (GES_TRACK_ELEMENT (parent_source));
+
+  if (!parent_clip || !registering_track) {
+    GST_DEBUG_OBJECT (timeline,
+        "Nested timeline parent source %" GST_PTR_FORMAT " has no %s, skipping",
+        parent_source, !parent_clip ? "parent clip" : "track");
+    g_object_unref (parent_source);
+    return;
+  }
 
   /* Remove stale pooled sources for this clip+track-type combination.
    * This handles NLE deactivating a nested timeline (PAUSED→READY) and

@@ -236,9 +236,9 @@ static guint camerabin_signals[LAST_SIGNAL];
  ********************************/
 
 static GstPipelineClass *parent_class;
-static void gst_camera_bin_class_init (GstCameraBin2Class * klass);
+static void gst_camera_bin_class_init (GstCameraBin2Class * klass, gpointer class_data G_GNUC_UNUSED);
 static void gst_camera_bin_base_init (gpointer klass);
-static void gst_camera_bin_init (GstCameraBin2 * camera);
+static void gst_camera_bin_init (GstCameraBin2 * camera, gpointer g_class G_GNUC_UNUSED);
 static void gst_camera_bin_dispose (GObject * object);
 static void gst_camera_bin_finalize (GObject * object);
 
@@ -606,7 +606,7 @@ gst_camera_bin_base_init (gpointer g_class)
 }
 
 static void
-gst_camera_bin_class_init (GstCameraBin2Class * klass)
+gst_camera_bin_class_init (GstCameraBin2Class * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *object_class;
   GstElementClass *element_class;
@@ -855,7 +855,7 @@ gst_camera_bin_class_init (GstCameraBin2Class * klass)
 }
 
 static void
-gst_camera_bin_init (GstCameraBin2 * camera)
+gst_camera_bin_init (GstCameraBin2 * camera, gpointer g_class G_GNUC_UNUSED)
 {
   camera->post_previews = DEFAULT_POST_PREVIEWS;
   camera->mode = DEFAULT_MODE;

@@ -437,9 +437,9 @@ calculate_adjustment (GtkWidget * widget, GtkAllocation * allocation)
   allocation->y = wy;
 }
 
-static gboolean
+static void
 scrollable_window_adjustment_changed_cb (GtkAdjustment * adjustment,
-    gpointer user_data)
+    gdouble value G_GNUC_UNUSED, gpointer user_data)
 {
   GstGtkWaylandSink *self = user_data;
   GstGtkWaylandSinkPrivate *priv =
@@ -450,8 +450,6 @@ scrollable_window_adjustment_changed_cb (GtkAdjustment * adjustment,
   calculate_adjustment (priv->gtk_widget, &allocation);
   gst_wl_window_set_render_rectangle (priv->wl_window, allocation.x,
       allocation.y, allocation.width, allocation.height);
-
-  return FALSE;
 }
 
 static void

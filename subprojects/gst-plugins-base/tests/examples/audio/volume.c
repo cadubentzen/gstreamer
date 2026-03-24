@@ -38,7 +38,7 @@ static GtkWidget *scale;
 #endif
 
 static void
-value_changed_callback (GtkWidget * widget, GstElement * volume)
+value_changed_callback (GtkWidget * widget, gpointer user_data G_GNUC_UNUSED, GstElement * volume)
 {
   gdouble value;
   gdouble level;

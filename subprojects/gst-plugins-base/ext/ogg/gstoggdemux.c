@@ -204,10 +204,10 @@ gst_ogg_pad_dispose (GObject * object)
   pad->chain = NULL;
   pad->ogg = NULL;
 
-  g_list_foreach (pad->map.headers, (GFunc) _ogg_packet_free, NULL);
+  g_list_foreach (pad->map.headers, g_destroy_notify_to_func, (GDestroyNotify) _ogg_packet_free);
   g_list_free (pad->map.headers);
   pad->map.headers = NULL;
-  g_list_foreach (pad->map.queued, (GFunc) _ogg_packet_free, NULL);
+  g_list_foreach (pad->map.queued, g_destroy_notify_to_func, (GDestroyNotify) _ogg_packet_free);
   g_list_free (pad->map.queued);
   pad->map.queued = NULL;
 
@@ -215,7 +215,7 @@ gst_ogg_pad_dispose (GObject * object)
   pad->map.index = NULL;
 
   /* clear continued pages */
-  g_list_foreach (pad->continued, (GFunc) gst_ogg_page_free, NULL);
+  g_list_foreach (pad->continued, g_destroy_notify_to_func, (GDestroyNotify) gst_ogg_page_free);
   g_list_free (pad->continued);
   pad->continued = NULL;
 
@@ -469,7 +469,7 @@ gst_ogg_pad_reset (GstOggPad * pad)
   GST_DEBUG_OBJECT (pad, "doing reset");
 
   /* clear continued pages */
-  g_list_foreach (pad->continued, (GFunc) gst_ogg_page_free, NULL);
+  g_list_foreach (pad->continued, g_destroy_notify_to_func, (GDestroyNotify) gst_ogg_page_free);
   g_list_free (pad->continued);
   pad->continued = NULL;
 
@@ -1096,7 +1096,7 @@ gst_ogg_pad_submit_packet (GstOggPad * pad, ogg_packet * packet)
     pad->map.n_header_packets_seen = 0;
     if (!pad->map.have_headers) {
       GST_DEBUG_OBJECT (ogg, "clearing header packets");
-      g_list_foreach (pad->map.headers, (GFunc) _ogg_packet_free, NULL);
+      g_list_foreach (pad->map.headers, g_destroy_notify_to_func, (GDestroyNotify) _ogg_packet_free);
       g_list_free (pad->map.headers);
       pad->map.headers = NULL;
     }

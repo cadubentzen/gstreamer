@@ -341,7 +341,8 @@ _add_child (GESContainer * group, GESTimelineElement * child)
 }
 
 static void
-_child_added (GESContainer * group, GESTimelineElement * child)
+_child_added (GESContainer * group, GESTimelineElement * child,
+    gpointer user_data G_GNUC_UNUSED)
 {
   GESGroup *self = GES_GROUP (group);
   ChildSignalIds *sigids;
@@ -397,7 +398,8 @@ _disconnect_signals (GESGroup * group, GESTimelineElement * child,
 }
 
 static void
-_child_removed (GESContainer * group, GESTimelineElement * child)
+_child_removed (GESContainer * group, GESTimelineElement * child,
+    gpointer user_data G_GNUC_UNUSED)
 {
   GESGroup *self = GES_GROUP (group);
   ChildSignalIds *sigids;

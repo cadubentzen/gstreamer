@@ -148,7 +148,7 @@ gst_plugin_finalize (GObject * object)
   g_free (plugin->filename);
   g_free (plugin->basename);
 
-  g_list_foreach (plugin->priv->deps, (GFunc) gst_plugin_ext_dep_free, NULL);
+  g_list_foreach (plugin->priv->deps, g_destroy_notify_to_func, (GDestroyNotify) gst_plugin_ext_dep_free);
   g_list_free (plugin->priv->deps);
   plugin->priv->deps = NULL;
 

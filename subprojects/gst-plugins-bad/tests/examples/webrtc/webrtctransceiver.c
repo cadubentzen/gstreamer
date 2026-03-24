@@ -143,7 +143,8 @@ _on_ice_candidate (GstElement * webrtc, guint mlineindex, gchar * candidate,
 }
 
 static void
-_on_new_transceiver (GstElement * webrtc, GstWebRTCRTPTransceiver * trans)
+_on_new_transceiver (GstElement * webrtc, GstWebRTCRTPTransceiver * trans,
+    gpointer user_data G_GNUC_UNUSED)
 {
   /* If we expected more than one transceiver, we would take a look at
    * trans->mline, and compare it with webrtcbin's local description */

@@ -494,7 +494,7 @@ GST_START_TEST (test_target_list)
   fail_if (categories == NULL);
   fail_if (g_list_find_custom (categories, "herding",
           (GCompareFunc) g_strcmp0) == NULL);
-  g_list_foreach (categories, (GFunc) g_free, NULL);
+  g_list_foreach (categories, g_destroy_notify_to_func, (GDestroyNotify) g_free);
   g_list_free (categories);
 
   /* Try getting all available targets with a specified category */
@@ -508,7 +508,7 @@ GST_START_TEST (test_target_list)
   /* If tmp is NULL, it means we iterated the whole list without finding
    * our target */
   fail_if (tmp == NULL);
-  g_list_foreach (targets, (GFunc) g_object_unref, NULL);
+  g_list_foreach (targets, g_destroy_notify_to_func, (GDestroyNotify) g_object_unref);
   g_list_free (targets);
 
   /* Try getting all available targets without a specified category */
@@ -522,7 +522,7 @@ GST_START_TEST (test_target_list)
   /* If tmp is NULL, it means we iterated the whole list without finding
    * our target */
   fail_if (tmp == NULL);
-  g_list_foreach (targets, (GFunc) g_object_unref, NULL);
+  g_list_foreach (targets, g_destroy_notify_to_func, (GDestroyNotify) g_object_unref);
   g_list_free (targets);
 }
 

@@ -1008,8 +1008,9 @@ enum
  * the sink pad non-alpha caps. Using the G_DEFINE_TYPE there
  * seems to be no way of getting the real class being initialized */
 static void gst_video_aggregator_init (GstVideoAggregator * self,
-    GstVideoAggregatorClass * klass);
-static void gst_video_aggregator_class_init (GstVideoAggregatorClass * klass);
+    gpointer g_class);
+static void gst_video_aggregator_class_init (GstVideoAggregatorClass * klass,
+    gpointer class_data G_GNUC_UNUSED);
 static GstTaskPool *gst_video_aggregator_setup_task_pool (GstVideoAggregator *
     vagg);
 static gpointer gst_video_aggregator_parent_class = NULL;
@@ -3225,7 +3226,8 @@ gst_video_aggregator_change_state (GstElement * element,
 
 /* GObject boilerplate */
 static void
-gst_video_aggregator_class_init (GstVideoAggregatorClass * klass)
+gst_video_aggregator_class_init (GstVideoAggregatorClass * klass,
+    gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class = (GObjectClass *) klass;
   GstElementClass *gstelement_class = (GstElementClass *) klass;
@@ -3299,7 +3301,7 @@ gst_video_aggregator_class_init (GstVideoAggregatorClass * klass)
 
 static void
 gst_video_aggregator_init (GstVideoAggregator * vagg,
-    GstVideoAggregatorClass * klass)
+    gpointer g_class)
 {
   GstCaps *src_template;
   GstPadTemplate *pad_template;
@@ -3316,7 +3318,7 @@ gst_video_aggregator_init (GstVideoAggregator * vagg,
   /* Finding all supported formats */
   vagg->priv->supported_formats = g_ptr_array_new ();
   pad_template =
-      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (klass), "src");
+      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (g_class), "src");
   src_template = gst_pad_template_get_caps (pad_template);
   for (i = 0; i < gst_caps_get_size (src_template); i++) {
     const GValue *v =

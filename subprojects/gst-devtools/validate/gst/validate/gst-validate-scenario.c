@@ -148,6 +148,12 @@ enum
   LAST_SIGNAL
 };
 
+static gpointer
+gst_validate_action_ref_copy (gconstpointer src, gpointer data G_GNUC_UNUSED)
+{
+  return gst_validate_action_ref ((GstValidateAction *) src);
+}
+
 static guint scenario_signals[LAST_SIGNAL] = { 0 };
 
 static GList *action_types = NULL;
@@ -5258,7 +5264,7 @@ handle_bus_message (MessageData * d)
          * we check at this point for actions that have a pending_set_done and
          * call it before continuing. */
         GList *actions = g_list_copy_deep (priv->actions,
-            (GCopyFunc) (gst_validate_action_ref), NULL);
+            (GCopyFunc) gst_validate_action_ref_copy, NULL);
         GList *i;
         for (i = actions; i; i = i->next) {
           GstValidateAction *action = (GstValidateAction *) i->data;
@@ -7953,7 +7959,7 @@ gst_validate_scenario_get_actions (GstValidateScenario * scenario)
   g_return_val_if_fail (main_context_acquired, NULL);
 
   ret = g_list_copy_deep (scenario->priv->actions,
-      (GCopyFunc) gst_validate_action_ref, NULL);
+      (GCopyFunc) gst_validate_action_ref_copy, NULL);
 
   g_main_context_release (g_main_context_default ());
 

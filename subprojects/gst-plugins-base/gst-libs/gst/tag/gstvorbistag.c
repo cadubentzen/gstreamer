@@ -651,7 +651,7 @@ gst_tag_to_metadata_block_picture (const gchar * tag,
  * vorbiscomment packet.
  *
  * Returns: (element-type utf8) (transfer full): A #GList of newly-allocated
- *     key=value strings. Free with g_list_foreach (list, (GFunc) g_free, NULL)
+ *     key=value strings. Free with g_list_foreach (list, g_destroy_notify_to_func, (GDestroyNotify) g_free)
  *     plus g_list_free (list)
  */
 GList *
@@ -842,7 +842,7 @@ gst_tag_list_to_vorbiscomment_buffer (const GstTagList * list,
     memcpy (data, cur, size);
     data += size;
   }
-  g_list_foreach (my_data.entries, (GFunc) g_free, NULL);
+  g_list_foreach (my_data.entries, g_destroy_notify_to_func, (GDestroyNotify) g_free);
   g_list_free (my_data.entries);
   *data = 1;
   gst_buffer_unmap (buffer, &info);

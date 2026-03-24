@@ -156,8 +156,7 @@ struct _GstAudioCdSrcPrivate
   GstToc *toc;
 };
 
-static void gst_audio_cd_src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_audio_cd_src_uri_handler_init (gpointer g_iface);
 static void gst_audio_cd_src_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 static void gst_audio_cd_src_set_property (GObject * object, guint prop_id,
@@ -1061,7 +1060,7 @@ failed:
 }
 
 static void
-gst_audio_cd_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_audio_cd_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

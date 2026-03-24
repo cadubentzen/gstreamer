@@ -231,7 +231,7 @@ typedef struct _GstTestElementClass
 } GstTestElementClass;
 
 static void
-gst_test_element_class_init (GstTestElementClass * klass)
+gst_test_element_class_init (GstTestElementClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
   GstPadTemplate *templ;
@@ -317,7 +317,7 @@ typedef struct _GstTestElement2Class
 } GstTestElement2Class;
 
 static void
-gst_test_element2_class_init (GstTestElement2Class * klass)
+gst_test_element2_class_init (GstTestElement2Class * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
   GstPadTemplate *templ;
@@ -594,7 +594,7 @@ gst_test_element3_release_pad (GstElement * element, GstPad * pad)
 }
 
 static void
-gst_test_element3_init (GstTestElement3 * test)
+gst_test_element3_init (GstTestElement3 * test, gpointer g_class G_GNUC_UNUSED)
 {
   GstPadTemplate *pad_template;
   GstPad *sinkpad;
@@ -608,7 +608,7 @@ gst_test_element3_init (GstTestElement3 * test)
 }
 
 static void
-gst_test_element3_class_init (GstTestElement3Class * klass)
+gst_test_element3_class_init (GstTestElement3Class * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
 

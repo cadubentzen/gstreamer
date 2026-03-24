@@ -696,4 +696,11 @@ G_GNUC_INTERNAL gboolean ges_nle_composition_add_object (GstElement *comp, GstEl
 G_GNUC_INTERNAL gboolean ges_nle_composition_remove_object (GstElement *comp, GstElement *object);
 G_GNUC_INTERNAL gboolean ges_nle_object_commit (GstElement * nlesource, gboolean recurse);
 
+/* Adapter for gst_object_ref as GCopyFunc (which takes 2 params) */
+static inline gpointer
+gst_object_ref_copy_func (gconstpointer src, gpointer data G_GNUC_UNUSED)
+{
+  return gst_object_ref ((gpointer) src);
+}
+
 G_END_DECLS

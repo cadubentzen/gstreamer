@@ -215,7 +215,7 @@ beach:
 }
 
 static void
-gst_image_sequence_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_image_sequence_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

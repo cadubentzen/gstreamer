@@ -338,9 +338,10 @@ gst_audio_decoder_finish_frame_or_subframe (GstAudioDecoder * dec,
 static GstElementClass *parent_class = NULL;
 static gint private_offset = 0;
 
-static void gst_audio_decoder_class_init (GstAudioDecoderClass * klass);
+static void gst_audio_decoder_class_init (GstAudioDecoderClass * klass,
+    gpointer class_data G_GNUC_UNUSED);
 static void gst_audio_decoder_init (GstAudioDecoder * dec,
-    GstAudioDecoderClass * klass);
+    gpointer g_class);
 
 GType
 gst_audio_decoder_get_type (void)
@@ -379,7 +380,8 @@ gst_audio_decoder_get_instance_private (GstAudioDecoder * self)
 }
 
 static void
-gst_audio_decoder_class_init (GstAudioDecoderClass * klass)
+gst_audio_decoder_class_init (GstAudioDecoderClass * klass,
+    gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class;
   GstElementClass *element_class;
@@ -476,7 +478,7 @@ gst_audio_decoder_class_init (GstAudioDecoderClass * klass)
 }
 
 static void
-gst_audio_decoder_init (GstAudioDecoder * dec, GstAudioDecoderClass * klass)
+gst_audio_decoder_init (GstAudioDecoder * dec, gpointer g_class)
 {
   GstPadTemplate *pad_template;
 
@@ -486,7 +488,7 @@ gst_audio_decoder_init (GstAudioDecoder * dec, GstAudioDecoderClass * klass)
 
   /* Setup sink pad */
   pad_template =
-      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (klass), "sink");
+      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (g_class), "sink");
   g_return_if_fail (pad_template != NULL);
 
   dec->sinkpad = gst_pad_new_from_template (pad_template, "sink");
@@ -501,7 +503,7 @@ gst_audio_decoder_init (GstAudioDecoder * dec, GstAudioDecoderClass * klass)
 
   /* Setup source pad */
   pad_template =
-      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (klass), "src");
+      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (g_class), "src");
   g_return_if_fail (pad_template != NULL);
 
   dec->srcpad = gst_pad_new_from_template (pad_template, "src");
@@ -566,7 +568,7 @@ gst_audio_decoder_reset (GstAudioDecoder * dec, gboolean full)
     gst_segment_init (&dec->output_segment, GST_FORMAT_TIME);
     dec->priv->in_out_segment_sync = TRUE;
 
-    g_list_foreach (dec->priv->pending_events, (GFunc) gst_event_unref, NULL);
+    g_list_foreach (dec->priv->pending_events, g_destroy_notify_to_func, (GDestroyNotify) gst_event_unref);
     g_list_free (dec->priv->pending_events);
     dec->priv->pending_events = NULL;
 
@@ -588,7 +590,7 @@ gst_audio_decoder_reset (GstAudioDecoder * dec, gboolean full)
     dec->priv->ctx.had_input_data = FALSE;
   }
 
-  g_queue_foreach (&dec->priv->frames, (GFunc) gst_buffer_unref, NULL);
+  g_queue_foreach (&dec->priv->frames, g_destroy_notify_to_func, (GDestroyNotify) gst_buffer_unref);
   g_queue_clear (&dec->priv->frames);
   gst_adapter_clear (dec->priv->adapter);
   gst_adapter_clear (dec->priv->adapter_out);
@@ -1592,7 +1594,7 @@ gst_audio_decoder_finish_frame_or_subframe (GstAudioDecoder * dec,
   ret = gst_audio_decoder_output (dec, buf);
 
 exit:
-  g_queue_foreach (&inbufs, (GFunc) gst_buffer_unref, NULL);
+  g_queue_foreach (&inbufs, g_destroy_notify_to_func, (GDestroyNotify) gst_buffer_unref);
   g_queue_clear (&inbufs);
 
   if (is_subframe)
@@ -1832,7 +1834,7 @@ drain_failed:
     /* not fatal/impossible though if subclass/codec eats stuff */
     GST_WARNING_OBJECT (dec, "still %d frames left after draining",
         dec->priv->frames.length);
-    g_queue_foreach (&dec->priv->frames, (GFunc) gst_buffer_unref, NULL);
+    g_queue_foreach (&dec->priv->frames, g_destroy_notify_to_func, (GDestroyNotify) gst_buffer_unref);
     g_queue_clear (&dec->priv->frames);
   }
 
@@ -1901,13 +1903,13 @@ gst_audio_decoder_clear_queues (GstAudioDecoder * dec)
 {
   GstAudioDecoderPrivate *priv = dec->priv;
 
-  g_list_foreach (priv->queued, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (priv->queued, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (priv->queued);
   priv->queued = NULL;
-  g_list_foreach (priv->gather, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (priv->gather, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (priv->gather);
   priv->gather = NULL;
-  g_list_foreach (priv->decode, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (priv->decode, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (priv->decode);
   priv->decode = NULL;
 }

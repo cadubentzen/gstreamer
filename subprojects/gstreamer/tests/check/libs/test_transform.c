@@ -89,7 +89,7 @@ static GstStaticPadTemplate *sink_template = &gst_test_trans_sink_template;
 static GstStaticPadTemplate *src_template = &gst_test_trans_src_template;
 
 static void
-gst_test_trans_class_init (GstTestTransClass * klass)
+gst_test_trans_class_init (GstTestTransClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GstElementClass *element_class;
   GstBaseTransformClass *trans_class;
@@ -125,7 +125,7 @@ gst_test_trans_class_init (GstTestTransClass * klass)
 }
 
 static void
-gst_test_trans_init (GstTestTrans * this)
+gst_test_trans_init (GstTestTrans * this, gpointer g_class G_GNUC_UNUSED)
 {
 }
 

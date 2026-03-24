@@ -259,8 +259,7 @@ gst_v4l2radio_set_unmute (GstV4l2Radio * radio)
 
 GST_IMPLEMENT_V4L2_TUNER_METHODS (GstV4l2Radio, gst_v4l2radio);
 
-static void gst_v4l2radio_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_v4l2radio_uri_handler_init (gpointer g_iface);
 
 static void
 gst_v4l2radio_tuner_interface_reinit (GstTunerInterface * iface)
@@ -576,7 +575,7 @@ uri_failed:
 }
 
 static void
-gst_v4l2radio_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_v4l2radio_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

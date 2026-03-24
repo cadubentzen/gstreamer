@@ -308,7 +308,7 @@ gst_check_clear_log_filter (void)
 {
   g_mutex_lock (&_gst_check_log_filters_mutex);
   g_queue_foreach (&_gst_check_log_filters,
-      (GFunc) gst_check_free_log_filter, NULL);
+      g_destroy_notify_to_func, (GDestroyNotify) gst_check_free_log_filter);
   g_queue_clear (&_gst_check_log_filters);
   g_mutex_unlock (&_gst_check_log_filters_mutex);
 }

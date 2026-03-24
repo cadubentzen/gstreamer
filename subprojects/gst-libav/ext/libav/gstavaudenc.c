@@ -51,9 +51,9 @@ enum
 
 GST_DEBUG_CATEGORY_STATIC (GST_CAT_PERFORMANCE);
 
-static void gst_ffmpegaudenc_class_init (GstFFMpegAudEncClass * klass);
+static void gst_ffmpegaudenc_class_init (GstFFMpegAudEncClass * klass, gpointer class_data G_GNUC_UNUSED);
 static void gst_ffmpegaudenc_base_init (GstFFMpegAudEncClass * klass);
-static void gst_ffmpegaudenc_init (GstFFMpegAudEnc * ffmpegaudenc);
+static void gst_ffmpegaudenc_init (GstFFMpegAudEnc * ffmpegaudenc, gpointer g_class G_GNUC_UNUSED);
 static void gst_ffmpegaudenc_finalize (GObject * object);
 
 static gboolean gst_ffmpegaudenc_set_format (GstAudioEncoder * encoder,
@@ -128,7 +128,7 @@ gst_ffmpegaudenc_base_init (GstFFMpegAudEncClass * klass)
 }
 
 static void
-gst_ffmpegaudenc_class_init (GstFFMpegAudEncClass * klass)
+gst_ffmpegaudenc_class_init (GstFFMpegAudEncClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class;
   GstAudioEncoderClass *gstaudioencoder_class;
@@ -158,7 +158,7 @@ gst_ffmpegaudenc_class_init (GstFFMpegAudEncClass * klass)
 }
 
 static void
-gst_ffmpegaudenc_init (GstFFMpegAudEnc * ffmpegaudenc)
+gst_ffmpegaudenc_init (GstFFMpegAudEnc * ffmpegaudenc, gpointer g_class G_GNUC_UNUSED)
 {
   GstFFMpegAudEncClass *klass =
       (GstFFMpegAudEncClass *) G_OBJECT_GET_CLASS (ffmpegaudenc);

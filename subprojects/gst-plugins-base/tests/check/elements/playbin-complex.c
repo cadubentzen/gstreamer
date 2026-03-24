@@ -97,7 +97,7 @@ gst_caps_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_caps_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_caps_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

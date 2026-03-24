@@ -113,8 +113,8 @@ struct _GESContainerClass
 
   /*< public > */
   /* signals */
-  void (*child_added)             (GESContainer *container, GESTimelineElement *element);
-  void (*child_removed)           (GESContainer *container, GESTimelineElement *element);
+  void (*child_added)             (GESContainer *container, GESTimelineElement *element, gpointer user_data);
+  void (*child_removed)           (GESContainer *container, GESTimelineElement *element, gpointer user_data);
   gboolean (*add_child)           (GESContainer *container, GESTimelineElement *element);
   gboolean (*remove_child)        (GESContainer *container, GESTimelineElement *element);
   GList* (*ungroup)               (GESContainer *container, gboolean recursive);

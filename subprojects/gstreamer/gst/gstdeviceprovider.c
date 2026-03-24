@@ -71,8 +71,10 @@ static guint gst_device_provider_signals[LAST_SIGNAL] = { 0 };
 /* this is used in gstelementfactory.c:gst_element_register() */
 GQuark __gst_deviceproviderclass_factory = 0;
 
-static void gst_device_provider_class_init (GstDeviceProviderClass * klass);
-static void gst_device_provider_init (GstDeviceProvider * element);
+static void gst_device_provider_class_init (GstDeviceProviderClass * klass,
+    gpointer class_data G_GNUC_UNUSED);
+static void gst_device_provider_init (GstDeviceProvider * element,
+    gpointer g_class G_GNUC_UNUSED);
 static void gst_device_provider_base_class_init (gpointer g_class);
 static void gst_device_provider_dispose (GObject * object);
 static void gst_device_provider_finalize (GObject * object);
@@ -136,7 +138,8 @@ gst_device_provider_base_class_init (gpointer g_class)
 }
 
 static void
-gst_device_provider_class_init (GstDeviceProviderClass * klass)
+gst_device_provider_class_init (GstDeviceProviderClass * klass,
+    gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class = (GObjectClass *) klass;
 
@@ -158,7 +161,8 @@ gst_device_provider_class_init (GstDeviceProviderClass * klass)
 }
 
 static void
-gst_device_provider_init (GstDeviceProvider * provider)
+gst_device_provider_init (GstDeviceProvider * provider,
+    gpointer g_class G_GNUC_UNUSED)
 {
   provider->priv = gst_device_provider_get_instance_private (provider);
 

@@ -153,8 +153,7 @@ static void
 dvb_base_bin_deactivate_program (DvbBaseBin * dvbbasebin,
     DvbBaseBinProgram * program);
 
-static void dvb_base_bin_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void dvb_base_bin_uri_handler_init (gpointer g_iface);
 
 static void dvb_base_bin_program_destroy (gpointer data);
 
@@ -1212,7 +1211,7 @@ set_properties_failed:
 }
 
 static void
-dvb_base_bin_uri_handler_init (gpointer g_iface, gpointer iface_data)
+dvb_base_bin_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

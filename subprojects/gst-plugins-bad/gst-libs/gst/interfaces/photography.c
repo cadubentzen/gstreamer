@@ -39,7 +39,7 @@
  */
 
 static void gst_photography_iface_base_init (GstPhotographyInterface * iface);
-static void gst_photography_iface_class_init (gpointer g_class);
+static void gst_photography_iface_class_init (gpointer g_class, gpointer class_data G_GNUC_UNUSED);
 
 GType
 gst_photography_get_type (void)
@@ -511,7 +511,7 @@ gst_photography_get_config (GstPhotography * photo,
 
 /* Photography class initialization stuff */
 static void
-gst_photography_iface_class_init (gpointer g_class)
+gst_photography_iface_class_init (gpointer g_class, gpointer class_data G_GNUC_UNUSED)
 {
   /* create interface signals and properties here. */
 

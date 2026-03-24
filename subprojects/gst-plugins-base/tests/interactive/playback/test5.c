@@ -33,7 +33,7 @@ pad_added_cb (GstElement * element, GstPad * pad, GstElement * sink)
 }
 
 static void
-no_more_pads (GstElement * element)
+no_more_pads (GstElement * element, gpointer user_data G_GNUC_UNUSED)
 {
   g_print ("No more pads...\n");
   g_main_loop_quit (loop);

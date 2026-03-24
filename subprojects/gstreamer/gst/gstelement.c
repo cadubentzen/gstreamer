@@ -121,8 +121,10 @@ enum
       /* FILL ME */
 };
 
-static void gst_element_class_init (GstElementClass * klass);
-static void gst_element_init (GstElement * element);
+static void gst_element_class_init (GstElementClass * klass,
+    gpointer class_data G_GNUC_UNUSED);
+static void gst_element_init (GstElement * element,
+    gpointer g_class G_GNUC_UNUSED);
 static void gst_element_base_class_init (gpointer g_class);
 
 static void gst_element_constructed (GObject * object);
@@ -218,7 +220,8 @@ gst_element_setup_thread_pool (void)
 }
 
 static void
-gst_element_class_init (GstElementClass * klass)
+gst_element_class_init (GstElementClass * klass,
+    gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class;
 
@@ -316,7 +319,8 @@ gst_element_base_class_init (gpointer g_class)
 }
 
 static void
-gst_element_init (GstElement * element)
+gst_element_init (GstElement * element,
+    gpointer g_class G_GNUC_UNUSED)
 {
   GST_STATE (element) = GST_STATE_NULL;
   GST_STATE_TARGET (element) = GST_STATE_NULL;
@@ -3632,7 +3636,13 @@ gst_element_get_contexts (GstElement * element)
   g_return_val_if_fail (GST_IS_ELEMENT (element), NULL);
 
   GST_OBJECT_LOCK (element);
-  ret = g_list_copy_deep (element->contexts, (GCopyFunc) gst_context_ref, NULL);
+  {
+    GList *l;
+    ret = NULL;
+    for (l = element->contexts; l; l = l->next)
+      ret = g_list_prepend (ret, gst_context_ref (l->data));
+    ret = g_list_reverse (ret);
+  }
   GST_OBJECT_UNLOCK (element);
 
   return ret;

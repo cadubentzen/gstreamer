@@ -225,7 +225,9 @@ calculate_position (gint * x, gint * y, guint logo_w, guint logo_h, guint n)
 }
 
 static GstVideoOverlayComposition *
-draw_overlay (GstElement * overlay, GstSample * sample, gpointer user_data)
+draw_overlay (GstElement * overlay, GstSample * sample,
+    gint window_width G_GNUC_UNUSED, gint window_height G_GNUC_UNUSED,
+    gpointer user_data)
 {
   OverlayState *s = (OverlayState *) user_data;
   GstVideoOverlayRectangle *rect;

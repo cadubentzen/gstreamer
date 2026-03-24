@@ -97,7 +97,7 @@ static const GstBs2bPreset presets[3] = {
       BS2B_JMEIER_CLEVEL}
 };
 
-static void gst_preset_interface_init (gpointer g_iface, gpointer iface_data);
+static void gst_preset_interface_init (gpointer g_iface);
 
 G_DEFINE_TYPE_WITH_CODE (GstBs2b, gst_bs2b, GST_TYPE_AUDIO_FILTER,
     G_IMPLEMENT_INTERFACE (GST_TYPE_PRESET, gst_preset_interface_init));
@@ -176,7 +176,7 @@ gst_bs2b_get_meta (GstPreset * preset, const gchar * name,
 }
 
 static void
-gst_preset_interface_init (gpointer g_iface, gpointer iface_data)
+gst_preset_interface_init (gpointer g_iface)
 {
   GstPresetInterface *iface = g_iface;
 

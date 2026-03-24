@@ -1030,9 +1030,10 @@ async_done_func (GstBus * bus, GstMessage * msg, GstElement * sink)
   return GST_BUS_DROP;
 }
 
-static void
-send_buffer (GstPad * sinkpad)
+static gpointer
+send_buffer (gpointer data)
 {
+  GstPad *sinkpad = data;
   GstBuffer *buffer;
   GstFlowReturn ret;
 
@@ -1045,6 +1046,7 @@ send_buffer (GstPad * sinkpad)
   /* this function will initially block */
   ret = gst_pad_chain (sinkpad, buffer);
   fail_unless (ret == GST_FLOW_OK, "no OK flow return");
+  return NULL;
 }
 
 /* when we get the ASYNC_DONE message from a sink, we want the sink to be able
@@ -1103,7 +1105,7 @@ GST_START_TEST (test_async_done)
    * new thread so that we can check the position */
   GST_DEBUG ("starting thread");
   thread =
-      g_thread_try_new ("gst-check", (GThreadFunc) send_buffer, sinkpad, NULL);
+      g_thread_try_new ("gst-check", send_buffer, sinkpad, NULL);
   fail_if (thread == NULL, "no thread");
 
   GST_DEBUG ("waiting 1 second");

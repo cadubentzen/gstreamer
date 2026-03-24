@@ -445,8 +445,7 @@ static void gst_rtspsrc_get_property (GObject * object, guint prop_id,
 
 static GstClock *gst_rtspsrc_provide_clock (GstElement * element);
 
-static void gst_rtspsrc_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_rtspsrc_uri_handler_init (gpointer g_iface);
 
 static gboolean gst_rtspsrc_set_proxy (GstRTSPSrc * rtsp, const gchar * proxy);
 static void gst_rtspsrc_set_tcp_timeout (GstRTSPSrc * rtspsrc, guint64 timeout);
@@ -10408,7 +10407,7 @@ parse_error:
 }
 
 static void
-gst_rtspsrc_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_rtspsrc_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

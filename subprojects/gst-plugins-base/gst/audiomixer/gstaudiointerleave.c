@@ -136,8 +136,7 @@ GST_STATIC_PAD_TEMPLATE ("src",
         "layout = (string) interleaved")
     );
 
-static void gst_audio_interleave_child_proxy_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_audio_interleave_child_proxy_init (gpointer g_iface);
 
 #define gst_audio_interleave_parent_class parent_class
 G_DEFINE_TYPE_WITH_CODE (GstAudioInterleave, gst_audio_interleave,
@@ -896,7 +895,7 @@ gst_audio_interleave_child_proxy_get_children_count (GstChildProxy *
 }
 
 static void
-gst_audio_interleave_child_proxy_init (gpointer g_iface, gpointer iface_data)
+gst_audio_interleave_child_proxy_init (gpointer g_iface)
 {
   GstChildProxyInterface *iface = g_iface;
 

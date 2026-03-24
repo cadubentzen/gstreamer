@@ -76,7 +76,8 @@ message_cb (GstBus * bus, GstMessage * message, GstElement * pipeline)
 }
 
 static gboolean
-expose_cb (GtkWidget * widget, cairo_t * cr, GstElement * videosink)
+expose_cb (GtkWidget * widget, cairo_t * cr, gint width G_GNUC_UNUSED,
+    gint height G_GNUC_UNUSED, GstElement * videosink)
 {
   gst_video_overlay_expose (GST_VIDEO_OVERLAY (videosink));
   return FALSE;

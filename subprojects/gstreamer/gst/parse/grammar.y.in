@@ -370,8 +370,9 @@ static int  gst_resolve_reference(reference_t *rr, GstElement *pipeline){
   else            return -1; /* not found */
 }
 
-static void gst_parse_free_delayed_set (DelayedSet *set)
+static void gst_parse_free_delayed_set (gpointer data, GClosure *closure G_GNUC_UNUSED)
 {
+  DelayedSet *set = data;
   g_free(set->name);
   g_free(set->value_str);
   g_free(set);
@@ -392,7 +393,7 @@ static void gst_parse_add_delayed_set (GstChildProxy *proxy, gchar *name, gchar 
   data->name = g_strdup (name);
   data->value_str = g_strdup (value_str);
   data->signal_id = g_signal_connect_data (proxy, "child-added",
-      G_CALLBACK (gst_parse_new_child), data, (GClosureNotify)
+      G_CALLBACK (gst_parse_new_child), data,
       gst_parse_free_delayed_set, (GConnectFlags) 0);
 
   current = names = g_strsplit (name, "::", -1);
@@ -896,7 +897,7 @@ static void gst_parse_free_reference (reference_t *rr)
 {
   if(rr->element) gst_object_unref(rr->element);
   gst_parse_strfree (rr->name);
-  g_slist_foreach (rr->pads, (GFunc) gst_parse_strfree, NULL);
+  g_slist_foreach (rr->pads, g_destroy_notify_to_func, (GDestroyNotify) gst_parse_strfree);
   g_slist_free (rr->pads);
 }
 
@@ -927,8 +928,9 @@ static void gst_parse_free_element (element_t *el)
   gst_parse_element_free (el);
 }
 
-static void gst_parse_free_delayed_link (DelayedLink *link)
+static void gst_parse_free_delayed_link (gpointer data, GClosure *closure G_GNUC_UNUSED)
 {
+  DelayedLink *link = data;
   g_free (link->src_pad);
   g_free (link->sink_pad);
   if (link->caps) gst_caps_unref (link->caps);
@@ -1019,7 +1021,7 @@ gst_parse_perform_delayed_link (GstElement *src, const gchar *src_pad,
       }
       data->pad_added_signal_id = g_signal_connect_data (src, "pad-added",
           G_CALLBACK (gst_parse_found_pad), data,
-          (GClosureNotify) gst_parse_free_delayed_link, (GConnectFlags) 0);
+          gst_parse_free_delayed_link, (GConnectFlags) 0);
       data->no_more_pads_signal_id = g_signal_connect (src, "no-more-pads",
           G_CALLBACK (gst_parse_no_more_pads), data);
       return TRUE;
@@ -1365,7 +1367,7 @@ chain:	openchain			      { $$=$1;
 						if($$->last.pads){
 							SET_ERROR (graph, GST_PARSE_ERROR_SYNTAX,
 							_("unexpected pad-reference \"%s\" - ignoring"), (gchar*)$$->last.pads->data);
-							g_slist_foreach ($$->last.pads, (GFunc) gst_parse_strfree, NULL);
+							g_slist_foreach ($$->last.pads, g_destroy_notify_to_func, (GDestroyNotify) gst_parse_strfree);
 							g_slist_free ($$->last.pads);
 							$$->last.pads=NULL;
 						}
@@ -1581,7 +1583,7 @@ bin:	binopener assignments chainlist ')'   {
 						  SET_ERROR (graph, GST_PARSE_ERROR_NO_SUCH_ELEMENT,
 						    _("no bin \"%s\", unpacking elements"), $1);
 						  /* clear property-list */
-						  g_slist_foreach ($2, (GFunc) gst_parse_strfree, NULL);
+						  g_slist_foreach ($2, g_destroy_notify_to_func, (GDestroyNotify) gst_parse_strfree);
 						  g_slist_free ($2);
 						  $2 = NULL;
 						} else {
@@ -1864,7 +1866,7 @@ error1:
     g.chain=NULL;
   }
 
-  g_slist_foreach (g.links, (GFunc)gst_parse_free_link, NULL);
+  g_slist_foreach (g.links, g_destroy_notify_to_func, (GDestroyNotify) gst_parse_free_link);
   g_slist_free (g.links);
 
   if (error)

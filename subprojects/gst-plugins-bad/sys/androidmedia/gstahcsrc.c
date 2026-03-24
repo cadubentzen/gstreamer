@@ -97,8 +97,7 @@ static GstFlowReturn gst_ahc_src_create (GstPushSrc * src, GstBuffer ** buffer);
 static gboolean gst_ahc_src_query (GstBaseSrc * bsrc, GstQuery * query);
 
 /* GstPhotography  */
-static void gst_ahc_src_photography_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_ahc_src_photography_init (gpointer g_iface);
 static gboolean gst_ahc_src_get_ev_compensation (GstPhotography * photo,
     gfloat * ev_comp);
 static gboolean _white_balance_to_enum (const gchar * white_balance,
@@ -234,7 +233,7 @@ gst_ahc_src_facing_get_type (void)
 #define GST_AHC_SRC_FACING_TYPE (gst_ahc_src_facing_get_type())
 
 static void
-gst_ahc_src_photography_init (gpointer g_iface, gpointer iface_data)
+gst_ahc_src_photography_init (gpointer g_iface)
 {
   GstPhotographyInterface *iface = g_iface;
 

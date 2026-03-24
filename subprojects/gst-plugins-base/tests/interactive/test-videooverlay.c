@@ -94,7 +94,8 @@ handle_resize_cb (GtkWidget * widget, GdkEventConfigure * event,
 }
 
 static gboolean
-handle_draw_cb (GtkWidget * widget, cairo_t * cr, gpointer user_data)
+handle_draw_cb (GtkWidget * widget, cairo_t * cr, gint width G_GNUC_UNUSED,
+    gint height G_GNUC_UNUSED, gpointer user_data)
 {
   GstVideoRectangle *r = &anim_state.rect;
   GtkStyleContext *style;

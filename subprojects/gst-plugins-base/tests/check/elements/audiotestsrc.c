@@ -64,7 +64,7 @@ cleanup_audiotestsrc (GstElement * audiotestsrc)
 {
   GST_DEBUG ("cleanup_audiotestsrc");
 
-  g_list_foreach (buffers, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (buffers);
   buffers = NULL;
 
@@ -103,7 +103,7 @@ GST_START_TEST (test_all_waves)
 
     gst_element_set_state (audiotestsrc, GST_STATE_READY);
 
-    g_list_foreach (buffers, (GFunc) gst_mini_object_unref, NULL);
+    g_list_foreach (buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
     g_list_free (buffers);
     buffers = NULL;
     ++j;

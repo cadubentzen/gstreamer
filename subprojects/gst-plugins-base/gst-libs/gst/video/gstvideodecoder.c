@@ -485,9 +485,10 @@ static gint private_offset = 0;
 #define META_TAG_VIDEO meta_tag_video_quark
 static GQuark meta_tag_video_quark;
 
-static void gst_video_decoder_class_init (GstVideoDecoderClass * klass);
+static void gst_video_decoder_class_init (GstVideoDecoderClass * klass,
+    gpointer klass_data);
 static void gst_video_decoder_init (GstVideoDecoder * dec,
-    GstVideoDecoderClass * klass);
+    gpointer g_class);
 
 static void gst_video_decoder_finalize (GObject * object);
 static void gst_video_decoder_get_property (GObject * object, guint property_id,
@@ -601,7 +602,7 @@ gst_video_decoder_get_instance_private (GstVideoDecoder * self)
 }
 
 static void
-gst_video_decoder_class_init (GstVideoDecoderClass * klass)
+gst_video_decoder_class_init (GstVideoDecoderClass * klass, gpointer klass_data)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
@@ -771,7 +772,7 @@ gst_video_decoder_class_init (GstVideoDecoderClass * klass)
 }
 
 static void
-gst_video_decoder_init (GstVideoDecoder * decoder, GstVideoDecoderClass * klass)
+gst_video_decoder_init (GstVideoDecoder * decoder, gpointer g_class)
 {
   GstPadTemplate *pad_template;
   GstPad *pad;
@@ -781,7 +782,7 @@ gst_video_decoder_init (GstVideoDecoder * decoder, GstVideoDecoderClass * klass)
   decoder->priv = gst_video_decoder_get_instance_private (decoder);
 
   pad_template =
-      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (klass), "sink");
+      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (g_class), "sink");
   g_return_if_fail (pad_template != NULL);
 
   decoder->sinkpad = pad = gst_pad_new_from_template (pad_template, "sink");
@@ -794,7 +795,7 @@ gst_video_decoder_init (GstVideoDecoder * decoder, GstVideoDecoderClass * klass)
   gst_element_add_pad (GST_ELEMENT (decoder), decoder->sinkpad);
 
   pad_template =
-      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (klass), "src");
+      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (g_class), "src");
   g_return_if_fail (pad_template != NULL);
 
   decoder->srcpad = pad = gst_pad_new_from_template (pad_template, "src");
@@ -4344,6 +4345,12 @@ gst_video_decoder_get_frame (GstVideoDecoder * decoder, int frame_number)
   return frame;
 }
 
+static GstVideoCodecFrame *
+gst_video_codec_frame_ref_with_data (GstVideoCodecFrame * frame, gpointer data)
+{
+  return gst_video_codec_frame_ref (frame);
+}
+
 /**
  * gst_video_decoder_get_frames:
  * @decoder: a #GstVideoDecoder
@@ -4360,7 +4367,7 @@ gst_video_decoder_get_frames (GstVideoDecoder * decoder)
   GST_VIDEO_DECODER_STREAM_LOCK (decoder);
   frames =
       g_list_copy_deep (decoder->priv->frames.head,
-      (GCopyFunc) gst_video_codec_frame_ref, NULL);
+      (GCopyFunc) gst_video_codec_frame_ref_with_data, NULL);
   GST_VIDEO_DECODER_STREAM_UNLOCK (decoder);
 
   return frames;

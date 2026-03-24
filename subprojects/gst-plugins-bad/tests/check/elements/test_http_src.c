@@ -122,8 +122,7 @@ GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS_ANY);
 
-static void gst_test_http_src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_test_http_src_uri_handler_init (gpointer g_iface);
 static void gst_test_http_src_finalize (GObject * object);
 static gboolean gst_test_http_src_is_seekable (GstBaseSrc * basesrc);
 static gboolean gst_test_http_src_do_seek (GstBaseSrc * basesrc,
@@ -664,7 +663,7 @@ gst_test_http_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_test_http_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_test_http_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

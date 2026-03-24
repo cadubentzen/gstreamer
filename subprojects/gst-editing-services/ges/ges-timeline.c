@@ -514,7 +514,7 @@ ges_timeline_dispose (GObject * object)
   UNLOCK_DYN (tl);
 
   /* NOTE: the timeline should not contain empty groups */
-  groups = g_list_copy_deep (priv->groups, (GCopyFunc) gst_object_ref, NULL);
+  groups = g_list_copy_deep (priv->groups, gst_object_ref_copy_func, NULL);
   for (tmp = groups; tmp; tmp = tmp->next) {
     GList *elems = ges_container_ungroup (tmp->data, FALSE);
 
@@ -1502,7 +1502,7 @@ ges_timeline_get_auto_transition_at_edge (GESTimeline * timeline,
 
   LOCK_DYN (timeline);
   auto_transitions = g_list_copy_deep (timeline->priv->auto_transitions,
-      (GCopyFunc) gst_object_ref, NULL);
+      gst_object_ref_copy_func, NULL);
   UNLOCK_DYN (timeline);
 
   for (tmp = auto_transitions; tmp; tmp = tmp->next) {
@@ -2203,7 +2203,7 @@ add_object_to_tracks (GESTimeline * timeline, GESClip * clip,
 
   LOCK_DYN (timeline);
   tracks =
-      g_list_copy_deep (timeline->tracks, (GCopyFunc) gst_object_ref, NULL);
+      g_list_copy_deep (timeline->tracks, gst_object_ref_copy_func, NULL);
   timeline->priv->new_track = new_track ? gst_object_ref (new_track) : NULL;
   UNLOCK_DYN (timeline);
 
@@ -3494,7 +3494,7 @@ ges_timeline_get_tracks (GESTimeline * timeline)
   g_return_val_if_fail (GES_IS_TIMELINE (timeline), NULL);
 
   LOCK_DYN (timeline);
-  res = g_list_copy_deep (timeline->tracks, (GCopyFunc) gst_object_ref, NULL);
+  res = g_list_copy_deep (timeline->tracks, gst_object_ref_copy_func, NULL);
   UNLOCK_DYN (timeline);
 
   return res;
@@ -3690,7 +3690,8 @@ ges_timeline_commit (GESTimeline * timeline)
 }
 
 static void
-commited_cb (GESTimeline * timeline)
+commited_cb (GESTimeline * timeline, gboolean changed G_GNUC_UNUSED,
+    gpointer user_data G_GNUC_UNUSED)
 {
   g_mutex_lock (&timeline->priv->commited_lock);
   g_cond_signal (&timeline->priv->commited_cond);

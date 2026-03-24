@@ -23,7 +23,7 @@
 
 void
 deep_prop_changed_cb (GESTrackElement * track_element, GstElement * element,
-    GParamSpec * spec);
+    GParamSpec * spec, gpointer user_data G_GNUC_UNUSED);
 
 GST_START_TEST (test_effect_basic)
 {
@@ -554,7 +554,7 @@ effect_added_cb (GESClip * clip, GESBaseEffect * trop, gboolean * effect_added)
 
 void
 deep_prop_changed_cb (GESTrackElement * track_element, GstElement * element,
-    GParamSpec * spec)
+    GParamSpec * spec, gpointer user_data G_GNUC_UNUSED)
 {
   GST_DEBUG ("%s property changed", g_param_spec_get_name (spec));
   fail_unless (GES_IS_TRACK_ELEMENT (track_element));

@@ -2450,7 +2450,8 @@ bus_sync_handler (GstBus * bus, GstMessage * message, GstPipeline * data)
 #endif
 
 static gboolean
-draw_cb (GtkWidget * widget, cairo_t * cr, gpointer data)
+draw_cb (GtkWidget * widget, cairo_t * cr, gint width G_GNUC_UNUSED,
+    gint height G_GNUC_UNUSED, gpointer data)
 {
   if (state < GST_STATE_PAUSED) {
     int width, height;
@@ -3028,7 +3029,7 @@ main (int argc, char **argv)
   g_array_free (vis_entries, TRUE);
   gst_object_unref (pipeline);
 
-  g_list_foreach (paths, (GFunc) g_free, NULL);
+  g_list_foreach (paths, g_destroy_notify_to_func, (GDestroyNotify) g_free);
   g_list_free (paths);
 
   return 0;

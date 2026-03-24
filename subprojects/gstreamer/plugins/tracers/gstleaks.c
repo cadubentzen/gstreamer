@@ -796,7 +796,7 @@ static gboolean
 sig_usr1_handler (gpointer data)
 {
   G_LOCK (instances);
-  g_queue_foreach (&instances, (GFunc) gst_leaks_tracer_log_live_objects, NULL);
+  g_queue_foreach (&instances, g_destroy_notify_to_func, (GDestroyNotify) gst_leaks_tracer_log_live_objects);
   G_UNLOCK (instances);
 
   return G_SOURCE_CONTINUE;

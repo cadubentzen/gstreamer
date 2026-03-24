@@ -61,22 +61,18 @@ G_DEFINE_TYPE_WITH_CODE (TestElement, test_element, GST_TYPE_ELEMENT,
     init_interface (g_define_type_id));
 
 static void
-test_element_navigation_interface_init (GstNavigationInterface * iface)
+test_element_navigation_interface_init (gpointer iface)
 {
-  iface->send_event_simple = nav_send_event;
+  GstNavigationInterface *nav_iface = iface;
+
+  nav_iface->send_event_simple = nav_send_event;
 }
 
 static void
 init_interface (GType type)
 {
-  static const GInterfaceInfo navigation_iface_info = {
-    (GInterfaceInitFunc) test_element_navigation_interface_init,
-    NULL,
-    NULL,
-  };
-
-  g_type_add_interface_static (type, GST_TYPE_NAVIGATION,
-      &navigation_iface_info);
+  g_type_add_interface_static1 (type, GST_TYPE_NAVIGATION,
+      (GTypeClassInitFunc1) test_element_navigation_interface_init);
 }
 
 static void

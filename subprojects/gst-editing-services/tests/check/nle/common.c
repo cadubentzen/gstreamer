@@ -366,7 +366,7 @@ copy_segment_list (GList * list)
 static GMutex lock;
 static GCond cond;
 static void
-commited_cb (GstElement * comp, gboolean changed)
+commited_cb (GstElement * comp, gboolean changed, gpointer user_data G_GNUC_UNUSED)
 {
   g_mutex_lock (&lock);
   g_cond_signal (&cond);

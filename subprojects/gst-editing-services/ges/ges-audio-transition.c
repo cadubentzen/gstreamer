@@ -69,7 +69,8 @@ static void ges_audio_transition_set_property (GObject * object, guint
     property_id, const GValue * value, GParamSpec * pspec);
 
 static void
-duration_changed_cb (GESTrackElement * self, GParamSpec * arg G_GNUC_UNUSED)
+duration_changed_cb (GESTrackElement * self, GParamSpec * arg G_GNUC_UNUSED,
+    gpointer user_data G_GNUC_UNUSED)
 {
   ges_audio_transition_duration_changed (self,
       ges_timeline_element_get_duration (GES_TIMELINE_ELEMENT (self)));

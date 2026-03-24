@@ -215,8 +215,7 @@ static gboolean gst_file_sink_get_current_offset (GstFileSink * filesink,
 
 static gboolean gst_file_sink_query (GstBaseSink * bsink, GstQuery * query);
 
-static void gst_file_sink_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_file_sink_uri_handler_init (gpointer g_iface);
 
 static GstFlowReturn gst_file_sink_flush_buffer (GstFileSink * filesink);
 
@@ -1185,7 +1184,7 @@ gst_file_sink_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_file_sink_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_file_sink_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

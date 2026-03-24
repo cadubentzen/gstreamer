@@ -118,7 +118,7 @@ GST_START_TEST (test_num_buffers)
   cleanup_fdsrc (src);
   close (pipe_fd[0]);
   close (pipe_fd[1]);
-  g_list_foreach (buffers, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (buffers);
 }
 

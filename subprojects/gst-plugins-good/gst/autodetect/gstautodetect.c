@@ -348,7 +348,7 @@ gst_auto_detect_find_best (GstAutoDetect * self)
   }
   gst_object_unref (bus);
   gst_plugin_feature_list_free (list);
-  g_slist_foreach (errors, (GFunc) gst_mini_object_unref, NULL);
+  g_slist_foreach (errors, g_destroy_notify_to_func, gst_mini_object_unref);
   g_slist_free (errors);
 
   return choice;

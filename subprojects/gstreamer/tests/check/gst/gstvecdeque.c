@@ -204,6 +204,13 @@ compare_pointer_value (guintptr a, guintptr b)
   return (int) (a - b);
 }
 
+static int
+compare_pointer_value_data (guintptr a, guintptr b,
+    gpointer user_data G_GNUC_UNUSED)
+{
+  return (int) (a - b);
+}
+
 GST_START_TEST (test_vec_deque_drop2)
 {
 #define NUM_QA_ELEMENTS 674
@@ -355,7 +362,7 @@ GST_START_TEST (test_vec_deque_push_sorted)
   /* Now try to push even values, in reverse order because why not */
   for (i = 8; i >= 0; i -= 2)
     gst_vec_deque_push_sorted (array, GINT_TO_POINTER (i),
-        (GCompareDataFunc) compare_pointer_value, NULL);
+        (GCompareDataFunc) compare_pointer_value_data, NULL);
 
   fail_unless_equals_int (gst_vec_deque_get_length (array), 10);
 
@@ -394,7 +401,7 @@ GST_START_TEST (test_vec_deque_push_sorted_wrapped)
   /* Now try to push even values, in reverse order because why not */
   for (i = 8; i >= 0; i -= 2)
     gst_vec_deque_push_sorted (array, GINT_TO_POINTER (i),
-        (GCompareDataFunc) compare_pointer_value, NULL);
+        (GCompareDataFunc) compare_pointer_value_data, NULL);
 
   fail_unless_equals_int (gst_vec_deque_get_length (array), 10);
 
@@ -414,10 +421,12 @@ typedef struct
 } CompareTestStruct;
 
 static int
-compare_struct_value (CompareTestStruct * a, CompareTestStruct * b)
+compare_struct_value (CompareTestStruct * a, CompareTestStruct * b,
+    gpointer user_data G_GNUC_UNUSED)
 {
   return a->value - b->value;
 }
+
 
 GST_START_TEST (test_vec_deque_push_sorted_struct)
 {
@@ -516,7 +525,7 @@ GST_START_TEST (test_vec_deque_sort)
   fail_unless_equals_int (gst_vec_deque_get_length (array), 10);
 
   /* Sort the array */
-  gst_vec_deque_sort (array, (GCompareDataFunc) compare_pointer_value, NULL);
+  gst_vec_deque_sort (array, (GCompareDataFunc) compare_pointer_value_data, NULL);
 
   fail_unless_equals_int (gst_vec_deque_get_length (array), 10);
 
@@ -595,7 +604,7 @@ GST_START_TEST (test_vec_deque_sort_wrapped)
   fail_unless_equals_int (gst_vec_deque_get_length (array), 10);
 
   /* Sort the array */
-  gst_vec_deque_sort (array, (GCompareDataFunc) compare_pointer_value, NULL);
+  gst_vec_deque_sort (array, (GCompareDataFunc) compare_pointer_value_data, NULL);
 
   /* Check that the array is now 0-9 in correct order */
   for (i = 0; i < 10; i++)

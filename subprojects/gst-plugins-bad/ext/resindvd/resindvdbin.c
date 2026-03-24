@@ -86,7 +86,7 @@ GST_STATIC_PAD_TEMPLATE ("subpicture",
     );
 
 static void rsn_dvdbin_finalize (GObject * object);
-static void rsn_dvdbin_uri_handler_init (gpointer g_iface, gpointer iface_data);
+static void rsn_dvdbin_uri_handler_init (gpointer g_iface);
 static gboolean rsndvdbin_element_init (GstPlugin * plugin);
 
 #define rsn_dvdbin_parent_class parent_class
@@ -271,7 +271,7 @@ rsn_dvdbin_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-rsn_dvdbin_uri_handler_init (gpointer g_iface, gpointer iface_data)
+rsn_dvdbin_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

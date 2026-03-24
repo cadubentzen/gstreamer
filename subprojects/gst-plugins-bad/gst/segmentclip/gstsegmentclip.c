@@ -45,7 +45,7 @@ static gboolean gst_segment_clip_query (GstPad * pad, GstObject * parent,
 GST_DEBUG_CATEGORY_STATIC (gst_segment_clip_debug);
 #define GST_CAT_DEFAULT gst_segment_clip_debug
 
-static void gst_segment_clip_class_init (GstSegmentClipClass * klass);
+static void gst_segment_clip_class_init (GstSegmentClipClass * klass, gpointer class_data G_GNUC_UNUSED);
 static void gst_segment_clip_init (GstSegmentClip * clip,
     GstSegmentClipClass * g_class);
 
@@ -72,7 +72,7 @@ gst_segment_clip_get_type (void)
 }
 
 static void
-gst_segment_clip_class_init (GstSegmentClipClass * klass)
+gst_segment_clip_class_init (GstSegmentClipClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GstElementClass *gstelement_class = GST_ELEMENT_CLASS (klass);
 

@@ -213,7 +213,7 @@ GST_END_TEST;
 
 #if 0
 static gint
-find_composition_func (const GValue * velement)
+find_composition_func (const GValue * velement, gconstpointer unused G_GNUC_UNUSED)
 {
   GstElement *element = g_value_get_object (velement);
   GstElementFactory *fac = gst_element_get_factory (element);

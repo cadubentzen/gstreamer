@@ -137,8 +137,7 @@ enum
   LAST_SIGNAL
 };
 
-static void gst_gl_mixer_bin_child_proxy_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_gl_mixer_bin_child_proxy_init (gpointer g_iface);
 
 G_DEFINE_TYPE_WITH_CODE (GstGLMixerBin, gst_gl_mixer_bin, GST_TYPE_BIN,
     G_ADD_PRIVATE (GstGLMixerBin)
@@ -716,7 +715,7 @@ gst_gl_mixer_bin_child_proxy_get_children_count (GstChildProxy * child_proxy)
 }
 
 static void
-gst_gl_mixer_bin_child_proxy_init (gpointer g_iface, gpointer iface_data)
+gst_gl_mixer_bin_child_proxy_init (gpointer g_iface)
 {
   GstChildProxyInterface *iface = g_iface;
 

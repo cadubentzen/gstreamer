@@ -3005,7 +3005,7 @@ gst_aggregator_get_property (GObject * object, guint prop_id,
 
 /* GObject vmethods implementations */
 static void
-gst_aggregator_class_init (GstAggregatorClass * klass)
+gst_aggregator_class_init (GstAggregatorClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class = (GObjectClass *) klass;
   GstElementClass *gstelement_class = (GstElementClass *) klass;
@@ -3135,8 +3135,9 @@ gst_aggregator_get_instance_private (GstAggregator * self)
 }
 
 static void
-gst_aggregator_init (GstAggregator * self, GstAggregatorClass * klass)
+gst_aggregator_init (GstAggregator * self, gpointer g_class)
 {
+  GstAggregatorClass *klass = GST_AGGREGATOR_CLASS (g_class);
   GstPadTemplate *pad_template;
   GstAggregatorPrivate *priv;
   GType pad_type;

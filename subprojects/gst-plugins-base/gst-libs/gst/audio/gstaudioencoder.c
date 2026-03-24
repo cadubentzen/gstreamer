@@ -260,9 +260,10 @@ static gint private_offset = 0;
 #define META_TAG_AUDIO meta_tag_audio_quark
 static GQuark meta_tag_audio_quark;
 
-static void gst_audio_encoder_class_init (GstAudioEncoderClass * klass);
+static void gst_audio_encoder_class_init (GstAudioEncoderClass * klass,
+    gpointer class_data G_GNUC_UNUSED);
 static void gst_audio_encoder_init (GstAudioEncoder * parse,
-    GstAudioEncoderClass * klass);
+    gpointer g_class);
 
 GType
 gst_audio_encoder_get_type (void)
@@ -281,12 +282,6 @@ gst_audio_encoder_get_type (void)
       0,
       (GInstanceInitFunc) gst_audio_encoder_init,
     };
-    const GInterfaceInfo preset_interface_info = {
-      NULL,                     /* interface_init */
-      NULL,                     /* interface_finalize */
-      NULL                      /* interface_data */
-    };
-
     audio_encoder_type = g_type_register_static (GST_TYPE_ELEMENT,
         "GstAudioEncoder", &audio_encoder_info, G_TYPE_FLAG_ABSTRACT);
 
@@ -294,8 +289,7 @@ gst_audio_encoder_get_type (void)
         g_type_add_instance_private (audio_encoder_type,
         sizeof (GstAudioEncoderPrivate));
 
-    g_type_add_interface_static (audio_encoder_type, GST_TYPE_PRESET,
-        &preset_interface_info);
+    g_type_add_interface_static1 (audio_encoder_type, GST_TYPE_PRESET, NULL);
   }
   return audio_encoder_type;
 }
@@ -355,7 +349,8 @@ static gboolean gst_audio_encoder_src_query_default (GstAudioEncoder * encoder,
     GstQuery * query);
 
 static void
-gst_audio_encoder_class_init (GstAudioEncoderClass * klass)
+gst_audio_encoder_class_init (GstAudioEncoderClass * klass,
+    gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
@@ -411,7 +406,7 @@ gst_audio_encoder_class_init (GstAudioEncoderClass * klass)
 }
 
 static void
-gst_audio_encoder_init (GstAudioEncoder * enc, GstAudioEncoderClass * bclass)
+gst_audio_encoder_init (GstAudioEncoder * enc, gpointer g_class)
 {
   GstPadTemplate *pad_template;
 
@@ -421,7 +416,7 @@ gst_audio_encoder_init (GstAudioEncoder * enc, GstAudioEncoderClass * bclass)
 
   /* only push mode supported */
   pad_template =
-      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (bclass), "sink");
+      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (g_class), "sink");
   g_return_if_fail (pad_template != NULL);
   enc->sinkpad = gst_pad_new_from_template (pad_template, "sink");
   gst_pad_set_event_function (enc->sinkpad,
@@ -438,7 +433,7 @@ gst_audio_encoder_init (GstAudioEncoder * enc, GstAudioEncoderClass * bclass)
 
   /* and we don't mind upstream traveling stuff that much ... */
   pad_template =
-      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (bclass), "src");
+      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (g_class), "src");
   g_return_if_fail (pad_template != NULL);
   enc->srcpad = gst_pad_new_from_template (pad_template, "src");
   gst_pad_set_event_function (enc->srcpad,
@@ -488,7 +483,7 @@ gst_audio_encoder_reset (GstAudioEncoder * enc, gboolean full)
     enc->priv->bytes_out = 0;
     GST_OBJECT_UNLOCK (enc);
 
-    g_list_foreach (enc->priv->ctx.headers, (GFunc) gst_buffer_unref, NULL);
+    g_list_foreach (enc->priv->ctx.headers, g_destroy_notify_to_func, (GDestroyNotify) gst_buffer_unref);
     g_list_free (enc->priv->ctx.headers);
     enc->priv->ctx.headers = NULL;
     enc->priv->ctx.new_headers = FALSE;
@@ -2432,7 +2427,7 @@ gst_audio_encoder_set_headers (GstAudioEncoder * enc, GList * headers)
   GST_DEBUG_OBJECT (enc, "new headers %p", headers);
 
   if (enc->priv->ctx.headers) {
-    g_list_foreach (enc->priv->ctx.headers, (GFunc) gst_buffer_unref, NULL);
+    g_list_foreach (enc->priv->ctx.headers, g_destroy_notify_to_func, (GDestroyNotify) gst_buffer_unref);
     g_list_free (enc->priv->ctx.headers);
   }
   enc->priv->ctx.headers = headers;

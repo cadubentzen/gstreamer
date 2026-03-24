@@ -75,7 +75,7 @@ GST_STATIC_PAD_TEMPLATE ("sink",
     );
 
 static void
-gst_protection_test_class_init (GObjectClass * klass)
+gst_protection_test_class_init (GObjectClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
 }
 

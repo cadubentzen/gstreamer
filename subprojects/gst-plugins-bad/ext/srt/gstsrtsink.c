@@ -64,8 +64,7 @@ enum
 
 static guint signals[LAST_SIGNAL] = { 0 };
 
-static void gst_srt_sink_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_srt_sink_uri_handler_init (gpointer g_iface);
 static gchar *gst_srt_sink_uri_get_uri (GstURIHandler * handler);
 static gboolean gst_srt_sink_uri_set_uri (GstURIHandler * handler,
     const gchar * uri, GError ** error);
@@ -473,7 +472,7 @@ gst_srt_sink_uri_set_uri (GstURIHandler * handler,
 }
 
 static void
-gst_srt_sink_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_srt_sink_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

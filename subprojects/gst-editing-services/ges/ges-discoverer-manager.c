@@ -389,7 +389,8 @@ ges_discoverer_manager_set_timeout (GESDiscovererManager * self,
 }
 
 static GstDiscovererInfo *
-proxy_load_serialized_info_cb (GESDiscovererManager * self, const gchar * uri)
+proxy_load_serialized_info_cb (GESDiscovererManager * self, const gchar * uri,
+    GstDiscoverer * discoverer G_GNUC_UNUSED)
 {
   GstDiscovererInfo *info;
 
@@ -399,7 +400,8 @@ proxy_load_serialized_info_cb (GESDiscovererManager * self, const gchar * uri)
 }
 
 static void
-source_setup_cb (GESDiscovererManager * self, GstElement * source)
+source_setup_cb (GESDiscovererManager * self, GstElement * source,
+    GstDiscoverer * discoverer G_GNUC_UNUSED)
 {
   g_signal_emit (self, signals[DISCOVERER_SOURCE_SETUP], 0, source);
 }

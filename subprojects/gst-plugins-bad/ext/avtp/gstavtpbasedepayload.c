@@ -39,7 +39,7 @@ static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
     );
 
 static void gst_avtp_base_depayload_class_init (GstAvtpBaseDepayloadClass *
-    klass);
+    klass, gpointer class_data G_GNUC_UNUSED);
 static void gst_avtp_base_depayload_init (GstAvtpBaseDepayload *
     avtpbasedepayload, gpointer g_class);
 
@@ -79,7 +79,8 @@ gst_avtp_base_depayload_get_type (void)
 }
 
 static void
-gst_avtp_base_depayload_class_init (GstAvtpBaseDepayloadClass * klass)
+gst_avtp_base_depayload_class_init (GstAvtpBaseDepayloadClass * klass,
+    gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 

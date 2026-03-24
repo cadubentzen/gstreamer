@@ -276,7 +276,7 @@ struct _GstBaseSrcPrivate
 static GstElementClass *parent_class = NULL;
 static gint private_offset = 0;
 
-static void gst_base_src_class_init (GstBaseSrcClass * klass);
+static void gst_base_src_class_init (GstBaseSrcClass * klass, gpointer class_data G_GNUC_UNUSED);
 static void gst_base_src_init (GstBaseSrc * src, gpointer g_class);
 static void gst_base_src_finalize (GObject * object);
 
@@ -372,7 +372,7 @@ static gboolean gst_base_src_update_length (GstBaseSrc * src, guint64 offset,
     guint * length, gboolean force);
 
 static void
-gst_base_src_class_init (GstBaseSrcClass * klass)
+gst_base_src_class_init (GstBaseSrcClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
@@ -515,8 +515,7 @@ gst_base_src_finalize (GObject * object)
   gst_event_replace (event_p, NULL);
 
   if (basesrc->priv->pending_events) {
-    g_list_foreach (basesrc->priv->pending_events, (GFunc) gst_event_unref,
-        NULL);
+    g_list_foreach (basesrc->priv->pending_events, g_destroy_notify_to_func, (GDestroyNotify) gst_event_unref);
     g_list_free (basesrc->priv->pending_events);
   }
 
@@ -3872,8 +3871,7 @@ gst_base_src_set_flushing (GstBaseSrc * basesrc, gboolean flushing)
     /* Drop all delayed events */
     GST_OBJECT_LOCK (basesrc);
     if (basesrc->priv->pending_events) {
-      g_list_foreach (basesrc->priv->pending_events, (GFunc) gst_event_unref,
-          NULL);
+      g_list_foreach (basesrc->priv->pending_events, g_destroy_notify_to_func, (GDestroyNotify) gst_event_unref);
       g_list_free (basesrc->priv->pending_events);
       basesrc->priv->pending_events = NULL;
       g_atomic_int_set (&basesrc->priv->have_events, FALSE);

@@ -76,8 +76,9 @@ GST_DEBUG_CATEGORY_STATIC (gst_tag_mux_debug);
 static GstElementClass *parent_class;
 static gint private_offset = 0;
 
-static void gst_tag_mux_class_init (GstTagMuxClass * klass);
-static void gst_tag_mux_init (GstTagMux * mux, GstTagMuxClass * mux_class);
+static void gst_tag_mux_class_init (GstTagMuxClass * klass,
+    gpointer class_data G_GNUC_UNUSED);
+static void gst_tag_mux_init (GstTagMux * mux, gpointer g_class);
 static GstStateChangeReturn
 gst_tag_mux_change_state (GstElement * element, GstStateChange transition);
 static GstFlowReturn gst_tag_mux_chain (GstPad * pad, GstObject * parent,
@@ -93,7 +94,6 @@ gst_tag_mux_get_type (void)
   static gsize tag_mux_type = 0;
 
   if (g_once_init_enter (&tag_mux_type)) {
-    const GInterfaceInfo interface_info = { NULL, NULL, NULL };
     GType _type;
 
     _type = g_type_register_static_simple (GST_TYPE_ELEMENT,
@@ -104,7 +104,7 @@ gst_tag_mux_get_type (void)
     private_offset =
         g_type_add_instance_private (_type, sizeof (GstTagMuxPrivate));
 
-    g_type_add_interface_static (_type, GST_TYPE_TAG_SETTER, &interface_info);
+    g_type_add_interface_static1 (_type, GST_TYPE_TAG_SETTER, (GTypeClassInitFunc1) NULL);
 
     g_once_init_leave (&tag_mux_type, _type);
   }
@@ -141,7 +141,8 @@ gst_tag_mux_finalize (GObject * obj)
 }
 
 static void
-gst_tag_mux_class_init (GstTagMuxClass * klass)
+gst_tag_mux_class_init (GstTagMuxClass * klass,
+    gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
@@ -162,9 +163,9 @@ gst_tag_mux_class_init (GstTagMuxClass * klass)
 }
 
 static void
-gst_tag_mux_init (GstTagMux * mux, GstTagMuxClass * mux_class)
+gst_tag_mux_init (GstTagMux * mux, gpointer g_class)
 {
-  GstElementClass *element_klass = GST_ELEMENT_CLASS (mux_class);
+  GstElementClass *element_klass = GST_ELEMENT_CLASS (g_class);
   GstPadTemplate *tmpl;
 
   mux->priv = gst_tag_mux_get_instance_private (mux);

@@ -505,7 +505,7 @@ gst_lv2_filter_base_finalize (GstLV2FilterClass * lv2_class)
 }
 
 static void
-gst_lv2_filter_class_init (GstLV2FilterClass * klass)
+gst_lv2_filter_class_init (GstLV2FilterClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class = (GObjectClass *) klass;
   GstBaseTransformClass *transform_class = GST_BASE_TRANSFORM_CLASS (klass);

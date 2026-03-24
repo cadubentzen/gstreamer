@@ -56,14 +56,7 @@ G_DEFINE_TYPE_WITH_CODE (TestElement, test_element, GST_TYPE_ELEMENT,
 static void
 init_interface (GType type)
 {
-  static const GInterfaceInfo tagxmpwriter_info = {
-    NULL,
-    NULL,
-    NULL,
-  };
-
-  g_type_add_interface_static (type, GST_TYPE_TAG_XMP_WRITER,
-      &tagxmpwriter_info);
+  g_type_add_interface_static1 (type, GST_TYPE_TAG_XMP_WRITER, NULL);
 }
 
 static void

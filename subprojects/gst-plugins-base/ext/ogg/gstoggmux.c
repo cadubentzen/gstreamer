@@ -1659,7 +1659,7 @@ gst_ogg_mux_send_headers (GstOggMux * mux)
       break;
   }
   /* free any remaining nodes/buffers in case we couldn't push them */
-  g_list_foreach (hbufs, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (hbufs, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (hbufs);
 
   return ret;

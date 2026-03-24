@@ -158,7 +158,7 @@ circle_geometric_transform_precalc (GstGeometricTransform * gt)
 
 static void
 gst_circle_geometric_transform_class_init (GstCircleGeometricTransformClass *
-    klass)
+    klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class;
   GstGeometricTransformClass *gstgt_class;

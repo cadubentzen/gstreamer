@@ -57,7 +57,8 @@ on_configure_event (GtkWidget * widget, GdkEventConfigure * event,
 
 /* control gains */
 static void
-on_gain_changed (GtkRange * range, gpointer user_data)
+on_gain_changed (GtkRange * range, gdouble scroll_value G_GNUC_UNUSED,
+    gpointer user_data)
 {
   GstObject *band = GST_OBJECT (user_data);
   gdouble value = gtk_range_get_value (range);
@@ -67,7 +68,8 @@ on_gain_changed (GtkRange * range, gpointer user_data)
 
 /* control bandwidths */
 static void
-on_bandwidth_changed (GtkRange * range, gpointer user_data)
+on_bandwidth_changed (GtkRange * range, gdouble scroll_value G_GNUC_UNUSED,
+    gpointer user_data)
 {
   GstObject *band = GST_OBJECT (user_data);
   gdouble value = gtk_range_get_value (range);
@@ -77,7 +79,8 @@ on_bandwidth_changed (GtkRange * range, gpointer user_data)
 
 /* control frequency */
 static void
-on_freq_changed (GtkRange * range, gpointer user_data)
+on_freq_changed (GtkRange * range, gdouble scroll_value G_GNUC_UNUSED,
+    gpointer user_data)
 {
   GstObject *band = GST_OBJECT (user_data);
   gdouble value = gtk_range_get_value (range);

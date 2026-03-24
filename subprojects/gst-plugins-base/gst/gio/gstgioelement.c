@@ -194,7 +194,7 @@ gst_gio_uri_handler_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_gio_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_gio_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
   gboolean sink = GPOINTER_TO_INT (iface_data); /* See in do_init below. */
@@ -211,11 +211,6 @@ gst_gio_uri_handler_init (gpointer g_iface, gpointer iface_data)
 void
 gst_gio_uri_handler_do_init (GType type)
 {
-  GInterfaceInfo uri_handler_info = {
-    gst_gio_uri_handler_init,
-    NULL,
-    NULL
-  };
 
   /* Store information for uri_handler_init to use for distinguishing the
    * element types.  This lets us use a single interface implementation for both
@@ -223,7 +218,7 @@ gst_gio_uri_handler_do_init (GType type)
   uri_handler_info.interface_data = GINT_TO_POINTER (g_type_is_a (type,
           GST_TYPE_BASE_SINK));
 
-  g_type_add_interface_static (type, GST_TYPE_URI_HANDLER, &uri_handler_info);
+  g_type_add_interface_static1 (type, GST_TYPE_URI_HANDLER, (GTypeClassInitFunc1) gst_gio_uri_handler_init);
 }
 
 #define GIO_GVFS_MOUNTS_DIR GIO_PREFIX \

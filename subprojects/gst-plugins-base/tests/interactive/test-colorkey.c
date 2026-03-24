@@ -83,7 +83,8 @@ handle_resize_cb (GtkWidget * widget, GdkEventConfigure * event, gpointer data)
 }
 
 static gboolean
-draw_cb (GtkWidget * widget, cairo_t * cr, gpointer data)
+draw_cb (GtkWidget * widget, cairo_t * cr, gpointer G_GNUC_UNUSED data,
+    gpointer G_GNUC_UNUSED extra1, gpointer G_GNUC_UNUSED extra2)
 {
   redraw_overlay (widget);
   return FALSE;

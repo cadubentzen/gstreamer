@@ -103,9 +103,10 @@ static gint num_threads = 10;
 static gint refs_per_thread = 10000;
 
 /* test thread-safe refcounting of GstMiniObject */
-static void
-thread_ref (GstMiniObject * mobj)
+static gpointer
+thread_ref (gpointer data)
 {
+  GstMiniObject *mobj = data;
   int j;
 
   THREAD_START ();
@@ -117,6 +118,7 @@ thread_ref (GstMiniObject * mobj)
       THREAD_SWITCH ();
   }
   GST_DEBUG ("thread stopped");
+  return NULL;
 }
 
 GST_START_TEST (test_ref_threaded)
@@ -142,9 +144,10 @@ GST_START_TEST (test_ref_threaded)
 
 GST_END_TEST;
 
-static void
-thread_unref (GstMiniObject * mobj)
+static gpointer
+thread_unref (gpointer data)
 {
+  GstMiniObject *mobj = data;
   int j;
 
   THREAD_START ();
@@ -155,6 +158,7 @@ thread_unref (GstMiniObject * mobj)
     if (j % num_threads == 0)
       THREAD_SWITCH ();
   }
+  return NULL;
 }
 
 GST_START_TEST (test_unref_threaded)
@@ -298,9 +302,10 @@ my_recycle_buffer_destroy (MyRecycleBuffer * buf)
   gst_buffer_unref (GST_BUFFER_CAST (buf));
 }
 
-static void
-thread_buffer_producer (MyBufferPool * pool)
+static gpointer
+thread_buffer_producer (gpointer data)
 {
+  MyBufferPool *pool = data;
   int j;
 
   THREAD_START ();
@@ -311,11 +316,14 @@ thread_buffer_producer (MyBufferPool * pool)
   }
 
   g_atomic_int_set (&pool->is_closed, TRUE);
+  return NULL;
 }
 
-static void
-thread_buffer_consumer (MyBufferPool * pool)
+static gpointer
+thread_buffer_consumer (gpointer data)
 {
+  MyBufferPool *pool = data;
+
   THREAD_START ();
 
   do {
@@ -328,6 +336,7 @@ thread_buffer_consumer (MyBufferPool * pool)
     THREAD_SWITCH ();
   }
   while (!g_atomic_int_get (&pool->is_closed));
+  return NULL;
 }
 
 GST_START_TEST (test_recycle_threaded)

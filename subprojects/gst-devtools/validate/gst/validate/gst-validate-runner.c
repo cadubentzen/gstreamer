@@ -802,6 +802,12 @@ gst_validate_runner_get_reports_count (GstValidateRunner * runner)
   return l;
 }
 
+static gpointer
+gst_validate_report_ref_copy (gconstpointer src, gpointer data G_GNUC_UNUSED)
+{
+  return gst_validate_report_ref ((GstValidateReport *) src);
+}
+
 /**
  * gst_validate_runner_get_reports:
  * @runner: The #GstValidateRunner
@@ -816,7 +822,7 @@ gst_validate_runner_get_reports (GstValidateRunner * runner)
   GST_VALIDATE_RUNNER_LOCK (runner);
   ret =
       g_list_copy_deep (runner->priv->reports,
-      (GCopyFunc) gst_validate_report_ref, NULL);
+      (GCopyFunc) gst_validate_report_ref_copy, NULL);
   GST_VALIDATE_RUNNER_UNLOCK (runner);
 
   return ret;

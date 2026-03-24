@@ -172,7 +172,7 @@ gst_mem_index_finalize (GObject * object)
 
   /* Then delete the associations themselves */
   if (memindex->associations) {
-    g_list_foreach (memindex->associations, (GFunc) gst_index_entry_free, NULL);
+    g_list_foreach (memindex->associations, g_destroy_notify_to_func, (GDestroyNotify) gst_index_entry_free);
     g_list_free (memindex->associations);
     memindex->associations = NULL;
   }

@@ -946,7 +946,7 @@ theora_enc_handle_frame (GstVideoEncoder * benc, GstVideoCodecFrame * frame)
       buffers = g_list_prepend (buffers, buf);
     }
     if (result < 0) {
-      g_list_foreach (buffers, (GFunc) gst_buffer_unref, NULL);
+      g_list_foreach (buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_buffer_unref);
       g_list_free (buffers);
       goto encoder_disabled;
     }

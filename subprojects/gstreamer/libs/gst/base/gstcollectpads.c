@@ -262,8 +262,8 @@ gst_collect_pads_finalize (GObject * object)
   g_mutex_clear (&pads->priv->evt_lock);
 
   /* Remove pads and free pads list */
-  g_slist_foreach (pads->priv->pad_list, (GFunc) unref_data, NULL);
-  g_slist_foreach (pads->data, (GFunc) unref_data, NULL);
+  g_slist_foreach (pads->priv->pad_list, g_destroy_notify_to_func, (GDestroyNotify) unref_data);
+  g_slist_foreach (pads->data, g_destroy_notify_to_func, (GDestroyNotify) unref_data);
   g_slist_free (pads->data);
   g_slist_free (pads->priv->pad_list);
 
@@ -1262,7 +1262,7 @@ gst_collect_pads_check_pads (GstCollectPads * pads)
     GSList *collected;
 
     /* clear list and stats */
-    g_slist_foreach (pads->data, (GFunc) unref_data, NULL);
+    g_slist_foreach (pads->data, g_destroy_notify_to_func, (GDestroyNotify) unref_data);
     g_slist_free (pads->data);
     pads->data = NULL;
     pads->priv->numpads = 0;

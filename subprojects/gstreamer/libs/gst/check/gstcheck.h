@@ -639,7 +639,11 @@ G_STMT_START {                                                  \
                                                                 \
   /* join all threads */                                        \
   GST_DEBUG ("MAIN: joining");                                  \
-  g_list_foreach (thread_list, (GFunc) g_thread_join, NULL);    \
+  {                                                               \
+    GList *_l;                                                      \
+    for (_l = thread_list; _l; _l = _l->next)                       \
+      g_thread_join (_l->data);                                     \
+  }                                                                 \
   g_list_free (thread_list);                                    \
   thread_list = NULL;                                           \
   g_mutex_clear (&mutex);                                       \

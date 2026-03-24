@@ -132,7 +132,7 @@ done:
 }
 
 static void
-ges_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+ges_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

@@ -4698,7 +4698,7 @@ retry:
   /* Get the pads that we're going to expose and mark things as exposed */
   if (!gst_decode_chain_expose (dbin->decode_chain, &endpads, &missing_plugin,
           missing_plugin_details, &last_group)) {
-    g_list_foreach (endpads, (GFunc) gst_object_unref, NULL);
+    g_list_foreach (endpads, g_destroy_notify_to_func, (GDestroyNotify) gst_object_unref);
     g_list_free (endpads);
     g_string_free (missing_plugin_details, TRUE);
     /* Failures could be due to the fact that we are currently shutting down (recheck) */
@@ -4768,7 +4768,7 @@ retry:
   }
   if (already_exposed) {
     GST_DEBUG_OBJECT (dbin, "Everything was exposed already!");
-    g_list_foreach (endpads, (GFunc) gst_object_unref, NULL);
+    g_list_foreach (endpads, g_destroy_notify_to_func, (GDestroyNotify) gst_object_unref);
     g_list_free (endpads);
     return TRUE;
   }

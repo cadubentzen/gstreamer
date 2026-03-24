@@ -81,8 +81,8 @@ enum
 
 /* class initialization */
 
-static void gst_amc_audio_dec_class_init (GstAmcAudioDecClass * klass);
-static void gst_amc_audio_dec_init (GstAmcAudioDec * self);
+static void gst_amc_audio_dec_class_init (GstAmcAudioDecClass * klass, gpointer class_data G_GNUC_UNUSED);
+static void gst_amc_audio_dec_init (GstAmcAudioDec * self, gpointer g_class G_GNUC_UNUSED);
 static void gst_amc_audio_dec_base_init (gpointer g_class);
 
 static GstAudioDecoderClass *parent_class = NULL;

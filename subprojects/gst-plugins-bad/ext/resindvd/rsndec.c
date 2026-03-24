@@ -40,7 +40,7 @@ static void cleanup_child (RsnDec * self);
 static GstBinClass *rsn_dec_parent_class = NULL;
 
 static void
-rsn_dec_class_init (RsnDecClass * klass)
+rsn_dec_class_init (RsnDecClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);

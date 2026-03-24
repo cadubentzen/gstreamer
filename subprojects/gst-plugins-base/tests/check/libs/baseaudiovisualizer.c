@@ -141,7 +141,7 @@ GST_START_TEST (count_in_out)
   fail_unless_equals_int (g_list_length (buffers), 30);
 
   /* clean up */
-  g_list_foreach (buffers, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (buffers);
   buffers = NULL;
 

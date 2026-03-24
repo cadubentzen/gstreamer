@@ -1330,6 +1330,14 @@ video_area_toolbar_show_cb (GtkWidget * widget, GdkEvent * event,
 }
 
 static gboolean
+video_area_scroll_event_cb (GtkWidget * widget, GdkEventScroll * event,
+    gpointer extra1 G_GNUC_UNUSED, gpointer extra2 G_GNUC_UNUSED,
+    gpointer extra3 G_GNUC_UNUSED, GtkPlay * play)
+{
+  return video_area_toolbar_show_cb (widget, (GdkEvent *) event, play);
+}
+
+static gboolean
 overlay_leave_notify_event_cb (GtkWidget * widget, GdkEvent * event,
     GtkPlay * play)
 {
@@ -1460,7 +1468,7 @@ create_ui (GtkPlay * play)
   g_signal_connect (play->video_area, "motion-notify-event",
       G_CALLBACK (video_area_toolbar_show_cb), play);
   g_signal_connect (play->video_area, "scroll-event",
-      G_CALLBACK (video_area_toolbar_show_cb), play);
+      G_CALLBACK (video_area_scroll_event_cb), play);
   g_signal_connect (play->video_area, "button-press-event",
       G_CALLBACK (mouse_button_pressed_cb), play);
   g_signal_connect (play->video_area, "leave-notify-event",

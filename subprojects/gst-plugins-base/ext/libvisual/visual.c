@@ -52,7 +52,7 @@ static GstStaticPadTemplate sink_template = GST_STATIC_PAD_TEMPLATE ("sink",
     );
 
 
-static void gst_visual_init (GstVisual * visual);
+static void gst_visual_init (GTypeInstance * instance, gpointer g_class);
 static void gst_visual_finalize (GObject * object);
 
 static gboolean gst_visual_setup (GstAudioVisualizer * bscope);
@@ -76,7 +76,7 @@ gst_visual_get_type (void)
       NULL,
       sizeof (GstVisual),
       0,
-      (GInstanceInitFunc) gst_visual_init,
+      gst_visual_init,
     };
 
     type =
@@ -122,7 +122,8 @@ gst_visual_class_init (gpointer g_class, gpointer class_data)
 }
 
 static void
-gst_visual_init (GstVisual * visual)
+gst_visual_init (GTypeInstance * instance G_GNUC_UNUSED,
+    gpointer g_class G_GNUC_UNUSED)
 {
   /* do nothing */
 }

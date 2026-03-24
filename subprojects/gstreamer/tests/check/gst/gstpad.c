@@ -70,7 +70,7 @@ GST_END_TEST;
 /* use globals */
 static GstPad *src, *sink;
 
-static void
+static gpointer
 thread_link_unlink (gpointer data)
 {
   THREAD_START ();
@@ -80,6 +80,7 @@ thread_link_unlink (gpointer data)
     gst_pad_unlink (src, sink);
     THREAD_SWITCH ();
   }
+  return NULL;
 }
 
 GST_START_TEST (test_link_unlink_threaded)

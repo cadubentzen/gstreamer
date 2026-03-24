@@ -76,8 +76,7 @@ enum
   PROP_IRADIO_MODE
 };
 
-static void gst_neonhttp_src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_neonhttp_src_uri_handler_init (gpointer g_iface);
 static void gst_neonhttp_src_dispose (GObject * gobject);
 static void gst_neonhttp_src_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
@@ -1086,7 +1085,7 @@ gst_neonhttp_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_neonhttp_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_neonhttp_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

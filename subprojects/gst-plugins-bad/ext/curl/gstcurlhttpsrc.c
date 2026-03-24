@@ -201,8 +201,7 @@ static gboolean gst_curl_http_src_unlock (GstBaseSrc * bsrc);
 static gboolean gst_curl_http_src_unlock_stop (GstBaseSrc * bsrc);
 
 /* URI Handler functions */
-static void gst_curl_http_src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_curl_http_src_uri_handler_init (gpointer g_iface);
 static guint gst_curl_http_src_urihandler_get_type (GType type);
 static const gchar *const *gst_curl_http_src_urihandler_get_protocols (GType
     type);
@@ -1624,7 +1623,7 @@ done:
 }
 
 static void
-gst_curl_http_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_curl_http_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *uri_iface = (GstURIHandlerInterface *) g_iface;
 

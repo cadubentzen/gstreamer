@@ -362,13 +362,14 @@ gst_gl_effects_class_init (GstGLEffectsClass * klass)
 }
 
 static void
-gst_gl_effects_filter_class_init (GstGLEffectsClass * klass,
-    const GstGLEffectsFilterDescriptor * filter_descriptor)
+gst_gl_effects_filter_class_init (gpointer klass, gpointer class_data)
 {
+  GstGLEffectsClass *effects_class = klass;
+  const GstGLEffectsFilterDescriptor *filter_descriptor = class_data;
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
 
-  klass->filter_descriptor = filter_descriptor;
+  effects_class->filter_descriptor = filter_descriptor;
 
   gobject_class->set_property = gst_gl_effects_set_property;
   gobject_class->get_property = gst_gl_effects_get_property;
@@ -439,8 +440,10 @@ gst_gl_effects_init (GstGLEffects * effects)
 }
 
 static void
-gst_gl_effects_filter_init (GstGLEffects * effects, gpointer class_data)
+gst_gl_effects_filter_init (GTypeInstance * instance, gpointer g_class G_GNUC_UNUSED)
 {
+  GstGLEffects *effects = (GstGLEffects *) instance;
+
   gst_gl_effects_set_effect (effects,
       GST_GL_EFFECTS_GET_CLASS (effects)->filter_descriptor->effect);
 }
@@ -667,7 +670,7 @@ gst_gl_effects_register_filters (GstPlugin * plugin, GstRank rank)
       sizeof (GstGLEffectsClass),
       NULL,
       NULL,
-      (GClassInitFunc) gst_gl_effects_filter_class_init,
+      gst_gl_effects_filter_class_init,
       NULL,
       NULL,
       sizeof (GstGLEffects),
@@ -687,12 +690,12 @@ gst_gl_effects_register_filters (GstPlugin * plugin, GstRank rank)
           sizeof (GstGLEffectsClass),
           NULL,
           NULL,
-          (GClassInitFunc) gst_gl_effects_filter_class_init,
+          gst_gl_effects_filter_class_init,
           NULL,
           filters,
           sizeof (GstGLEffects),
           0,
-          (GInstanceInitFunc) gst_gl_effects_filter_init
+          gst_gl_effects_filter_init
         };
         GType type =
             g_type_register_static (GST_TYPE_GL_EFFECTS, name, &info, 0);

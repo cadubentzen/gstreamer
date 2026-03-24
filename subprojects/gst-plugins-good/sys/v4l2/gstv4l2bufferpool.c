@@ -780,7 +780,7 @@ gst_v4l2_buffer_pool_streamoff (GstV4l2BufferPool * pool)
 
 static void
 gst_v4l2_buffer_pool_group_released (GstV4l2BufferPool * pool,
-    GstV4l2MemoryGroup * group)
+    GstV4l2MemoryGroup * group, gpointer user_data G_GNUC_UNUSED)
 {
   gint index = group->buffer.index;
 

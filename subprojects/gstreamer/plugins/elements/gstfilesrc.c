@@ -135,8 +135,7 @@ static gboolean gst_file_src_get_size (GstBaseSrc * src, guint64 * size);
 static GstFlowReturn gst_file_src_fill (GstBaseSrc * src, guint64 offset,
     guint length, GstBuffer * buf);
 
-static void gst_file_src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_file_src_uri_handler_init (gpointer g_iface);
 
 #define _do_init \
   G_IMPLEMENT_INTERFACE (GST_TYPE_URI_HANDLER, gst_file_src_uri_handler_init); \
@@ -720,7 +719,7 @@ beach:
 }
 
 static void
-gst_file_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_file_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

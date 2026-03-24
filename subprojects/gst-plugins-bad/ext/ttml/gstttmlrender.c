@@ -145,7 +145,7 @@ typedef struct
 
 static GstElementClass *parent_class = NULL;
 static void gst_ttml_render_base_init (gpointer g_class);
-static void gst_ttml_render_class_init (GstTtmlRenderClass * klass);
+static void gst_ttml_render_class_init (GstTtmlRenderClass * klass, gpointer class_data G_GNUC_UNUSED);
 static void gst_ttml_render_init (GstTtmlRender * render,
     GstTtmlRenderClass * klass);
 
@@ -245,7 +245,7 @@ gst_ttml_render_base_init (gpointer g_class)
 }
 
 static void
-gst_ttml_render_class_init (GstTtmlRenderClass * klass)
+gst_ttml_render_class_init (GstTtmlRenderClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;

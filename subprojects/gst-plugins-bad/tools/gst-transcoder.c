@@ -112,7 +112,8 @@ hup_handler (gpointer user_data)
 #endif /* G_OS_UNIX */
 
 static void
-position_updated_cb (GstTranscoder * transcoder, GstClockTime pos)
+position_updated_cb (GstTranscoder * transcoder, GstClockTime pos,
+    gpointer user_data G_GNUC_UNUSED)
 {
   GstClockTime dur = -1;
   gchar status[64] = { 0, };
@@ -295,7 +296,8 @@ _error_cb (GstTranscoder * transcoder, GError * err, GstStructure * details)
 }
 
 static void
-_warning_cb (GstTranscoder * transcoder, GError * error, GstStructure * details)
+_warning_cb (GstTranscoder * transcoder, GError * error, GstStructure * details,
+    gpointer user_data G_GNUC_UNUSED)
 {
   gboolean cant_encode;
   GstCaps *caps = NULL;

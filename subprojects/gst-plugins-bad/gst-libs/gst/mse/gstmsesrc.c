@@ -243,8 +243,7 @@ struct _GstMseSrc
   gchar *uri;
 };
 
-static void gst_mse_src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_mse_src_uri_handler_init (gpointer g_iface);
 static GstStateChangeReturn gst_mse_src_change_state (GstElement * element,
     GstStateChange transition);
 static gboolean gst_mse_src_send_event (GstElement * element, GstEvent * event);
@@ -507,8 +506,8 @@ gst_mse_src_get_position (GstMseSrc * self)
 static void
 update_pad_duration (GstMseSrc * self, GstMseSrcPad * pad)
 {
-  pad->segment.duration = self->duration;
   pad->does_need_segment = TRUE;
+  pad->segment.duration = self->duration;
 }
 
 void
@@ -1219,7 +1218,7 @@ gst_mse_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_mse_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_mse_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
   iface->get_type = gst_mse_src_uri_get_type;

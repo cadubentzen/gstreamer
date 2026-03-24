@@ -26,7 +26,7 @@
 #define PLAYBACK_DELAY_MS 40
 
 static void
-source_created (GstElement * pipe, GstElement * source)
+source_created (GstElement * pipe, GstElement * source, gpointer user_data G_GNUC_UNUSED)
 {
   g_object_set (source, "latency", PLAYBACK_DELAY_MS,
       "ntp-time-source", 3, "buffer-mode", 4, "ntp-sync", TRUE, NULL);

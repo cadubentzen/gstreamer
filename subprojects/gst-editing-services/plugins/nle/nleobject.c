@@ -204,7 +204,7 @@ nle_object_query (GstElement * element, GstQuery * query)
 }
 
 static void
-nle_object_class_init (NleObjectClass * klass)
+nle_object_class_init (NleObjectClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
@@ -932,7 +932,7 @@ nle_object_change_state (GstElement * element, GstStateChange transition)
             && !NLE_OBJECT_IS_COMPOSITION (NLE_OBJECT (element))) {
           GST_INFO ("Adding nleobject to something that is not a composition,"
               " commiting ourself");
-          nle_object_commit (NLE_OBJECT (element), FALSE);
+          nle_object_commit (NLE_OBJECT (element), FALSE, NULL);
         }
 
         gst_object_unref (parent);
@@ -987,7 +987,8 @@ nle_object_set_commit_needed (NleObject * object)
 }
 
 gboolean
-nle_object_commit (NleObject * object, gboolean recurse)
+nle_object_commit (NleObject * object, gboolean recurse,
+    gpointer user_data G_GNUC_UNUSED)
 {
   gboolean ret;
 

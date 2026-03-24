@@ -142,8 +142,8 @@ GST_STATIC_PAD_TEMPLATE ("private_%d",
     GST_STATIC_CAPS_ANY);
 
 static void gst_ps_demux_base_init (GstPsDemuxClass * klass);
-static void gst_ps_demux_class_init (GstPsDemuxClass * klass);
-static void gst_ps_demux_init (GstPsDemux * demux);
+static void gst_ps_demux_class_init (GstPsDemuxClass * klass, gpointer class_data G_GNUC_UNUSED);
+static void gst_ps_demux_init (GstPsDemux * demux, gpointer g_class G_GNUC_UNUSED);
 static void gst_ps_demux_finalize (GstPsDemux * demux);
 static void gst_ps_demux_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
@@ -250,7 +250,7 @@ gst_ps_demux_base_init (GstPsDemuxClass * klass)
 }
 
 static void
-gst_ps_demux_class_init (GstPsDemuxClass * klass)
+gst_ps_demux_class_init (GstPsDemuxClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
@@ -282,7 +282,7 @@ gst_ps_demux_class_init (GstPsDemuxClass * klass)
 }
 
 static void
-gst_ps_demux_init (GstPsDemux * demux)
+gst_ps_demux_init (GstPsDemux * demux, gpointer g_class G_GNUC_UNUSED)
 {
   GstPsDemuxClass *klass = GST_PS_DEMUX_GET_CLASS (demux);
 

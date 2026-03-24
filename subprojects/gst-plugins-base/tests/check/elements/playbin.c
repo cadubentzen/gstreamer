@@ -635,7 +635,7 @@ gst_red_video_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_red_video_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_red_video_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 
@@ -648,11 +648,8 @@ gst_red_video_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
 static void
 gst_red_video_src_init_type (GType type)
 {
-  static const GInterfaceInfo uri_hdlr_info = {
-    gst_red_video_src_uri_handler_init, NULL, NULL
-  };
 
-  g_type_add_interface_static (type, GST_TYPE_URI_HANDLER, &uri_hdlr_info);
+  g_type_add_interface_static1 (type, GST_TYPE_URI_HANDLER, (GTypeClassInitFunc1) gst_red_video_src_uri_handler_init);
 }
 
 typedef GstPushSrc GstRedVideoSrc;
@@ -757,11 +754,8 @@ gst_codec_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
 static void
 gst_codec_src_init_type (GType type)
 {
-  static const GInterfaceInfo uri_hdlr_info = {
-    gst_codec_src_uri_handler_init, NULL, NULL
-  };
 
-  g_type_add_interface_static (type, GST_TYPE_URI_HANDLER, &uri_hdlr_info);
+  g_type_add_interface_static1 (type, GST_TYPE_URI_HANDLER, (GTypeClassInitFunc1) gst_red_video_src_uri_handler_init);
 }
 
 #undef parent_class

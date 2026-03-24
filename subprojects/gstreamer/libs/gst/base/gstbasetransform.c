@@ -206,9 +206,9 @@ struct _GstBaseTransformPrivate
 static GstElementClass *parent_class = NULL;
 static gint private_offset = 0;
 
-static void gst_base_transform_class_init (GstBaseTransformClass * klass);
+static void gst_base_transform_class_init (GstBaseTransformClass * klass, gpointer class_data G_GNUC_UNUSED);
 static void gst_base_transform_init (GstBaseTransform * trans,
-    GstBaseTransformClass * klass);
+    gpointer g_class G_GNUC_UNUSED);
 static GstFlowReturn default_submit_input_buffer (GstBaseTransform * trans,
     gboolean is_discont, GstBuffer * input);
 static GstFlowReturn default_generate_output (GstBaseTransform * trans,
@@ -318,7 +318,7 @@ gst_base_transform_finalize (GObject * object)
 }
 
 static void
-gst_base_transform_class_init (GstBaseTransformClass * klass)
+gst_base_transform_class_init (GstBaseTransformClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class;
 
@@ -373,8 +373,9 @@ gst_base_transform_class_init (GstBaseTransformClass * klass)
 
 static void
 gst_base_transform_init (GstBaseTransform * trans,
-    GstBaseTransformClass * bclass)
+    gpointer g_class)
 {
+  GstBaseTransformClass *bclass = GST_BASE_TRANSFORM_CLASS (g_class);
   GstPadTemplate *pad_template;
   GstBaseTransformPrivate *priv;
 

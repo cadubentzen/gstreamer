@@ -78,8 +78,7 @@ static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS_ANY);
 
-static void gst_push_file_src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_push_file_src_uri_handler_init (gpointer g_iface);
 
 #define gst_push_file_src_parent_class parent_class
 G_DEFINE_TYPE_WITH_CODE (GstPushFileSrc, gst_push_file_src, GST_TYPE_BIN,
@@ -413,7 +412,7 @@ gst_push_file_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_push_file_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_push_file_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

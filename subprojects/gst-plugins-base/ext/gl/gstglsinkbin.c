@@ -41,12 +41,9 @@ static void gst_gl_sink_bin_get_property (GObject * object, guint prop_id,
 static GstStateChangeReturn gst_gl_sink_bin_change_state (GstElement * element,
     GstStateChange transition);
 
-static void gst_gl_sink_bin_video_overlay_init (gpointer g_iface,
-    gpointer g_iface_data);
-static void gst_gl_sink_bin_navigation_interface_init (gpointer g_iface,
-    gpointer g_iface_data);
-static void gst_gl_sink_bin_color_balance_init (gpointer g_iface,
-    gpointer g_iface_data);
+static void gst_gl_sink_bin_video_overlay_init (gpointer g_iface);
+static void gst_gl_sink_bin_navigation_interface_init (gpointer g_iface);
+static void gst_gl_sink_bin_color_balance_init (gpointer g_iface);
 
 #define DEFAULT_SYNC                TRUE
 #define DEFAULT_MAX_LATENESS        -1
@@ -475,8 +472,7 @@ gst_gl_sink_bin_navigation_send_event (GstNavigation * navigation,
 }
 
 static void
-gst_gl_sink_bin_navigation_interface_init (gpointer g_iface,
-    gpointer g_iface_data)
+gst_gl_sink_bin_navigation_interface_init (gpointer g_iface)
 {
   GstNavigationInterface *iface = (GstNavigationInterface *) g_iface;
   iface->send_event_simple = gst_gl_sink_bin_navigation_send_event;
@@ -551,7 +547,7 @@ gst_gl_sink_bin_overlay_set_window_handle (GstVideoOverlay * overlay,
 }
 
 static void
-gst_gl_sink_bin_video_overlay_init (gpointer g_iface, gpointer g_iface_data)
+gst_gl_sink_bin_video_overlay_init (gpointer g_iface)
 {
   GstVideoOverlayInterface *iface = (GstVideoOverlayInterface *) g_iface;
   iface->expose = gst_gl_sink_bin_overlay_expose;
@@ -636,7 +632,7 @@ gst_gl_sink_bin_color_balance_get_balance_type (GstColorBalance * balance)
 }
 
 static void
-gst_gl_sink_bin_color_balance_init (gpointer g_iface, gpointer g_iface_data)
+gst_gl_sink_bin_color_balance_init (gpointer g_iface)
 {
   GstColorBalanceInterface *iface = (GstColorBalanceInterface *) g_iface;
 

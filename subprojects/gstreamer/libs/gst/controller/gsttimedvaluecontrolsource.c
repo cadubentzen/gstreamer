@@ -210,7 +210,8 @@ gst_timed_value_control_source_set_internal (GstTimedValueControlSource *
   /* sort new cp into the prop->values list */
   cp = _make_new_cp (self, timestamp, value);
   g_sequence_insert_sorted (self->values, cp,
-      (GCompareDataFunc) gst_control_point_compare, NULL);
+      g_compare_func_to_compare_data_func,
+      (GCompareFunc) gst_control_point_compare);
   self->nvalues++;
   g_mutex_unlock (&self->lock);
 

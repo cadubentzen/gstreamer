@@ -89,7 +89,7 @@ gst_preset_test_set_property (GObject * object, guint property_id,
 }
 
 static void
-gst_preset_test_class_init (GObjectClass * klass)
+gst_preset_test_class_init (GObjectClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   klass->set_property = gst_preset_test_set_property;
   klass->get_property = gst_preset_test_get_property;
@@ -130,13 +130,8 @@ gst_preset_test_get_type (void)
       NULL,                     /* instance_init */
       NULL                      /* value_table */
     };
-    const GInterfaceInfo preset_interface_info = {
-      NULL,                     /* interface_init */
-      NULL,                     /* interface_finalize */
-      NULL                      /* interface_data */
-    };
     type = g_type_register_static (GST_TYPE_ELEMENT, "GstPresetTest", &info, 0);
-    g_type_add_interface_static (type, GST_TYPE_PRESET, &preset_interface_info);
+    g_type_add_interface_static1 (type, GST_TYPE_PRESET, NULL);
     g_once_init_leave (&preset_test_type, type);
   }
   return preset_test_type;

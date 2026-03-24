@@ -134,7 +134,7 @@ gst_parse_context_free (GstParseContext * context)
 {
 #ifndef GST_DISABLE_PARSE
   if (context) {
-    g_list_foreach (context->missing_elements, (GFunc) g_free, NULL);
+    g_list_foreach (context->missing_elements, g_destroy_notify_to_func, (GDestroyNotify) g_free);
     g_list_free (context->missing_elements);
     g_free (context);
   }

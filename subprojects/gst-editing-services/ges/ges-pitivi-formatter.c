@@ -104,7 +104,7 @@ G_DEFINE_TYPE_WITH_PRIVATE (GESPitiviFormatter, ges_pitivi_formatter,
 static void
 list_table_destroyer (gpointer key, gpointer value, void *unused)
 {
-  g_list_foreach (value, (GFunc) g_free, NULL);
+  g_list_foreach (value, g_destroy_notify_to_func, g_free);
   g_list_free (value);
 }
 
@@ -188,7 +188,7 @@ create_tracks (GESFormatter * self)
         priv->trackv = track;
       }
     }
-    g_list_foreach (tracks, (GFunc) gst_object_unref, NULL);
+    g_list_foreach (tracks, g_destroy_notify_to_func, gst_object_unref);
     g_list_free (tracks);
     return TRUE;
   }

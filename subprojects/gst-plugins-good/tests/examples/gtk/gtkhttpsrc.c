@@ -242,7 +242,8 @@ idle_cb (gpointer user_data)
 
 static gboolean
 accept_certificate_cb (GstElement * source, GTlsCertificate * tls_certificate,
-    GTlsCertificateFlags tls_errors, gpointer user_data)
+    GTlsCertificateFlags tls_errors,
+    GTlsConnection * tls_connection G_GNUC_UNUSED, gpointer user_data)
 {
   gchar *errors;
 

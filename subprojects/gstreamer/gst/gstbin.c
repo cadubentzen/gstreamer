@@ -255,18 +255,13 @@ enum
   PROP_LAST
 };
 
-static void gst_bin_child_proxy_init (gpointer g_iface, gpointer iface_data);
+static void gst_bin_child_proxy_init (gpointer g_iface);
 
 static guint gst_bin_signals[LAST_SIGNAL] = { 0 };
 
 #define _do_init \
 { \
-  static const GInterfaceInfo iface_info = { \
-    gst_bin_child_proxy_init, \
-    NULL, \
-    NULL}; \
-  \
-  g_type_add_interface_static (g_define_type_id, GST_TYPE_CHILD_PROXY, &iface_info); \
+  g_type_add_interface_static1 (g_define_type_id, GST_TYPE_CHILD_PROXY, (GTypeClassInitFunc1) gst_bin_child_proxy_init); \
   \
   GST_DEBUG_CATEGORY_INIT (bin_debug, "bin", GST_DEBUG_BOLD, \
       "debugging info for the 'bin' container element"); \
@@ -311,7 +306,7 @@ gst_bin_child_proxy_get_children_count (GstChildProxy * child_proxy)
 }
 
 static void
-gst_bin_child_proxy_init (gpointer g_iface, gpointer iface_data)
+gst_bin_child_proxy_init (gpointer g_iface)
 {
   GstChildProxyInterface *iface = g_iface;
 
@@ -3994,7 +3989,7 @@ gst_bin_handle_message_func (GstBin * bin, GstMessage * message)
         GST_OBJECT_LOCK (bin);
         contexts =
             g_list_copy_deep (GST_ELEMENT_CAST (bin)->contexts,
-            (GCopyFunc) gst_mini_object_ref, NULL);
+            (GCopyFunc) gst_mini_object_ref_with_data, NULL);
         GST_OBJECT_UNLOCK (bin);
         GST_LOG_OBJECT (bin, "got need-context message type: %s", context_type);
         for (l = contexts; l; l = l->next) {

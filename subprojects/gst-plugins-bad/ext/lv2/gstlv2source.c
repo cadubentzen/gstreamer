@@ -648,7 +648,7 @@ gst_lv2_source_base_finalize (GstLV2SourceClass * lv2_class)
 }
 
 static void
-gst_lv2_source_class_init (GstLV2SourceClass * klass)
+gst_lv2_source_class_init (GstLV2SourceClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class = (GObjectClass *) klass;
   GstBaseSrcClass *src_class = (GstBaseSrcClass *) klass;

@@ -637,6 +637,12 @@ gst_play_bin_update_context (GstPlayBin * playbin, GstContext * context);
 
 static GstElementClass *parent_class;
 
+static void
+closure_notify_g_free (gpointer data, GClosure *closure G_GNUC_UNUSED)
+{
+  g_free (data);
+}
+
 static guint gst_play_bin_signals[LAST_SIGNAL] = { 0 };
 
 #define REMOVE_SIGNAL(obj,id)            \
@@ -645,11 +651,9 @@ if (id) {                                \
   id = 0;                                \
 }
 
-static void gst_play_bin_overlay_init (gpointer g_iface, gpointer g_iface_data);
-static void gst_play_bin_navigation_init (gpointer g_iface,
-    gpointer g_iface_data);
-static void gst_play_bin_colorbalance_init (gpointer g_iface,
-    gpointer g_iface_data);
+static void gst_play_bin_overlay_init (gpointer g_iface);
+static void gst_play_bin_navigation_init (gpointer g_iface);
+static void gst_play_bin_colorbalance_init (gpointer g_iface);
 
 static GType gst_play_bin_get_type (void);
 
@@ -657,26 +661,10 @@ static void
 _do_init_type (GType type)
 {
 
-  static const GInterfaceInfo svol_info = {
-    NULL, NULL, NULL
-  };
-  static const GInterfaceInfo ov_info = {
-    gst_play_bin_overlay_init,
-    NULL, NULL
-  };
-  static const GInterfaceInfo nav_info = {
-    gst_play_bin_navigation_init,
-    NULL, NULL
-  };
-  static const GInterfaceInfo col_info = {
-    gst_play_bin_colorbalance_init,
-    NULL, NULL
-  };
-
-  g_type_add_interface_static (type, GST_TYPE_STREAM_VOLUME, &svol_info);
-  g_type_add_interface_static (type, GST_TYPE_VIDEO_OVERLAY, &ov_info);
-  g_type_add_interface_static (type, GST_TYPE_NAVIGATION, &nav_info);
-  g_type_add_interface_static (type, GST_TYPE_COLOR_BALANCE, &col_info);
+  g_type_add_interface_static1 (type, GST_TYPE_STREAM_VOLUME, (GTypeClassInitFunc1) NULL);
+  g_type_add_interface_static1 (type, GST_TYPE_VIDEO_OVERLAY, (GTypeClassInitFunc1) gst_play_bin_overlay_init);
+  g_type_add_interface_static1 (type, GST_TYPE_NAVIGATION, (GTypeClassInitFunc1) gst_play_bin_navigation_init);
+  g_type_add_interface_static1 (type, GST_TYPE_COLOR_BALANCE, (GTypeClassInitFunc1) gst_play_bin_colorbalance_init);
 }
 
 G_DEFINE_TYPE_WITH_CODE (GstPlayBin, gst_play_bin, GST_TYPE_PIPELINE,
@@ -3548,7 +3536,7 @@ pad_added_cb (GstElement * decodebin, GstPad * pad, GstSourceGroup * group)
 
         notify_tags_handler =
             g_signal_connect_data (G_OBJECT (sinkpad), "notify::tags",
-            G_CALLBACK (notify_tags_cb), ntdata, (GClosureNotify) g_free,
+            G_CALLBACK (notify_tags_cb), ntdata, closure_notify_g_free,
             (GConnectFlags) 0);
         g_object_set_data (G_OBJECT (sinkpad), "playbin.notify_tags_handler",
             ULONG_TO_POINTER (notify_tags_handler));
@@ -6031,7 +6019,7 @@ gst_play_bin_overlay_set_window_handle (GstVideoOverlay * overlay,
 }
 
 static void
-gst_play_bin_overlay_init (gpointer g_iface, gpointer g_iface_data)
+gst_play_bin_overlay_init (gpointer g_iface)
 {
   GstVideoOverlayInterface *iface = (GstVideoOverlayInterface *) g_iface;
   iface->expose = gst_play_bin_overlay_expose;
@@ -6050,7 +6038,7 @@ gst_play_bin_navigation_send_event (GstNavigation * navigation,
 }
 
 static void
-gst_play_bin_navigation_init (gpointer g_iface, gpointer g_iface_data)
+gst_play_bin_navigation_init (gpointer g_iface)
 {
   GstNavigationInterface *iface = (GstNavigationInterface *) g_iface;
 
@@ -6097,7 +6085,7 @@ gst_play_bin_colorbalance_get_balance_type (GstColorBalance * balance)
 }
 
 static void
-gst_play_bin_colorbalance_init (gpointer g_iface, gpointer g_iface_data)
+gst_play_bin_colorbalance_init (gpointer g_iface)
 {
   GstColorBalanceInterface *iface = (GstColorBalanceInterface *) g_iface;
 

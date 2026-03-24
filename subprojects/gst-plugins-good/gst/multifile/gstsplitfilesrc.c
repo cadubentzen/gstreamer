@@ -56,8 +56,7 @@ enum
 
 #define DEFAULT_LOCATION NULL
 
-static void gst_split_file_src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_split_file_src_uri_handler_init (gpointer g_iface);
 static void gst_split_file_src_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
 static void gst_split_file_src_get_property (GObject * object, guint prop_id,
@@ -589,7 +588,7 @@ gst_split_file_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_split_file_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_split_file_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

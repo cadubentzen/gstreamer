@@ -167,7 +167,7 @@ _overlay_set_window_handle (GstVideoOverlay * overlay, guintptr handle)
 }
 
 static void
-video_overlay_init (gpointer g_iface, gpointer g_iface_data)
+video_overlay_init (gpointer g_iface)
 {
   GstVideoOverlayInterface *iface = (GstVideoOverlayInterface *) g_iface;
 

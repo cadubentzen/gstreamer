@@ -56,8 +56,7 @@ enum
   PROP_0,
 };
 
-static void gst_gl_mosaic_child_proxy_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_gl_mosaic_child_proxy_init (gpointer g_iface);
 
 #define DEBUG_INIT \
     GST_DEBUG_CATEGORY_INIT (gst_gl_mosaic_debug, "glmosaic", 0, "glmosaic element");
@@ -478,7 +477,7 @@ gst_gl_mosaic_child_proxy_get_children_count (GstChildProxy * child_proxy)
 }
 
 static void
-gst_gl_mosaic_child_proxy_init (gpointer g_iface, gpointer iface_data)
+gst_gl_mosaic_child_proxy_init (gpointer g_iface)
 {
   GstChildProxyInterface *iface = g_iface;
 

@@ -124,7 +124,7 @@ gst_test_obj_set_property (GObject * object,
 }
 
 static void
-gst_test_obj_class_init (GstTestObjClass * klass)
+gst_test_obj_class_init (GstTestObjClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
@@ -263,7 +263,7 @@ gst_test_control_source_get_value_array (GstTestControlSource * self,
 }
 
 static void
-gst_test_control_source_init (GstTestControlSource * self)
+gst_test_control_source_init (GstTestControlSource * self, gpointer g_class G_GNUC_UNUSED)
 {
   GstControlSource *cs = (GstControlSource *) self;
 

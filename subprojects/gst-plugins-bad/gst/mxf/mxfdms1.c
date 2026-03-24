@@ -223,7 +223,7 @@ mxf_dms1_thesaurus_class_init (MXFDMS1ThesaurusClass * klass)
 }
 
 static void
-mxf_dms1_framework_interface_init (gpointer g_iface, gpointer iface_data)
+mxf_dms1_framework_interface_init (gpointer g_iface)
 {
 }
 

@@ -40,7 +40,7 @@ enum
   PROP_SDP
 };
 
-static void gst_sdp_src_handler_init (gpointer g_iface, gpointer iface_data);
+static void gst_sdp_src_handler_init (gpointer g_iface);
 
 #define gst_sdp_src_parent_class parent_class
 G_DEFINE_TYPE_WITH_CODE (GstSdpSrc, gst_sdp_src, GST_TYPE_BIN,
@@ -320,7 +320,7 @@ gst_sdp_src_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_sdp_src_handler_init (gpointer g_iface, gpointer iface_data)
+gst_sdp_src_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

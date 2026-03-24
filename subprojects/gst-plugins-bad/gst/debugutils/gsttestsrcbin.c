@@ -592,7 +592,7 @@ failed:
 }
 
 static void
-gst_test_src_bin_uri_handler_init (gpointer g_iface, gpointer unused)
+gst_test_src_bin_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

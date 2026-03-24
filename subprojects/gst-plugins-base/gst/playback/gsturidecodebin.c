@@ -2951,8 +2951,11 @@ gst_uri_decode_bin_change_state (GstElement * element,
       ret = GST_STATE_CHANGE_ASYNC;
 
       /* And now sync the states of everything we added */
-      g_slist_foreach (decoder->decodebins,
-          (GFunc) gst_element_sync_state_with_parent, NULL);
+      {
+        GSList *l;
+        for (l = decoder->decodebins; l; l = l->next)
+          gst_element_sync_state_with_parent (l->data);
+      }
       if (decoder->typefind)
         ret = gst_element_set_state (decoder->typefind, GST_STATE_PAUSED);
       if (ret == GST_STATE_CHANGE_FAILURE)

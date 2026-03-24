@@ -128,7 +128,8 @@ redraw_cb (gpointer data)
 }
 
 static gboolean
-draw_cb (GtkWidget * widget, cairo_t * cr, gpointer data)
+draw_cb (GtkWidget * widget, cairo_t * cr, gint width G_GNUC_UNUSED,
+    gint height G_GNUC_UNUSED, gpointer data)
 {
   struct _app *app = data;
   gboolean ret = TRUE;

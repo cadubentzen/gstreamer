@@ -62,9 +62,10 @@ enum
 static GstBaseTransformClass *parent_class = NULL;
 static gint private_offset = 0;
 
-static void gst_audio_visualizer_class_init (GstAudioVisualizerClass * klass);
+static void gst_audio_visualizer_class_init (GstAudioVisualizerClass * klass,
+    gpointer class_data G_GNUC_UNUSED);
 static void gst_audio_visualizer_init (GstAudioVisualizer * scope,
-    GstAudioVisualizerClass * g_class);
+    gpointer g_class);
 static void gst_audio_visualizer_set_property (GObject * object,
     guint prop_id, const GValue * value, GParamSpec * pspec);
 static void gst_audio_visualizer_get_property (GObject * object,
@@ -538,7 +539,8 @@ gst_audio_visualizer_get_instance_private (GstAudioVisualizer * self)
 }
 
 static void
-gst_audio_visualizer_class_init (GstAudioVisualizerClass * klass)
+gst_audio_visualizer_class_init (GstAudioVisualizerClass * klass,
+    gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class = (GObjectClass *) klass;
   GstElementClass *element_class = (GstElementClass *) klass;
@@ -575,7 +577,7 @@ gst_audio_visualizer_class_init (GstAudioVisualizerClass * klass)
 
 static void
 gst_audio_visualizer_init (GstAudioVisualizer * scope,
-    GstAudioVisualizerClass * g_class)
+    gpointer g_class)
 {
   GstPadTemplate *pad_template;
 

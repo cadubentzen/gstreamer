@@ -91,9 +91,9 @@ GST_ELEMENT_REGISTER_DEFINE_WITH_CODE (oggparse, "oggparse", GST_RANK_NONE,
 static void
 free_stream (GstOggStream * stream)
 {
-  g_list_foreach (stream->headers, (GFunc) gst_mini_object_unref, NULL);
-  g_list_foreach (stream->unknown_pages, (GFunc) gst_mini_object_unref, NULL);
-  g_list_foreach (stream->stored_buffers, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (stream->headers, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
+  g_list_foreach (stream->unknown_pages, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
+  g_list_foreach (stream->stored_buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
 
   g_free (stream);
 }
@@ -101,7 +101,7 @@ free_stream (GstOggStream * stream)
 static void
 gst_ogg_parse_delete_all_streams (GstOggParse * ogg)
 {
-  g_slist_foreach (ogg->oggstreams, (GFunc) free_stream, NULL);
+  g_slist_foreach (ogg->oggstreams, g_destroy_notify_to_func, (GDestroyNotify) free_stream);
   g_slist_free (ogg->oggstreams);
   ogg->oggstreams = NULL;
 }
@@ -629,7 +629,7 @@ gst_ogg_parse_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
                   return result;
               }
               g_list_foreach (stream->unknown_pages,
-                  (GFunc) gst_mini_object_unref, NULL);
+                  g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
               g_list_free (stream->unknown_pages);
               stream->unknown_pages = NULL;
             }

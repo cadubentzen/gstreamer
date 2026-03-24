@@ -70,8 +70,7 @@ static GstFlowReturn gst_data_uri_src_create (GstBaseSrc * src, guint64 offset,
     guint size, GstBuffer ** buf);
 static gboolean gst_data_uri_src_start (GstBaseSrc * src);
 
-static void gst_data_uri_src_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_data_uri_src_handler_init (gpointer g_iface);
 static GstURIType gst_data_uri_src_get_uri_type (GType type);
 static const gchar *const *gst_data_uri_src_get_protocols (GType type);
 static gchar *gst_data_uri_src_get_uri (GstURIHandler * handler);
@@ -460,7 +459,7 @@ invalid_uri_encoded_data:
 }
 
 static void
-gst_data_uri_src_handler_init (gpointer g_iface, gpointer iface_data)
+gst_data_uri_src_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

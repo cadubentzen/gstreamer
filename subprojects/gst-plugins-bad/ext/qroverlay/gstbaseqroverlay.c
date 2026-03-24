@@ -250,8 +250,9 @@ draw_overlay (GstBaseQROverlay * self, QRcode * qrcode)
 }
 
 static GstVideoOverlayComposition *
-gst_base_qr_overlay_draw_cb (GstBaseQROverlay * self, GstSample * sample,
-    GstElement * _)
+gst_base_qr_overlay_draw_cb (GstBaseQROverlay * self,
+    GstElement * overlay G_GNUC_UNUSED, GstSample * sample,
+    gint width G_GNUC_UNUSED, gint height G_GNUC_UNUSED)
 {
   GstBaseQROverlayPrivate *priv = PRIV (self);
   QRcode *qrcode;

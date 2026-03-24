@@ -238,8 +238,7 @@ static guint gst_soup_http_src_signals[LAST_SIGNAL] = { 0 };
 #define REDUCE_BLOCKSIZE_FACTOR 0.5
 #define GROW_TIME_LIMIT (1 * GST_SECOND)
 
-static void gst_soup_http_src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_soup_http_src_uri_handler_init (gpointer g_iface);
 static void gst_soup_http_src_finalize (GObject * gobject);
 static void gst_soup_http_src_dispose (GObject * gobject);
 
@@ -284,7 +283,7 @@ static gboolean gst_soup_http_src_authenticate_cb (SoupMessage * msg,
     SoupAuth * auth, gboolean retrying, gpointer);
 static gboolean gst_soup_http_src_accept_certificate_cb (SoupMessage * msg,
     GTlsCertificate * tls_certificate, GTlsCertificateFlags tls_errors,
-    gpointer user_data);
+    GTlsConnection * tls_connection G_GNUC_UNUSED, gpointer user_data);
 
 #define gst_soup_http_src_parent_class parent_class
 G_DEFINE_TYPE_WITH_CODE (GstSoupHTTPSrc, gst_soup_http_src, GST_TYPE_PUSH_SRC,
@@ -1417,7 +1416,7 @@ gst_soup_http_src_authenticate_cb (SoupMessage * msg, SoupAuth * auth,
 static gboolean
 gst_soup_http_src_accept_certificate_cb (SoupMessage * msg,
     GTlsCertificate * tls_certificate, GTlsCertificateFlags tls_errors,
-    gpointer user_data)
+    GTlsConnection * tls_connection G_GNUC_UNUSED, gpointer user_data)
 {
   GstSoupHTTPSrc *src = user_data;
   gboolean accept = FALSE;
@@ -2782,7 +2781,7 @@ gst_soup_http_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_soup_http_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_soup_http_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

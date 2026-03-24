@@ -105,8 +105,8 @@ enum
 
 /* class initialization */
 
-static void gst_amc_video_enc_class_init (GstAmcVideoEncClass * klass);
-static void gst_amc_video_enc_init (GstAmcVideoEnc * self);
+static void gst_amc_video_enc_class_init (GstAmcVideoEncClass * klass, gpointer class_data G_GNUC_UNUSED);
+static void gst_amc_video_enc_init (GstAmcVideoEnc * self, gpointer g_class G_GNUC_UNUSED);
 static void gst_amc_video_enc_base_init (gpointer g_class);
 
 static GstVideoEncoderClass *parent_class = NULL;

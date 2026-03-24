@@ -59,8 +59,7 @@ enum
 
 static void gst_udpsink_finalize (GstUDPSink * udpsink);
 
-static void gst_udpsink_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_udpsink_uri_handler_init (gpointer g_iface);
 
 static void gst_udpsink_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
@@ -251,7 +250,7 @@ gst_udpsink_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_udpsink_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_udpsink_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

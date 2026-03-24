@@ -59,8 +59,7 @@ static void gst_multi_file_src_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec);
 static GstCaps *gst_multi_file_src_getcaps (GstBaseSrc * src, GstCaps * filter);
 static gboolean gst_multi_file_src_query (GstBaseSrc * src, GstQuery * query);
-static void gst_multi_file_src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_multi_file_src_uri_handler_init (gpointer g_iface);
 
 
 static GstStaticPadTemplate gst_multi_file_src_pad_template =
@@ -577,7 +576,7 @@ invalid_uri:
 }
 
 static void
-gst_multi_file_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_multi_file_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

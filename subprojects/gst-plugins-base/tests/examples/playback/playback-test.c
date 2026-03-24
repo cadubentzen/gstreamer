@@ -391,7 +391,8 @@ static gboolean start_seek (GtkRange * range, GdkEventButton * event,
     PlaybackApp * app);
 static gboolean stop_seek (GtkRange * range, GdkEventButton * event,
     PlaybackApp * app);
-static void seek_cb (GtkRange * range, PlaybackApp * app);
+static void seek_cb (GtkRange * range, gdouble value G_GNUC_UNUSED,
+    PlaybackApp * app);
 
 static void
 set_scale (PlaybackApp * app, gdouble value)
@@ -621,7 +622,7 @@ do_seek (PlaybackApp * app, GstFormat format, gint64 position)
 }
 
 static void
-seek_cb (GtkRange * range, PlaybackApp * app)
+seek_cb (GtkRange * range, gdouble value G_GNUC_UNUSED, PlaybackApp * app)
 {
   gint64 real;
 
@@ -1008,7 +1009,8 @@ skip_audio_toggle_cb (GtkToggleButton * button, PlaybackApp * app)
 }
 
 static void
-rate_spinbutton_changed_cb (GtkSpinButton * button, PlaybackApp * app)
+rate_spinbutton_changed_cb (GtkSpinButton * button, gdouble value G_GNUC_UNUSED,
+    PlaybackApp * app)
 {
   gboolean res = FALSE;
   GstEvent *s_event;
@@ -1415,7 +1417,8 @@ vis_combo_cb (GtkComboBox * combo, PlaybackApp * app)
 }
 
 static void
-volume_spinbutton_changed_cb (GtkSpinButton * button, PlaybackApp * app)
+volume_spinbutton_changed_cb (GtkSpinButton * button, gdouble value G_GNUC_UNUSED,
+    PlaybackApp * app)
 {
   gdouble volume;
 
@@ -1693,7 +1696,8 @@ shuttle_rate_switch (PlaybackApp * app)
 }
 
 static void
-shuttle_value_changed (GtkRange * range, PlaybackApp * app)
+shuttle_value_changed (GtkRange * range, gdouble value G_GNUC_UNUSED,
+    PlaybackApp * app)
 {
   gdouble rate;
 
@@ -1720,7 +1724,8 @@ shuttle_value_changed (GtkRange * range, PlaybackApp * app)
 }
 
 static void
-colorbalance_value_changed (GtkRange * range, PlaybackApp * app)
+colorbalance_value_changed (GtkRange * range, gdouble value G_GNUC_UNUSED,
+    PlaybackApp * app)
 {
   const gchar *label;
   gdouble val;
@@ -2220,7 +2225,8 @@ bus_sync_handler (GstBus * bus, GstMessage * message, PlaybackApp * app)
 #endif
 
 static gboolean
-draw_cb (GtkWidget * widget, cairo_t * cr, PlaybackApp * app)
+draw_cb (GtkWidget * widget, cairo_t * cr, gint width G_GNUC_UNUSED,
+    gint height G_GNUC_UNUSED, PlaybackApp * app)
 {
   if (app->state < GST_STATE_PAUSED) {
     int width, height;
@@ -3514,9 +3520,9 @@ reset_app (PlaybackApp * app)
   if (app->colorbalance_element)
     gst_object_unref (app->colorbalance_element);
 
-  g_list_foreach (app->paths, (GFunc) g_free, NULL);
+  g_list_foreach (app->paths, g_destroy_notify_to_func, (GDestroyNotify) g_free);
   g_list_free (app->paths);
-  g_list_foreach (app->sub_paths, (GFunc) g_free, NULL);
+  g_list_foreach (app->sub_paths, g_destroy_notify_to_func, (GDestroyNotify) g_free);
   g_list_free (app->sub_paths);
   if (app->vis_entries)
     g_array_free (app->vis_entries, TRUE);

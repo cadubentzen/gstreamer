@@ -87,8 +87,7 @@ static gboolean gst_rfb_src_decide_allocation (GstBaseSrc * bsrc,
     GstQuery * query);
 static GstFlowReturn gst_rfb_src_fill (GstPushSrc * psrc, GstBuffer * outbuf);
 
-static void gst_rfb_src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_rfb_src_uri_handler_init (gpointer g_iface);
 static gboolean
 gst_rfb_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
     GError ** error);
@@ -792,7 +791,7 @@ gst_rfb_src_uri_set_uri (GstURIHandler * handler, const gchar * str_uri,
 }
 
 static void
-gst_rfb_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_rfb_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

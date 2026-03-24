@@ -145,11 +145,11 @@ static GType gst_ogm_parse_get_type (void);
 static void gst_ogm_audio_parse_base_init (GstOgmParseClass * klass);
 static void gst_ogm_video_parse_base_init (GstOgmParseClass * klass);
 static void gst_ogm_text_parse_base_init (GstOgmParseClass * klass);
-static void gst_ogm_parse_class_init (GstOgmParseClass * klass);
-static void gst_ogm_parse_init (GstOgmParse * ogm);
-static void gst_ogm_video_parse_init (GstOgmParse * ogm);
-static void gst_ogm_audio_parse_init (GstOgmParse * ogm);
-static void gst_ogm_text_parse_init (GstOgmParse * ogm);
+static void gst_ogm_parse_class_init (gpointer klass, gpointer class_data);
+static void gst_ogm_parse_init (GTypeInstance * instance, gpointer g_class);
+static void gst_ogm_video_parse_init (GTypeInstance * instance, gpointer g_class);
+static void gst_ogm_audio_parse_init (GTypeInstance * instance, gpointer g_class);
+static void gst_ogm_text_parse_init (GTypeInstance * instance, gpointer g_class);
 static void gst_ogm_parse_element_init (GstPlugin * plugin);
 
 static gboolean gst_ogm_parse_sink_event (GstPad * pad, GstObject * parent,
@@ -177,12 +177,12 @@ gst_ogm_parse_get_type (void)
       sizeof (GstOgmParseClass),
       NULL,
       NULL,
-      (GClassInitFunc) gst_ogm_parse_class_init,
+      gst_ogm_parse_class_init,
       NULL,
       NULL,
       sizeof (GstOgmParse),
       0,
-      (GInstanceInitFunc) gst_ogm_parse_init,
+      gst_ogm_parse_init,
     };
 
     ogm_parse_type =
@@ -208,7 +208,7 @@ gst_ogm_audio_parse_get_type (void)
       NULL,
       sizeof (GstOgmParse),
       0,
-      (GInstanceInitFunc) gst_ogm_audio_parse_init,
+      gst_ogm_audio_parse_init,
     };
 
     ogm_audio_parse_type =
@@ -234,7 +234,7 @@ gst_ogm_video_parse_get_type (void)
       NULL,
       sizeof (GstOgmParse),
       0,
-      (GInstanceInitFunc) gst_ogm_video_parse_init,
+      gst_ogm_video_parse_init,
     };
 
     ogm_video_parse_type =
@@ -260,7 +260,7 @@ gst_ogm_text_parse_get_type (void)
       NULL,
       sizeof (GstOgmParse),
       0,
-      (GInstanceInitFunc) gst_ogm_text_parse_init,
+      gst_ogm_text_parse_init,
     };
 
     ogm_text_parse_type =
@@ -339,7 +339,7 @@ gst_ogm_text_parse_base_init (GstOgmParseClass * klass)
 }
 
 static void
-gst_ogm_parse_class_init (GstOgmParseClass * klass)
+gst_ogm_parse_class_init (gpointer klass, gpointer class_data G_GNUC_UNUSED)
 {
   GstElementClass *gstelement_class = GST_ELEMENT_CLASS (klass);
 
@@ -352,8 +352,10 @@ gst_ogm_parse_class_init (GstOgmParseClass * klass)
 }
 
 static void
-gst_ogm_parse_init (GstOgmParse * ogm)
+gst_ogm_parse_init (GTypeInstance * instance, gpointer g_class G_GNUC_UNUSED)
 {
+  GstOgmParse *ogm = (GstOgmParse *) instance;
+
   memset (&ogm->hdr, 0, sizeof (ogm->hdr));
   ogm->next_granulepos = 0;
   ogm->srcpad = NULL;
@@ -361,8 +363,10 @@ gst_ogm_parse_init (GstOgmParse * ogm)
 }
 
 static void
-gst_ogm_audio_parse_init (GstOgmParse * ogm)
+gst_ogm_audio_parse_init (GTypeInstance * instance, gpointer g_class G_GNUC_UNUSED)
 {
+  GstOgmParse *ogm = (GstOgmParse *) instance;
+
   ogm->sinkpad = gst_pad_new_from_static_template (&sink_factory_audio, "sink");
   gst_pad_set_query_function (ogm->sinkpad,
       GST_DEBUG_FUNCPTR (gst_ogm_parse_sink_query));
@@ -377,8 +381,10 @@ gst_ogm_audio_parse_init (GstOgmParse * ogm)
 }
 
 static void
-gst_ogm_video_parse_init (GstOgmParse * ogm)
+gst_ogm_video_parse_init (GTypeInstance * instance, gpointer g_class G_GNUC_UNUSED)
 {
+  GstOgmParse *ogm = (GstOgmParse *) instance;
+
   ogm->sinkpad = gst_pad_new_from_static_template (&sink_factory_video, "sink");
   gst_pad_set_query_function (ogm->sinkpad,
       GST_DEBUG_FUNCPTR (gst_ogm_parse_sink_query));
@@ -393,8 +399,10 @@ gst_ogm_video_parse_init (GstOgmParse * ogm)
 }
 
 static void
-gst_ogm_text_parse_init (GstOgmParse * ogm)
+gst_ogm_text_parse_init (GTypeInstance * instance, gpointer g_class G_GNUC_UNUSED)
 {
+  GstOgmParse *ogm = (GstOgmParse *) instance;
+
   ogm->sinkpad = gst_pad_new_from_static_template (&sink_factory_text, "sink");
   gst_pad_set_query_function (ogm->sinkpad,
       GST_DEBUG_FUNCPTR (gst_ogm_parse_sink_query));
@@ -955,7 +963,7 @@ gst_ogm_parse_change_state (GstElement * element, GstStateChange transition)
       }
       memset (&ogm->hdr, 0, sizeof (ogm->hdr));
       ogm->next_granulepos = 0;
-      g_list_foreach (ogm->cached_events, (GFunc) gst_mini_object_unref, NULL);
+      g_list_foreach (ogm->cached_events, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
       g_list_free (ogm->cached_events);
       ogm->cached_events = NULL;
       break;

@@ -215,7 +215,7 @@ GST_START_TEST (test_get_markers)
   fail_unless (g_list_index (markers, marker3) == 2);
   fail_unless (g_list_index (markers, marker4) == 3);
 
-  g_list_foreach (markers, (GFunc) gst_object_unref, NULL);
+  g_list_foreach (markers, g_destroy_notify_to_func, gst_object_unref);
   g_list_free (markers);
 
   g_object_unref (markerlist);
@@ -250,7 +250,7 @@ GST_START_TEST (test_move_marker)
   fail_unless (g_list_index (range, marker_a) == 0);
   fail_unless (g_list_index (range, marker_b) == 1);
 
-  g_list_foreach (range, (GFunc) gst_object_unref, NULL);
+  g_list_foreach (range, g_destroy_notify_to_func, gst_object_unref);
   g_list_free (range);
 
   fail_unless (ges_marker_list_move (markerlist, marker_a, 35));
@@ -260,7 +260,7 @@ GST_START_TEST (test_move_marker)
   fail_unless (g_list_index (range, marker_b) == 0);
   fail_unless (g_list_index (range, marker_a) == 1);
 
-  g_list_foreach (range, (GFunc) gst_object_unref, NULL);
+  g_list_foreach (range, g_destroy_notify_to_func, gst_object_unref);
   g_list_free (range);
 
   fail_unless (ges_marker_list_move (markerlist, marker_a, 30));

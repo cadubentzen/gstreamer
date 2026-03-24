@@ -232,7 +232,8 @@ GST_END_TEST;
 static gint num_preroll = 0;
 
 static void
-preroll_count (GstElement * sink)
+preroll_count (GstElement * sink G_GNUC_UNUSED, GstBuffer * buffer G_GNUC_UNUSED,
+    GstPad * pad G_GNUC_UNUSED, gpointer user_data G_GNUC_UNUSED)
 {
   num_preroll++;
   GST_DEBUG ("got preroll handoff %d", num_preroll);

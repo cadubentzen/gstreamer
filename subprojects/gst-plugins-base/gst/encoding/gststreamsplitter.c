@@ -86,8 +86,7 @@ gst_stream_splitter_dispose (GObject * object)
 {
   GstStreamSplitter *stream_splitter = (GstStreamSplitter *) object;
 
-  g_list_foreach (stream_splitter->pending_events, (GFunc) gst_event_unref,
-      NULL);
+  g_list_foreach (stream_splitter->pending_events, g_destroy_notify_to_func, (GDestroyNotify) gst_event_unref);
   g_list_free (stream_splitter->pending_events);
   stream_splitter->pending_events = NULL;
 

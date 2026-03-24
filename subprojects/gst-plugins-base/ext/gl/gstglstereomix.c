@@ -80,8 +80,7 @@ gst_gl_stereo_mix_pad_init (GstGLStereoMixPad * pad)
 {
 }
 
-static void gst_gl_stereo_mix_child_proxy_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_gl_stereo_mix_child_proxy_init (gpointer g_iface);
 
 #define gst_gl_stereo_mix_parent_class parent_class
 G_DEFINE_TYPE_WITH_CODE (GstGLStereoMix, gst_gl_stereo_mix, GST_TYPE_GL_MIXER,
@@ -794,7 +793,7 @@ gst_gl_stereo_mix_child_proxy_get_children_count (GstChildProxy * child_proxy)
 }
 
 static void
-gst_gl_stereo_mix_child_proxy_init (gpointer g_iface, gpointer iface_data)
+gst_gl_stereo_mix_child_proxy_init (gpointer g_iface)
 {
   GstChildProxyInterface *iface = g_iface;
 

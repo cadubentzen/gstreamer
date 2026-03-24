@@ -48,9 +48,9 @@ enum
   PROP_CFG_BASE,
 };
 
-static void gst_ffmpegvidenc_class_init (GstFFMpegVidEncClass * klass);
+static void gst_ffmpegvidenc_class_init (GstFFMpegVidEncClass * klass, gpointer class_data G_GNUC_UNUSED);
 static void gst_ffmpegvidenc_base_init (GstFFMpegVidEncClass * klass);
-static void gst_ffmpegvidenc_init (GstFFMpegVidEnc * ffmpegenc);
+static void gst_ffmpegvidenc_init (GstFFMpegVidEnc * ffmpegenc, gpointer g_class G_GNUC_UNUSED);
 static void gst_ffmpegvidenc_finalize (GObject * object);
 
 static gboolean gst_ffmpegvidenc_start (GstVideoEncoder * encoder);
@@ -155,7 +155,7 @@ gst_ffmpegvidenc_base_init (GstFFMpegVidEncClass * klass)
 }
 
 static void
-gst_ffmpegvidenc_class_init (GstFFMpegVidEncClass * klass)
+gst_ffmpegvidenc_class_init (GstFFMpegVidEncClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class;
   GstVideoEncoderClass *venc_class;
@@ -201,7 +201,7 @@ gst_ffmpegvidenc_class_init (GstFFMpegVidEncClass * klass)
 }
 
 static void
-gst_ffmpegvidenc_init (GstFFMpegVidEnc * ffmpegenc)
+gst_ffmpegvidenc_init (GstFFMpegVidEnc * ffmpegenc, gpointer g_class G_GNUC_UNUSED)
 {
   GstFFMpegVidEncClass *klass =
       (GstFFMpegVidEncClass *) G_OBJECT_GET_CLASS (ffmpegenc);

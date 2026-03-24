@@ -127,7 +127,7 @@ gst_gio_src_check_deleted (GstGioSrc * src)
 }
 
 static void
-gst_gio_src_file_changed_cb (GstGioSrc * src)
+gst_gio_src_file_changed_cb (GstGioSrc * src, gpointer user_data G_GNUC_UNUSED)
 {
   GST_DEBUG_OBJECT (src, "Underlying file changed.");
   GST_OBJECT_LOCK (src);

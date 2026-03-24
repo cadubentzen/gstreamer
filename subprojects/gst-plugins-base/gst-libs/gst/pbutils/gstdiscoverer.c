@@ -428,7 +428,7 @@ discoverer_reset (GstDiscoverer * dc)
   GST_DEBUG_OBJECT (dc, "Resetting");
 
   if (dc->priv->pending_uris) {
-    g_list_foreach (dc->priv->pending_uris, (GFunc) g_free, NULL);
+    g_list_foreach (dc->priv->pending_uris, g_destroy_notify_to_func, (GDestroyNotify) g_free);
     g_list_free (dc->priv->pending_uris);
     dc->priv->pending_uris = NULL;
   }

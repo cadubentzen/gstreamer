@@ -120,8 +120,7 @@ static GstStaticPadTemplate src_factory = GST_STATIC_PAD_TEMPLATE ("src",
         "format = (string) { NTSC, PAL }, " "systemstream = (boolean) true")
     );
 
-static void gst_dv1394src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_dv1394src_uri_handler_init (gpointer g_iface);
 
 static void gst_dv1394src_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
@@ -1102,7 +1101,7 @@ gst_dv1394src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_dv1394src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_dv1394src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

@@ -662,7 +662,7 @@ GST_START_TEST (test_set_value_from_string)
 GST_END_TEST;
 
 static gint
-_binary_search_compare (guint32 * a, guint32 * b)
+_binary_search_compare (guint32 * a, guint32 * b, gpointer user_data)
 {
   return *a - *b;
 }

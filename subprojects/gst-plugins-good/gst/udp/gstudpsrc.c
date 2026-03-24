@@ -598,7 +598,7 @@ enum
   PROP_MULTICAST_SOURCE,
 };
 
-static void gst_udpsrc_uri_handler_init (gpointer g_iface, gpointer iface_data);
+static void gst_udpsrc_uri_handler_init (gpointer g_iface);
 
 static GstCaps *gst_udpsrc_getcaps (GstBaseSrc * src, GstCaps * filter);
 static gboolean gst_udpsrc_close (GstUDPSrc * src);
@@ -2152,7 +2152,7 @@ gst_udpsrc_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_udpsrc_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_udpsrc_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

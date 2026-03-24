@@ -140,7 +140,7 @@ fake_demuxer_init (FakeDemuxer * self, gpointer * g_class)
 }
 
 static void
-fake_demuxer_class_init (FakeDemuxerClass * self_class)
+fake_demuxer_class_init (FakeDemuxerClass * self_class, gpointer class_data G_GNUC_UNUSED)
 {
   GstElementClass *gstelement_class = GST_ELEMENT_CLASS (self_class);
 
@@ -260,7 +260,7 @@ fake_decoder_init (FakeDecoder * self, gpointer * g_class)
 }
 
 static void
-fake_decoder_class_init (FakeDecoderClass * self_class)
+fake_decoder_class_init (FakeDecoderClass * self_class, gpointer class_data G_GNUC_UNUSED)
 {
   GstElementClass *gstelement_class = GST_ELEMENT_CLASS (self_class);
 
@@ -392,7 +392,7 @@ fake_mixer_init (FakeMixer * self, FakeMixerClass * g_class)
 }
 
 static void
-fake_mixer_class_init (FakeMixerClass * self_class)
+fake_mixer_class_init (FakeMixerClass * self_class, gpointer class_data G_GNUC_UNUSED)
 {
   GstElementClass *gstelement_class = GST_ELEMENT_CLASS (self_class);
 
@@ -467,7 +467,7 @@ fake_src_init (FakeSrc * self, FakeSrcClass * g_class)
 }
 
 static void
-fake_src_class_init (FakeSrcClass * self_class)
+fake_src_class_init (FakeSrcClass * self_class, gpointer class_data G_GNUC_UNUSED)
 {
   GstElementClass *gstelement_class = GST_ELEMENT_CLASS (self_class);
 

@@ -196,8 +196,7 @@ GST_STATIC_PAD_TEMPLATE ("sink_%u",
     GST_PAD_REQUEST,
     SINK_CAPS);
 
-static void gst_audiomixer_child_proxy_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_audiomixer_child_proxy_init (gpointer g_iface);
 
 #define gst_audiomixer_parent_class parent_class
 G_DEFINE_TYPE_WITH_CODE (GstAudioMixer, gst_audiomixer,
@@ -449,7 +448,7 @@ gst_audiomixer_child_proxy_get_children_count (GstChildProxy * child_proxy)
 }
 
 static void
-gst_audiomixer_child_proxy_init (gpointer g_iface, gpointer iface_data)
+gst_audiomixer_child_proxy_init (gpointer g_iface)
 {
   GstChildProxyInterface *iface = g_iface;
 

@@ -501,36 +501,18 @@ static guint gst_play_bin3_signals[LAST_SIGNAL] = { 0 };
     id = 0;					\
   }
 
-static void gst_play_bin3_overlay_init (gpointer g_iface,
-    gpointer g_iface_data);
-static void gst_play_bin3_navigation_init (gpointer g_iface,
-    gpointer g_iface_data);
-static void gst_play_bin3_colorbalance_init (gpointer g_iface,
-    gpointer g_iface_data);
+static void gst_play_bin3_overlay_init (gpointer g_iface);
+static void gst_play_bin3_navigation_init (gpointer g_iface);
+static void gst_play_bin3_colorbalance_init (gpointer g_iface);
 
 static void
 _do_init_type (GType type)
 {
-  static const GInterfaceInfo svol_info = {
-    NULL, NULL, NULL
-  };
-  static const GInterfaceInfo ov_info = {
-    gst_play_bin3_overlay_init,
-    NULL, NULL
-  };
-  static const GInterfaceInfo nav_info = {
-    gst_play_bin3_navigation_init,
-    NULL, NULL
-  };
-  static const GInterfaceInfo col_info = {
-    gst_play_bin3_colorbalance_init,
-    NULL, NULL
-  };
 
-  g_type_add_interface_static (type, GST_TYPE_STREAM_VOLUME, &svol_info);
-  g_type_add_interface_static (type, GST_TYPE_VIDEO_OVERLAY, &ov_info);
-  g_type_add_interface_static (type, GST_TYPE_NAVIGATION, &nav_info);
-  g_type_add_interface_static (type, GST_TYPE_COLOR_BALANCE, &col_info);
+  g_type_add_interface_static1 (type, GST_TYPE_STREAM_VOLUME, (GTypeClassInitFunc1) NULL);
+  g_type_add_interface_static1 (type, GST_TYPE_VIDEO_OVERLAY, (GTypeClassInitFunc1) gst_play_bin3_overlay_init);
+  g_type_add_interface_static1 (type, GST_TYPE_NAVIGATION, (GTypeClassInitFunc1) gst_play_bin3_navigation_init);
+  g_type_add_interface_static1 (type, GST_TYPE_COLOR_BALANCE, (GTypeClassInitFunc1) gst_play_bin3_colorbalance_init);
 }
 
 static GType gst_play_bin3_get_type (void);
@@ -2819,7 +2801,7 @@ gst_play_bin3_overlay_set_window_handle (GstVideoOverlay * overlay,
 }
 
 static void
-gst_play_bin3_overlay_init (gpointer g_iface, gpointer g_iface_data)
+gst_play_bin3_overlay_init (gpointer g_iface)
 {
   GstVideoOverlayInterface *iface = (GstVideoOverlayInterface *) g_iface;
   iface->expose = gst_play_bin3_overlay_expose;
@@ -2838,7 +2820,7 @@ gst_play_bin3_navigation_send_event (GstNavigation * navigation,
 }
 
 static void
-gst_play_bin3_navigation_init (gpointer g_iface, gpointer g_iface_data)
+gst_play_bin3_navigation_init (gpointer g_iface)
 {
   GstNavigationInterface *iface = (GstNavigationInterface *) g_iface;
 
@@ -2885,7 +2867,7 @@ gst_play_bin3_colorbalance_get_balance_type (GstColorBalance * balance)
 }
 
 static void
-gst_play_bin3_colorbalance_init (gpointer g_iface, gpointer g_iface_data)
+gst_play_bin3_colorbalance_init (gpointer g_iface)
 {
   GstColorBalanceInterface *iface = (GstColorBalanceInterface *) g_iface;
 

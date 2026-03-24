@@ -67,7 +67,7 @@ struct _GstCodecTimestamperPrivate
   GstClockTime latency;
 };
 
-static void gst_codec_timestamper_class_init (GstCodecTimestamperClass * klass);
+static void gst_codec_timestamper_class_init (GstCodecTimestamperClass * klass, gpointer class_data G_GNUC_UNUSED);
 static void gst_codec_timestamper_init (GstCodecTimestamper * self,
     GstCodecTimestamperClass * klass);
 static void gst_codec_timestamper_finalize (GObject * object);
@@ -131,7 +131,7 @@ gst_codec_timestamper_get_instance_private (GstCodecTimestamper * self)
 }
 
 static void
-gst_codec_timestamper_class_init (GstCodecTimestamperClass * klass)
+gst_codec_timestamper_class_init (GstCodecTimestamperClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);

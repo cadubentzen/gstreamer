@@ -191,7 +191,8 @@ enum
 static GstElementClass *gst_nonstream_audio_decoder_parent_class = NULL;
 
 static void
-gst_nonstream_audio_decoder_class_init (GstNonstreamAudioDecoderClass * klass);
+gst_nonstream_audio_decoder_class_init (GstNonstreamAudioDecoderClass * klass,
+    gpointer class_data G_GNUC_UNUSED);
 static void gst_nonstream_audio_decoder_init (GstNonstreamAudioDecoder * dec,
     GstNonstreamAudioDecoderClass * klass);
 
@@ -369,7 +370,8 @@ gst_nonstream_audio_decoder_get_type (void)
 
 
 static void
-gst_nonstream_audio_decoder_class_init (GstNonstreamAudioDecoderClass * klass)
+gst_nonstream_audio_decoder_class_init (GstNonstreamAudioDecoderClass * klass,
+    gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *object_class;
   GstElementClass *element_class;

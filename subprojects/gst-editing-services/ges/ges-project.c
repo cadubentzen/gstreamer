@@ -404,7 +404,7 @@ ges_add_missing_uri_relocation_uri (const gchar * uri, gboolean recurse)
 
 static gchar *
 ges_missing_uri_default (GESProject * self, GError * error,
-    GESAsset * wrong_asset)
+    GESAsset * wrong_asset, gpointer user_data G_GNUC_UNUSED)
 {
   guint i;
   const gchar *old_uri = ges_asset_get_id (wrong_asset);
@@ -447,7 +447,7 @@ ges_missing_uri_default (GESProject * self, GError * error,
 gchar *
 ges_uri_asset_try_update_id (GError * error, GESAsset * wrong_asset)
 {
-  return ges_missing_uri_default (NULL, error, wrong_asset);
+  return ges_missing_uri_default (NULL, error, wrong_asset, NULL);
 }
 
 static void

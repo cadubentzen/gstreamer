@@ -349,8 +349,7 @@ static void gst_rtsp_client_sink_get_property (GObject * object, guint prop_id,
 
 static GstClock *gst_rtsp_client_sink_provide_clock (GstElement * element);
 
-static void gst_rtsp_client_sink_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_rtsp_client_sink_uri_handler_init (gpointer g_iface);
 
 static gboolean gst_rtsp_client_sink_set_proxy (GstRTSPClientSink * rtsp,
     const gchar * proxy);
@@ -448,7 +447,7 @@ gst_rtsp_client_sink_child_proxy_get_children_count (GstChildProxy *
 }
 
 static void
-gst_rtsp_client_sink_child_proxy_init (gpointer g_iface, gpointer iface_data)
+gst_rtsp_client_sink_child_proxy_init (gpointer g_iface)
 {
   GstChildProxyInterface *iface = g_iface;
 
@@ -5312,7 +5311,7 @@ parse_error:
 }
 
 static void
-gst_rtsp_client_sink_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_rtsp_client_sink_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

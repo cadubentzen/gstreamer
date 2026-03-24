@@ -615,7 +615,7 @@ process_file (GstDiscoverer * dc, const gchar * filename)
 }
 
 static void
-_new_discovered_uri (GstDiscoverer * dc, GstDiscovererInfo * info, GError * err)
+_new_discovered_uri (GstDiscoverer * dc, GstDiscovererInfo * info, GError * err, gpointer user_data G_GNUC_UNUSED)
 {
   print_info (info, err);
 }

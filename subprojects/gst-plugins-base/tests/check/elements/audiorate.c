@@ -302,7 +302,7 @@ do_perfect_stream_test (guint rate, const gchar * format,
   gst_element_set_state (pipe, GST_STATE_NULL);
   gst_object_unref (pipe);
 
-  g_list_foreach (bufs, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (bufs, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (bufs);
 
   gst_caps_unref (caps);
@@ -565,7 +565,7 @@ GST_START_TEST (test_rate_change_down)
 
   fail_unless_equals_int64 (drop, 0);
 
-  g_list_foreach (rbufs, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (rbufs, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (rbufs);
 
   statistics_check (audiorate);

@@ -645,6 +645,12 @@ gst_video_convert_frame_context_unref (GstVideoConvertSampleContext * ctx)
   g_free (ctx);
 }
 
+static void
+closure_notify_convert_frame_context_unref (gpointer data, GClosure *closure G_GNUC_UNUSED)
+{
+  gst_video_convert_frame_context_unref (data);
+}
+
 static gboolean
 convert_frame_dispatch_callback (GstVideoConvertSampleContext * ctx)
 {
@@ -932,11 +938,11 @@ gst_video_convert_sample_async (GstSample * sample,
   g_signal_connect_data (src, "need-data",
       G_CALLBACK (convert_frame_need_data_callback),
       gst_video_convert_frame_context_ref (ctx),
-      (GClosureNotify) gst_video_convert_frame_context_unref, 0);
+      closure_notify_convert_frame_context_unref, 0);
   g_signal_connect_data (sink, "new-preroll",
       G_CALLBACK (convert_frame_new_preroll_callback),
       gst_video_convert_frame_context_ref (ctx),
-      (GClosureNotify) gst_video_convert_frame_context_unref, 0);
+      closure_notify_convert_frame_context_unref, 0);
 
   source = gst_bus_create_watch (bus);
   g_source_set_callback (source, (GSourceFunc) convert_frame_bus_callback,

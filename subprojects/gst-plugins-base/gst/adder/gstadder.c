@@ -188,7 +188,7 @@ GST_STATIC_PAD_TEMPLATE ("sink_%u",
     GST_STATIC_CAPS (CAPS)
     );
 
-static void gst_adder_child_proxy_init (gpointer g_iface, gpointer iface_data);
+static void gst_adder_child_proxy_init (gpointer g_iface);
 
 #define gst_adder_parent_class parent_class
 G_DEFINE_TYPE_WITH_CODE (GstAdder, gst_adder, GST_TYPE_ELEMENT,
@@ -814,7 +814,7 @@ gst_adder_sink_event (GstCollectPads * pads, GstCollectData * pad,
       GST_COLLECT_PADS_STREAM_UNLOCK (adder->collect);
       /* Clear pending tags */
       if (adder->pending_events) {
-        g_list_foreach (adder->pending_events, (GFunc) gst_event_unref, NULL);
+        g_list_foreach (adder->pending_events, g_destroy_notify_to_func, (GDestroyNotify) gst_event_unref);
         g_list_free (adder->pending_events);
         adder->pending_events = NULL;
       }
@@ -926,7 +926,7 @@ gst_adder_dispose (GObject * object)
   gst_caps_replace (&adder->current_caps, NULL);
 
   if (adder->pending_events) {
-    g_list_foreach (adder->pending_events, (GFunc) gst_event_unref, NULL);
+    g_list_foreach (adder->pending_events, g_destroy_notify_to_func, (GDestroyNotify) gst_event_unref);
     g_list_free (adder->pending_events);
     adder->pending_events = NULL;
   }
@@ -1579,7 +1579,7 @@ gst_adder_child_proxy_get_children_count (GstChildProxy * child_proxy)
 }
 
 static void
-gst_adder_child_proxy_init (gpointer g_iface, gpointer iface_data)
+gst_adder_child_proxy_init (gpointer g_iface)
 {
   GstChildProxyInterface *iface = g_iface;
 

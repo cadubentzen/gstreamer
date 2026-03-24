@@ -244,7 +244,7 @@ seek_to (AppInfo * info, gdouble percent)
 }
 
 static void
-slider_cb (GtkRange * range, AppInfo * info)
+slider_cb (GtkRange * range, AppInfo * info, gpointer user_data G_GNUC_UNUSED)
 {
   gdouble val;
 

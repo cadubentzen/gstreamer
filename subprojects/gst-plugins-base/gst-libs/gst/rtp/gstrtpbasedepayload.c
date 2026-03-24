@@ -171,9 +171,9 @@ static GstElementClass *parent_class = NULL;
 static gint private_offset = 0;
 
 static void gst_rtp_base_depayload_class_init (GstRTPBaseDepayloadClass *
-    klass);
+    klass, gpointer klass_data);
 static void gst_rtp_base_depayload_init (GstRTPBaseDepayload * rtpbasepayload,
-    GstRTPBaseDepayloadClass * klass);
+    gpointer g_class);
 static GstEvent *create_segment_event (GstRTPBaseDepayload * filter,
     guint rtptime, GstClockTime position);
 
@@ -264,7 +264,8 @@ extension_accumulator (GSignalInvocationHint * ihint,
 }
 
 static void
-gst_rtp_base_depayload_class_init (GstRTPBaseDepayloadClass * klass)
+gst_rtp_base_depayload_class_init (GstRTPBaseDepayloadClass * klass,
+    gpointer klass_data)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
@@ -437,7 +438,7 @@ gst_rtp_base_depayload_class_init (GstRTPBaseDepayloadClass * klass)
 
 static void
 gst_rtp_base_depayload_init (GstRTPBaseDepayload * filter,
-    GstRTPBaseDepayloadClass * klass)
+    gpointer g_class)
 {
   GstPadTemplate *pad_template;
   GstRTPBaseDepayloadPrivate *priv;
@@ -449,7 +450,7 @@ gst_rtp_base_depayload_init (GstRTPBaseDepayload * filter,
   GST_DEBUG_OBJECT (filter, "init");
 
   pad_template =
-      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (klass), "sink");
+      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (g_class), "sink");
   g_return_if_fail (pad_template != NULL);
   filter->sinkpad = gst_pad_new_from_template (pad_template, "sink");
   gst_pad_set_chain_function (filter->sinkpad, gst_rtp_base_depayload_chain);
@@ -460,7 +461,7 @@ gst_rtp_base_depayload_init (GstRTPBaseDepayload * filter,
   gst_element_add_pad (GST_ELEMENT (filter), filter->sinkpad);
 
   pad_template =
-      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (klass), "src");
+      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (g_class), "src");
   g_return_if_fail (pad_template != NULL);
   filter->srcpad = gst_pad_new_from_template (pad_template, "src");
   gst_pad_use_fixed_caps (filter->srcpad);

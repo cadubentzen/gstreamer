@@ -627,7 +627,7 @@ get_smart_profile (GESLauncher * self)
 
 static void
 disable_bframe_for_smart_rendering_cb (GstBin * bin, GstBin * sub_bin,
-    GstElement * child)
+    GstElement * child, gpointer user_data G_GNUC_UNUSED)
 {
   GstElementFactory *factory = gst_element_get_factory (child);
 

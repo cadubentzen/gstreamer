@@ -68,7 +68,7 @@ on_window_destroy (GObject * object, gpointer user_data)
 
 /* control audiotestsrc frequency */
 static void
-on_frequency_changed (GtkRange * range, gpointer user_data)
+on_frequency_changed (GtkRange * range, gdouble value G_GNUC_UNUSED, gpointer user_data)
 {
   GstElement *machine = GST_ELEMENT (user_data);
   gdouble value = gtk_range_get_value (range);

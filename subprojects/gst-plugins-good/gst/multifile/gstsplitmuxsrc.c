@@ -116,8 +116,7 @@ static gboolean splitmux_src_pad_event (GstPad * pad, GstObject * parent,
     GstEvent * event);
 static gboolean splitmux_src_pad_query (GstPad * pad, GstObject * parent,
     GstQuery * query);
-static void splitmux_src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void splitmux_src_uri_handler_init (gpointer g_iface);
 
 
 static void
@@ -210,7 +209,7 @@ wrong_uri:
 }
 
 static void
-splitmux_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+splitmux_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) (g_iface);
 

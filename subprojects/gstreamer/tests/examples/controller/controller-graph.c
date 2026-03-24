@@ -36,7 +36,8 @@ GstControlSource *cs = NULL;
 gdouble yval[] = { 0.0, 0.2, 0.8, 0.1, 0.1, 1.0 };
 
 static gboolean
-on_graph_draw (GtkWidget * widget, cairo_t * cr, gpointer user_data)
+on_graph_draw (GtkWidget * widget, cairo_t * cr, gint width G_GNUC_UNUSED,
+    gint height G_GNUC_UNUSED, gpointer user_data)
 {
   GtkStyleContext *style = gtk_widget_get_style_context (widget);
   GtkAllocation alloc;

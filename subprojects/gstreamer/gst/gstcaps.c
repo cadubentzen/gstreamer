@@ -2454,7 +2454,7 @@ gst_caps_structure_simplify (GstStructure ** result,
       g_slist_free (list);
       return TRUE;
     } else {                    /* multiple results */
-      g_slist_foreach (list, (GFunc) gst_structure_free, NULL);
+      g_slist_foreach (list, g_destroy_notify_to_func, (GDestroyNotify) gst_structure_free);
       g_slist_free (list);
       list = NULL;
     }

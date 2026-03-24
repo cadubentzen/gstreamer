@@ -89,8 +89,7 @@ static GstClockTime gst_dvd_read_src_get_time_for_sector (GstDvdReadSrc * src,
 static gint gst_dvd_read_src_get_sector_from_time (GstDvdReadSrc * src,
     GstClockTime ts);
 
-static void gst_dvd_read_src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_dvd_read_src_uri_handler_init (gpointer g_iface);
 static gboolean dvdread_element_init (GstPlugin * plugin);
 
 #define gst_dvd_read_src_parent_class parent_class
@@ -1780,7 +1779,7 @@ gst_dvd_read_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_dvd_read_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_dvd_read_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

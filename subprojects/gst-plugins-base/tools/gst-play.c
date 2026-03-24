@@ -316,7 +316,7 @@ play_free (GstPlay * play)
 static void
 play_reset (GstPlay * play)
 {
-  g_list_foreach (play->missing, (GFunc) gst_message_unref, NULL);
+  g_list_foreach (play->missing, g_destroy_notify_to_func, (GDestroyNotify) gst_message_unref);
   play->missing = NULL;
 
   play->buffering = FALSE;

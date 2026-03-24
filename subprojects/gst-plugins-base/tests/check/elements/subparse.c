@@ -229,7 +229,7 @@ teardown_subparse (void)
 {
   GST_DEBUG ("cleaning up");
 
-  g_list_foreach (buffers, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (buffers);
   buffers = NULL;
 

@@ -346,7 +346,7 @@ gst_vorbis_enc_metadata_set1 (const GstTagList * list, const gchar * tag,
     }
   }
 
-  g_list_foreach (vc_list, (GFunc) g_free, NULL);
+  g_list_foreach (vc_list, g_destroy_notify_to_func, (GDestroyNotify) g_free);
   g_list_free (vc_list);
 }
 

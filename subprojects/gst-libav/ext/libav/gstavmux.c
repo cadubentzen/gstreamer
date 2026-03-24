@@ -97,7 +97,7 @@ enum
 };
 
 /* A number of function prototypes are given so we can refer to them later. */
-static void gst_ffmpegmux_class_init (GstFFMpegMuxClass * klass);
+static void gst_ffmpegmux_class_init (GstFFMpegMuxClass * klass, gpointer class_data G_GNUC_UNUSED);
 static void gst_ffmpegmux_base_init (gpointer g_class);
 static void gst_ffmpegmux_init (GstFFMpegMux * ffmpegmux,
     GstFFMpegMuxClass * g_class);
@@ -288,7 +288,7 @@ beach:
 }
 
 static void
-gst_ffmpegmux_class_init (GstFFMpegMuxClass * klass)
+gst_ffmpegmux_class_init (GstFFMpegMuxClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;

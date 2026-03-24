@@ -78,8 +78,7 @@ struct _GstNetTimeProviderPrivate
   gboolean made_cancel_fd;
 };
 
-static void gst_net_time_provider_initable_iface_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_net_time_provider_initable_iface_init (gpointer g_iface);
 
 static gboolean gst_net_time_provider_start (GstNetTimeProvider * bself,
     GError ** error);
@@ -441,8 +440,7 @@ gst_net_time_provider_initable_init (GInitable * initable,
 }
 
 static void
-gst_net_time_provider_initable_iface_init (gpointer g_iface,
-    gpointer iface_data)
+gst_net_time_provider_initable_iface_init (gpointer g_iface)
 {
   GInitableIface *iface = g_iface;
 

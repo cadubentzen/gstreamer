@@ -131,7 +131,7 @@ gst_iqa_child_proxy_get_children_count (GstChildProxy * child_proxy)
 }
 
 static void
-gst_iqa_child_proxy_init (gpointer g_iface, gpointer iface_data)
+gst_iqa_child_proxy_init (gpointer g_iface)
 {
   GstChildProxyInterface *iface = g_iface;
 

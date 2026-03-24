@@ -1228,7 +1228,7 @@ print_signal_info (GstElement * element)
     }
 
     if (found_signals) {
-      g_slist_foreach (found_signals, (GFunc) g_free, NULL);
+      g_slist_foreach (found_signals, g_destroy_notify_to_func, (GDestroyNotify) g_free);
       g_slist_free (found_signals);
     }
   }
@@ -2107,7 +2107,7 @@ print_plugin_automatic_install_info (GstPlugin * plugin)
       gst_object_unref (feature_plugin);
   }
 
-  g_list_foreach (features, (GFunc) gst_object_unref, NULL);
+  g_list_foreach (features, g_destroy_notify_to_func, (GDestroyNotify) gst_object_unref);
   g_list_free (features);
 }
 

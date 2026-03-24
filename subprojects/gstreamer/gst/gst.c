@@ -1105,12 +1105,12 @@ gst_deinit (void)
   }
   gst_task_cleanup_all ();
 
-  g_slist_foreach (_priv_gst_preload_plugins, (GFunc) g_free, NULL);
+  g_slist_foreach (_priv_gst_preload_plugins, g_destroy_notify_to_func, (GDestroyNotify) g_free);
   g_slist_free (_priv_gst_preload_plugins);
   _priv_gst_preload_plugins = NULL;
 
 #ifndef GST_DISABLE_REGISTRY
-  g_list_foreach (_priv_gst_plugin_paths, (GFunc) g_free, NULL);
+  g_list_foreach (_priv_gst_plugin_paths, g_destroy_notify_to_func, (GDestroyNotify) g_free);
   g_list_free (_priv_gst_plugin_paths);
   _priv_gst_plugin_paths = NULL;
 #endif

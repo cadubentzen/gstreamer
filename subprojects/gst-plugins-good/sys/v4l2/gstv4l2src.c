@@ -93,8 +93,7 @@ GST_IMPLEMENT_V4L2_COLOR_BALANCE_METHODS (GstV4l2Src, gst_v4l2src);
 GST_IMPLEMENT_V4L2_TUNER_METHODS (GstV4l2Src, gst_v4l2src);
 GST_IMPLEMENT_V4L2_VIDORIENT_METHODS (GstV4l2Src, gst_v4l2src);
 
-static void gst_v4l2src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_v4l2src_uri_handler_init (gpointer g_iface);
 
 #define gst_v4l2src_parent_class parent_class
 G_DEFINE_TYPE_WITH_CODE (GstV4l2Src, gst_v4l2src, GST_TYPE_PUSH_SRC,
@@ -1430,7 +1429,7 @@ gst_v4l2src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 
 
 static void
-gst_v4l2src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_v4l2src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

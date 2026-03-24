@@ -52,8 +52,7 @@ GST_STATIC_PAD_TEMPLATE ("src",
 
 static GstFlowReturn gst_pnm_src_create (GstPushSrc * psrc, GstBuffer ** buf);
 
-static void gst_pnm_src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_pnm_src_uri_handler_init (gpointer g_iface);
 
 #define gst_pnm_src_parent_class parent_class
 G_DEFINE_TYPE_WITH_CODE (GstPNMSrc, gst_pnm_src, GST_TYPE_PUSH_SRC,
@@ -223,7 +222,7 @@ gst_pnm_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_pnm_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_pnm_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

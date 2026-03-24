@@ -108,7 +108,7 @@ gst_test_obj_set_property (GObject * object,
 }
 
 static void
-gst_test_obj_class_init (GstTestObjClass * klass)
+gst_test_obj_class_init (GstTestObjClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
 

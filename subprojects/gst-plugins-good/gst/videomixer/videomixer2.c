@@ -126,8 +126,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink_%u",
     GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE (FORMATS))
     );
 
-static void gst_videomixer2_child_proxy_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_videomixer2_child_proxy_init (gpointer g_iface);
 static gboolean gst_videomixer2_push_sink_event (GstVideoMixer2 * mix,
     GstEvent * event);
 static void gst_videomixer2_release_pad (GstElement * element, GstPad * pad);
@@ -2181,7 +2180,7 @@ gst_videomixer2_child_proxy_get_children_count (GstChildProxy * child_proxy)
 }
 
 static void
-gst_videomixer2_child_proxy_init (gpointer g_iface, gpointer iface_data)
+gst_videomixer2_child_proxy_init (gpointer g_iface)
 {
   GstChildProxyInterface *iface = g_iface;
 

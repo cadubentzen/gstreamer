@@ -726,7 +726,7 @@ gst_system_clock_dispose (GObject * object)
   priv->thread = NULL;
   GST_CAT_DEBUG_OBJECT (GST_CAT_CLOCK, clock, "joined thread");
 
-  g_list_foreach (priv->entries, (GFunc) gst_clock_id_unref, NULL);
+  g_list_foreach (priv->entries, g_destroy_notify_to_func, (GDestroyNotify) gst_clock_id_unref);
   g_list_free (priv->entries);
   priv->entries = NULL;
 

@@ -2365,7 +2365,7 @@ cleanup_cb (gpointer data)
         GST_DEBUG ("Announce sender 0x%016" G_GINT64_MODIFIER "x %u timed out",
             sender->master_clock_identity.clock_identity,
             sender->master_clock_identity.port_number);
-        g_queue_foreach (&sender->announce_messages, (GFunc) g_free, NULL);
+        g_queue_foreach (&sender->announce_messages, g_destroy_notify_to_func, (GDestroyNotify) g_free);
         g_queue_clear (&sender->announce_messages);
       }
 
@@ -3043,7 +3043,7 @@ gst_ptp_deinit (void)
     for (m = domain->announce_senders; m; m = m->next) {
       PtpAnnounceSender *sender = m->data;
 
-      g_queue_foreach (&sender->announce_messages, (GFunc) g_free, NULL);
+      g_queue_foreach (&sender->announce_messages, g_destroy_notify_to_func, (GDestroyNotify) g_free);
       g_queue_clear (&sender->announce_messages);
       g_free (sender);
     }

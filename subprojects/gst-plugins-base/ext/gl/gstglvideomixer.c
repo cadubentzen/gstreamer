@@ -645,8 +645,7 @@ enum
   PROP_BACKGROUND,
 };
 
-static void gst_gl_video_mixer_child_proxy_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_gl_video_mixer_child_proxy_init (gpointer g_iface);
 
 #define DEBUG_INIT \
     GST_DEBUG_CATEGORY_INIT (gst_gl_video_mixer_debug, "glvideomixer", 0, "glvideomixer element");
@@ -2321,7 +2320,7 @@ gst_gl_video_mixer_child_proxy_get_children_count (GstChildProxy * child_proxy)
 }
 
 static void
-gst_gl_video_mixer_child_proxy_init (gpointer g_iface, gpointer iface_data)
+gst_gl_video_mixer_child_proxy_init (gpointer g_iface)
 {
   GstChildProxyInterface *iface = g_iface;
 

@@ -254,8 +254,8 @@ enum
 
 /* class initialization */
 
-static void gst_amc_video_dec_class_init (GstAmcVideoDecClass * klass);
-static void gst_amc_video_dec_init (GstAmcVideoDec * self);
+static void gst_amc_video_dec_class_init (GstAmcVideoDecClass * klass, gpointer class_data G_GNUC_UNUSED);
+static void gst_amc_video_dec_init (GstAmcVideoDec * self, gpointer g_class G_GNUC_UNUSED);
 static void gst_amc_video_dec_base_init (gpointer g_class);
 
 static GstVideoDecoderClass *parent_class = NULL;
@@ -382,7 +382,7 @@ gst_amc_video_dec_base_init (gpointer g_class)
 }
 
 static void
-gst_amc_video_dec_class_init (GstAmcVideoDecClass * klass)
+gst_amc_video_dec_class_init (GstAmcVideoDecClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
   GstElementClass *element_class = GST_ELEMENT_CLASS (klass);
@@ -412,7 +412,7 @@ gst_amc_video_dec_class_init (GstAmcVideoDecClass * klass)
 }
 
 static void
-gst_amc_video_dec_init (GstAmcVideoDec * self)
+gst_amc_video_dec_init (GstAmcVideoDec * self, gpointer g_class G_GNUC_UNUSED)
 {
   gst_video_decoder_set_packetized (GST_VIDEO_DECODER (self), TRUE);
   gst_video_decoder_set_needs_format (GST_VIDEO_DECODER (self), TRUE);

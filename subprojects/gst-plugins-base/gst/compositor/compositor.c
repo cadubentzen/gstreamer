@@ -115,8 +115,7 @@ static GstStaticPadTemplate sink_factory = GST_STATIC_PAD_TEMPLATE ("sink_%u",
     GST_STATIC_CAPS (GST_VIDEO_CAPS_MAKE (GST_VIDEO_FORMATS_ALL))
     );
 
-static void gst_compositor_child_proxy_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_compositor_child_proxy_init (gpointer g_iface);
 
 #define GST_TYPE_COMPOSITOR_OPERATOR (gst_compositor_operator_get_type())
 static GType
@@ -2097,7 +2096,7 @@ gst_compositor_child_proxy_get_children_count (GstChildProxy * child_proxy)
 }
 
 static void
-gst_compositor_child_proxy_init (gpointer g_iface, gpointer iface_data)
+gst_compositor_child_proxy_init (gpointer g_iface)
 {
   GstChildProxyInterface *iface = g_iface;
 

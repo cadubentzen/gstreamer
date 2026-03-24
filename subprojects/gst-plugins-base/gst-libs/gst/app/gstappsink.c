@@ -192,8 +192,7 @@ GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS_ANY);
 
-static void gst_app_sink_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_app_sink_uri_handler_init (gpointer g_iface);
 
 static void gst_app_sink_dispose (GObject * object);
 static void gst_app_sink_finalize (GObject * object);
@@ -2240,7 +2239,7 @@ gst_app_sink_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_app_sink_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_app_sink_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

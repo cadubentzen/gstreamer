@@ -201,7 +201,7 @@ send_error:
   }
 }
 
-static void gst_rtsp_wms_extension_init (gpointer g_iface, gpointer iface_data);
+static void gst_rtsp_wms_extension_init (gpointer g_iface);
 
 G_DEFINE_TYPE_WITH_CODE (GstRTSPWMS, gst_rtsp_wms, GST_TYPE_ELEMENT,
     G_IMPLEMENT_INTERFACE (GST_TYPE_RTSP_EXTENSION,
@@ -228,7 +228,7 @@ gst_rtsp_wms_init (GstRTSPWMS * rtspwms)
 }
 
 static void
-gst_rtsp_wms_extension_init (gpointer g_iface, gpointer iface_data)
+gst_rtsp_wms_extension_init (gpointer g_iface)
 {
   GstRTSPExtensionInterface *iface = (GstRTSPExtensionInterface *) g_iface;
 

@@ -40,8 +40,7 @@ GST_DEBUG_CATEGORY (equalizer_debug);
 #define BANDS_LOCK(equ) g_mutex_lock(&equ->bands_lock)
 #define BANDS_UNLOCK(equ) g_mutex_unlock(&equ->bands_lock)
 
-static void gst_iir_equalizer_child_proxy_interface_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_iir_equalizer_child_proxy_interface_init (gpointer g_iface);
 
 static void gst_iir_equalizer_finalize (GObject * object);
 
@@ -342,8 +341,7 @@ gst_iir_equalizer_child_proxy_get_children_count (GstChildProxy * child_proxy)
 }
 
 static void
-gst_iir_equalizer_child_proxy_interface_init (gpointer g_iface,
-    gpointer iface_data)
+gst_iir_equalizer_child_proxy_interface_init (gpointer g_iface)
 {
   GstChildProxyInterface *iface = g_iface;
 

@@ -84,8 +84,7 @@ enum
   PROP_LAST
 };
 
-static void gst_rtp_src_uri_handler_init (gpointer g_iface,
-    gpointer iface_data);
+static void gst_rtp_src_uri_handler_init (gpointer g_iface);
 
 #define gst_rtp_src_parent_class parent_class
 G_DEFINE_TYPE_WITH_CODE (GstRtpSrc, gst_rtp_src, GST_TYPE_BIN,
@@ -954,7 +953,7 @@ gst_rtp_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_rtp_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_rtp_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

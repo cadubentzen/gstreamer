@@ -293,7 +293,7 @@ gst_test_video_src_prepare_for_capture (GstPhotography * photo,
 }
 
 static void
-gst_test_video_src_photography_init (gpointer g_iface, gpointer iface_data)
+gst_test_video_src_photography_init (gpointer g_iface)
 {
   GstPhotographyInterface *iface = g_iface;
 

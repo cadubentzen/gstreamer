@@ -1359,7 +1359,7 @@ gst_type_find_element_change_state (GstElement * element,
       gst_caps_replace (&typefind->caps, NULL);
 
       g_list_foreach (typefind->cached_events,
-          (GFunc) gst_mini_object_unref, NULL);
+          g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
       g_list_free (typefind->cached_events);
       typefind->cached_events = NULL;
       typefind->mode = MODE_TYPEFIND;

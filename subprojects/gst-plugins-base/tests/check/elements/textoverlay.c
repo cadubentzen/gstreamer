@@ -396,7 +396,7 @@ cleanup_textoverlay (GstElement * textoverlay)
 {
   GST_DEBUG ("cleanup_textoverlay");
 
-  g_list_foreach (buffers, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (buffers);
   buffers = NULL;
 
@@ -469,7 +469,7 @@ GST_START_TEST (test_video_passthrough)
   ASSERT_BUFFER_REFCOUNT (inbuffer, "inbuffer", 2);
 
   /* and clean up */
-  g_list_foreach (buffers, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (buffers);
   buffers = NULL;
   ASSERT_BUFFER_REFCOUNT (inbuffer, "inbuffer", 1);
@@ -541,7 +541,7 @@ GST_START_TEST (test_video_passthrough)
   fail_unless (buffer_is_all_black (outbuffer, outcaps));
   gst_caps_unref (outcaps);
   /* and clean up */
-  g_list_foreach (buffers, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (buffers);
   buffers = NULL;
   ASSERT_BUFFER_REFCOUNT (inbuffer, "inbuffer", 1);
@@ -606,7 +606,7 @@ GST_START_TEST (test_video_passthrough_with_feature)
   fail_unless (GST_BUFFER_DURATION (outbuffer) == (GST_SECOND / 10));
 
   /* and clean up */
-  g_list_foreach (buffers, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (buffers);
   buffers = NULL;
   ASSERT_BUFFER_REFCOUNT (inbuffer, "inbuffer", 1);
@@ -672,7 +672,7 @@ GST_START_TEST (test_video_passthrough_with_feature_and_unsupported_caps)
   fail_unless (GST_BUFFER_DURATION (outbuffer) == (GST_SECOND / 10));
 
   /* and clean up */
-  g_list_foreach (buffers, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (buffers);
   buffers = NULL;
   ASSERT_BUFFER_REFCOUNT (inbuffer, "inbuffer", 1);
@@ -743,7 +743,7 @@ GST_START_TEST (test_video_render_with_any_features_and_no_allocation_meta)
           GST_CAPS_FEATURE_META_GST_VIDEO_OVERLAY_COMPOSITION));
 
   /* and clean up */
-  g_list_foreach (buffers, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (buffers);
   buffers = NULL;
   ASSERT_BUFFER_REFCOUNT (inbuffer, "inbuffer", 1);
@@ -803,7 +803,7 @@ GST_START_TEST (test_video_render_static_text)
   fail_unless (GST_BUFFER_DURATION (outbuffer) == (GST_SECOND / 10));
 
   /* and clean up */
-  g_list_foreach (buffers, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (buffers);
   buffers = NULL;
   ASSERT_BUFFER_REFCOUNT (inbuffer, "inbuffer", 1);
@@ -977,7 +977,7 @@ GST_START_TEST (test_video_waits_for_text)
   fail_unless (gst_pad_push (myvideosrcpad, inbuffer) == GST_FLOW_FLUSHING);
 
   /* and clean up */
-  g_list_foreach (buffers, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (buffers);
   buffers = NULL;
 
@@ -1128,7 +1128,7 @@ GST_START_TEST (test_render_continuity)
   gst_caps_unref (outcaps);
 
   /* and clean up */
-  g_list_foreach (buffers, (GFunc) gst_mini_object_unref, NULL);
+  g_list_foreach (buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (buffers);
   buffers = NULL;
 

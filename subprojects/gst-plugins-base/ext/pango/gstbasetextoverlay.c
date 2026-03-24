@@ -260,9 +260,10 @@ gst_base_text_overlay_scale_mode_get_type (void)
 #define GST_BASE_TEXT_OVERLAY_BROADCAST(ov)(g_cond_broadcast (GST_BASE_TEXT_OVERLAY_GET_COND (ov)))
 
 static GstElementClass *parent_class = NULL;
-static void gst_base_text_overlay_class_init (GstBaseTextOverlayClass * klass);
-static void gst_base_text_overlay_init (GstBaseTextOverlay * overlay,
-    GstBaseTextOverlayClass * klass);
+static void gst_base_text_overlay_class_init (gpointer klass,
+    gpointer class_data);
+static void gst_base_text_overlay_init (GTypeInstance * instance,
+    gpointer g_class);
 
 static GstStateChangeReturn gst_base_text_overlay_change_state (GstElement *
     element, GstStateChange transition);
@@ -321,12 +322,12 @@ gst_base_text_overlay_get_type (void)
       sizeof (GstBaseTextOverlayClass),
       (GBaseInitFunc) NULL,
       NULL,
-      (GClassInitFunc) gst_base_text_overlay_class_init,
+      gst_base_text_overlay_class_init,
       NULL,
       NULL,
       sizeof (GstBaseTextOverlay),
       0,
-      (GInstanceInitFunc) gst_base_text_overlay_init,
+      gst_base_text_overlay_init,
     };
 
     g_once_init_leave ((gsize *) & type,
@@ -345,8 +346,10 @@ gst_base_text_overlay_get_text (GstBaseTextOverlay * overlay,
 }
 
 static void
-gst_base_text_overlay_class_init (GstBaseTextOverlayClass * klass)
+gst_base_text_overlay_class_init (gpointer klass,
+    gpointer class_data G_GNUC_UNUSED)
 {
+  GstBaseTextOverlayClass *overlay_class = klass;
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
 
@@ -370,7 +373,7 @@ gst_base_text_overlay_class_init (GstBaseTextOverlayClass * klass)
   gstelement_class->change_state =
       GST_DEBUG_FUNCPTR (gst_base_text_overlay_change_state);
 
-  klass->get_text = gst_base_text_overlay_get_text;
+  overlay_class->get_text = gst_base_text_overlay_get_text;
 
   g_object_class_install_property (G_OBJECT_CLASS (klass), PROP_TEXT,
       g_param_spec_string ("text", "text",
@@ -714,9 +717,10 @@ gst_base_text_overlay_finalize (GObject * object)
 }
 
 static void
-gst_base_text_overlay_init (GstBaseTextOverlay * overlay,
-    GstBaseTextOverlayClass * klass)
+gst_base_text_overlay_init (GTypeInstance * instance,
+    gpointer g_class G_GNUC_UNUSED)
 {
+  GstBaseTextOverlay *overlay = (GstBaseTextOverlay *) instance;
   GstPadTemplate *template;
   PangoFontDescription *desc;
   PangoFontMap *fontmap;

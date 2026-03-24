@@ -318,7 +318,7 @@ void
 track_resort_and_fill_gaps (GESTrack * track)
 {
   g_sequence_sort (track->priv->trackelements_by_start,
-      (GCompareDataFunc) element_start_compare, NULL);
+      g_compare_func_to_compare_data_func, element_start_compare);
 
   if (track->priv->updating == TRUE) {
     update_gaps (track);
@@ -1233,7 +1233,7 @@ remove_element_internal (GESTrack * track, GESTrackElement * object,
 
   g_hash_table_insert (track->priv->trackelements_iter, object,
       g_sequence_insert_sorted (track->priv->trackelements_by_start, object,
-          (GCompareDataFunc) element_start_compare, NULL));
+          g_compare_func_to_compare_data_func, element_start_compare));
 
   return FALSE;
 }
@@ -1307,7 +1307,7 @@ ges_track_add_element_full (GESTrack * track, GESTrackElement * object,
   gst_object_ref_sink (object);
   g_hash_table_insert (track->priv->trackelements_iter, object,
       g_sequence_insert_sorted (track->priv->trackelements_by_start, object,
-          (GCompareDataFunc) element_start_compare, NULL));
+          g_compare_func_to_compare_data_func, element_start_compare));
 
   timeline = track->priv->timeline;
   ges_timeline_element_set_timeline (el, timeline);

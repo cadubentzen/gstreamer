@@ -183,7 +183,8 @@ GST_START_TEST (test_project_unexistant_effect)
 GST_END_TEST;
 
 static void
-asset_added_cb (GESProject * project, GESAsset * asset)
+asset_added_cb (GESProject * project, GESAsset * asset,
+    gpointer user_data G_GNUC_UNUSED)
 {
   gchar *uri = ges_test_file_uri ("audio_video.ogg");
   GstDiscovererInfo *info;
@@ -200,7 +201,8 @@ asset_added_cb (GESProject * project, GESAsset * asset)
 }
 
 static gchar *
-_set_new_uri (GESProject * project, GError * error, GESAsset * wrong_asset)
+_set_new_uri (GESProject * project, GError * error, GESAsset * wrong_asset,
+    gpointer user_data G_GNUC_UNUSED)
 {
   fail_unless (!g_strcmp0 (ges_asset_get_id (wrong_asset),
           "file:///test/not/exisiting"));
@@ -671,7 +673,8 @@ GST_END_TEST;
 /*  FIXME This test does not pass for some bad reason */
 #if 0
 static void
-project_loaded_now_play_cb (GESProject * project, GESTimeline * timeline)
+project_loaded_now_play_cb (GESProject * project, GESTimeline * timeline,
+    gpointer user_data G_GNUC_UNUSED)
 {
   GstBus *bus;
   GstMessage *message;

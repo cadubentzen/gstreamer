@@ -117,9 +117,9 @@ struct _GstFFMpegDemuxClass
 };
 
 /* A number of function prototypes are given so we can refer to them later. */
-static void gst_ffmpegdemux_class_init (GstFFMpegDemuxClass * klass);
+static void gst_ffmpegdemux_class_init (GstFFMpegDemuxClass * klass, gpointer class_data G_GNUC_UNUSED);
 static void gst_ffmpegdemux_base_init (GstFFMpegDemuxClass * klass);
-static void gst_ffmpegdemux_init (GstFFMpegDemux * demux);
+static void gst_ffmpegdemux_init (GstFFMpegDemux * demux, gpointer g_class G_GNUC_UNUSED);
 static void gst_ffmpegdemux_finalize (GObject * object);
 
 static gboolean gst_ffmpegdemux_sink_event (GstPad * sinkpad,
@@ -231,7 +231,7 @@ gst_ffmpegdemux_base_init (GstFFMpegDemuxClass * klass)
 }
 
 static void
-gst_ffmpegdemux_class_init (GstFFMpegDemuxClass * klass)
+gst_ffmpegdemux_class_init (GstFFMpegDemuxClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
@@ -248,7 +248,7 @@ gst_ffmpegdemux_class_init (GstFFMpegDemuxClass * klass)
 }
 
 static void
-gst_ffmpegdemux_init (GstFFMpegDemux * demux)
+gst_ffmpegdemux_init (GstFFMpegDemux * demux, gpointer g_class G_GNUC_UNUSED)
 {
   GstFFMpegDemuxClass *oclass =
       (GstFFMpegDemuxClass *) (G_OBJECT_GET_CLASS (demux));

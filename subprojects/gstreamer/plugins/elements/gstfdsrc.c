@@ -114,7 +114,7 @@ enum
   PROP_LAST
 };
 
-static void gst_fd_src_uri_handler_init (gpointer g_iface, gpointer iface_data);
+static void gst_fd_src_uri_handler_init (gpointer g_iface);
 
 #define _do_init \
   G_IMPLEMENT_INTERFACE (GST_TYPE_URI_HANDLER, gst_fd_src_uri_handler_init); \
@@ -711,7 +711,7 @@ gst_fd_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_fd_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_fd_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

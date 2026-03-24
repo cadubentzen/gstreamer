@@ -105,13 +105,13 @@ GST_START_TEST (test_hammer_bus)
 
 GST_END_TEST;
 
-static gboolean
+static void
 message_func_eos (GstBus * bus, GstMessage * message, guint * p_counter)
 {
   const GstStructure *s;
   gint i;
 
-  g_return_val_if_fail (GST_MESSAGE_TYPE (message) == GST_MESSAGE_EOS, FALSE);
+  g_return_if_fail (GST_MESSAGE_TYPE (message) == GST_MESSAGE_EOS);
 
   GST_DEBUG ("got EOS message");
 
@@ -121,18 +121,15 @@ message_func_eos (GstBus * bus, GstMessage * message, guint * p_counter)
 
   if (p_counter != NULL)
     *p_counter += 1;
-
-  return i != 9;
 }
 
-static gboolean
+static void
 message_func_app (GstBus * bus, GstMessage * message, guint * p_counter)
 {
   const GstStructure *s;
   gint i;
 
-  g_return_val_if_fail (GST_MESSAGE_TYPE (message) == GST_MESSAGE_APPLICATION,
-      FALSE);
+  g_return_if_fail (GST_MESSAGE_TYPE (message) == GST_MESSAGE_APPLICATION);
 
   GST_DEBUG ("got APP message");
 
@@ -142,8 +139,6 @@ message_func_app (GstBus * bus, GstMessage * message, guint * p_counter)
 
   if (p_counter != NULL)
     *p_counter += 1;
-
-  return i != 9;
 }
 
 static gboolean

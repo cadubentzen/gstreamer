@@ -147,7 +147,7 @@ gst_encoding_target_finalize (GObject * object)
   g_free (target->description);
   g_free (target->path);
 
-  g_list_foreach (target->profiles, (GFunc) g_object_unref, NULL);
+  g_list_foreach (target->profiles, g_destroy_notify_to_func, (GDestroyNotify) g_object_unref);
   g_list_free (target->profiles);
 
   G_OBJECT_CLASS (gst_encoding_target_parent_class)->finalize (object);
@@ -889,7 +889,7 @@ gst_encoding_target_subload (gchar * path, const gchar * category,
       if (target)
         break;
     }
-    g_list_foreach (tries, (GFunc) g_free, NULL);
+    g_list_foreach (tries, g_destroy_notify_to_func, (GDestroyNotify) g_free);
     if (tries)
       g_list_free (tries);
   }

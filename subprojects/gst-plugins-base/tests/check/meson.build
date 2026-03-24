@@ -33,7 +33,8 @@ base_tests = [
   [ 'libs/xmpwriter.c' ],
   [ 'elements/adder.c', get_option('adder').disabled()],
   [ 'elements/appsink.c', get_option('app').disabled()],
-  [ 'elements/appsrc.c', get_option('app').disabled()],
+  # WASM: appsrc test hangs due to threading limitations
+  [ 'elements/appsrc.c', get_option('app').disabled() or host_machine.system() == 'emscripten'],
   [ 'elements/audioconvert.c', get_option('audioconvert').disabled()],
   [ 'elements/audiointerleave.c', get_option('audiomixer').disabled()],
   [ 'elements/audiomixer.c', get_option('audiomixer').disabled(), [ gst_controller_dep ] ],
@@ -58,12 +59,13 @@ base_tests = [
   [ 'pipelines/simple-launch-lines.c' ],
   [ 'pipelines/basetime.c' ],
   [ 'pipelines/capsfilter-renegotiation.c' ],
-  [ 'pipelines/gio.c' ],
+  [ 'pipelines/gio.c', host_machine.system() == 'emscripten' ],
   [ 'pipelines/streamsynchronizer.c' ],
 ]
 
 # FIXME: unistd dependency, unstable or not tested yet on windows
-if host_machine.system() != 'windows'
+# Emscripten: sockets (multifdsink, multisocketsink, tcp, rtsp) and vorbis not available
+if host_machine.system() not in ['windows', 'emscripten']
   base_tests += [
     [ 'libs/allocators.c', host_machine.system() != 'linux' ],
     [ 'libs/rtspconnection.c' ],
@@ -87,7 +89,8 @@ if host_machine.system() != 'windows'
 endif
 
 # FIXME: Unstable on Windows
-if build_gstgl and host_machine.system() != 'windows'
+# Emscripten: WebGL has limited GL feature support (no shared contexts, etc.)
+if build_gstgl and host_machine.system() not in ['windows', 'emscripten']
   base_tests += [
     [ 'libs/gstglapi.c', not build_gstgl, [gstgl_dep]],
     [ 'libs/gstglcolorconvert.c', not build_gstgl, [gstgl_dep, gstglproto_dep]],

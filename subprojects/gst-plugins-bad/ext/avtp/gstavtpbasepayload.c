@@ -44,7 +44,7 @@ static GstStaticPadTemplate src_template = GST_STATIC_PAD_TEMPLATE ("src",
     GST_STATIC_CAPS ("application/x-avtp")
     );
 
-static void gst_avtp_base_payload_class_init (GstAvtpBasePayloadClass * klass);
+static void gst_avtp_base_payload_class_init (GstAvtpBasePayloadClass * klass, gpointer class_data G_GNUC_UNUSED);
 static void gst_avtp_base_payload_init (GstAvtpBasePayload * avtpbasepayload,
     gpointer g_class);
 
@@ -84,7 +84,7 @@ gst_avtp_base_payload_get_type (void)
 }
 
 static void
-gst_avtp_base_payload_class_init (GstAvtpBasePayloadClass * klass)
+gst_avtp_base_payload_class_init (GstAvtpBasePayloadClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 

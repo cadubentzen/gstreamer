@@ -1169,7 +1169,8 @@ add_rtcp_sdes_packet (GstBuffer * gstbuf, guint32 ssrc, const char *cname)
 
 
 static void
-on_ssrc_collision_cb (GstElement * rtpsession, guint ssrc, gpointer user_data)
+on_ssrc_collision_cb (GstElement * rtpsession, GObject * src G_GNUC_UNUSED,
+    gpointer user_data)
 {
   gboolean *had_collision = user_data;
 
@@ -2404,7 +2405,8 @@ GST_END_TEST;
 
 static guint
 on_sending_nacks (GObject * internal_session, guint sender_ssrc,
-    guint media_ssrc, GArray * nacks, GstBuffer * buffer)
+    guint media_ssrc, GArray * nacks, GstBuffer * buffer,
+    gpointer user_data G_GNUC_UNUSED)
 {
   GstRTCPBuffer rtcp = GST_RTCP_BUFFER_INIT;
   GstRTCPPacket packet;
@@ -2533,7 +2535,8 @@ GST_START_TEST (test_on_sending_nacks)
 GST_END_TEST;
 
 static void
-disable_probation_on_new_ssrc (GObject * session, GObject * source)
+disable_probation_on_new_ssrc (GObject * session, GObject * source,
+    gpointer user_data G_GNUC_UNUSED)
 {
   g_object_set (source, "probation", 0, NULL);
 }

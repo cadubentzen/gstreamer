@@ -54,7 +54,8 @@ struct _GESProjectClass
                               GESAsset   * asset);
   gchar *  (*missing_uri)    (GESProject * self,
                               GError     * error,
-                              GESAsset   * wrong_asset);
+                              GESAsset   * wrong_asset,
+                              gpointer     user_data);
   gboolean (*loading_error)  (GESProject * self,
                               GError     * error,
                               gchar      * id,

@@ -180,7 +180,7 @@ struct _GstRistSrc
   gchar *encoding_name;
 };
 
-static void gst_rist_src_uri_init (gpointer g_iface, gpointer iface_data);
+static void gst_rist_src_uri_init (gpointer g_iface);
 
 G_DEFINE_TYPE_WITH_CODE (GstRistSrc, gst_rist_src, GST_TYPE_BIN,
     G_IMPLEMENT_INTERFACE (GST_TYPE_URI_HANDLER, gst_rist_src_uri_init);
@@ -1552,7 +1552,7 @@ gst_rist_src_uri_set_uri (GstURIHandler * handler, const gchar * uri,
 }
 
 static void
-gst_rist_src_uri_init (gpointer g_iface, gpointer iface_data)
+gst_rist_src_uri_init (gpointer g_iface)
 {
   GstURIHandlerInterface *iface = (GstURIHandlerInterface *) g_iface;
 

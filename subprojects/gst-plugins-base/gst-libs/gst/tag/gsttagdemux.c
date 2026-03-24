@@ -165,7 +165,7 @@ static gboolean gst_tag_demux_send_new_segment (GstTagDemux * tagdemux);
 
 static void gst_tag_demux_base_init (gpointer g_class);
 static void gst_tag_demux_class_init (gpointer g_class, gpointer d);
-static void gst_tag_demux_init (GstTagDemux * obj, GstTagDemuxClass * klass);
+static void gst_tag_demux_init (GstTagDemux * obj, gpointer g_class);
 
 static gpointer parent_class;   /* NULL */
 static gint private_offset = 0;
@@ -269,15 +269,15 @@ gst_tag_demux_reset (GstTagDemux * tagdemux)
   tagdemux->priv->segment_seqnum = gst_util_seqnum_next ();
 
   g_list_foreach (tagdemux->priv->pending_events,
-      (GFunc) gst_mini_object_unref, NULL);
+      g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (tagdemux->priv->pending_events);
   tagdemux->priv->pending_events = NULL;
 }
 
 static void
-gst_tag_demux_init (GstTagDemux * demux, GstTagDemuxClass * gclass)
+gst_tag_demux_init (GstTagDemux * demux, gpointer g_class)
 {
-  GstElementClass *element_klass = GST_ELEMENT_CLASS (gclass);
+  GstElementClass *element_klass = GST_ELEMENT_CLASS (g_class);
   GstPadTemplate *tmpl;
 
   demux->priv = gst_tag_demux_get_instance_private (demux);

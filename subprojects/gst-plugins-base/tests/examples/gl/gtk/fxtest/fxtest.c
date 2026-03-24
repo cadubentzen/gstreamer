@@ -117,7 +117,8 @@ resize_cb (GtkWidget * widget, GdkEvent * event, gpointer data)
 }
 
 static gboolean
-expose_cb (GtkWidget * widget, gpointer unused, gpointer data)
+expose_cb (GtkWidget * widget, cairo_t * cr G_GNUC_UNUSED, gint width G_GNUC_UNUSED,
+    gint height G_GNUC_UNUSED, gpointer data)
 {
   GstVideoOverlay *overlay =
       GST_VIDEO_OVERLAY (gst_bin_get_by_interface (GST_BIN (data),

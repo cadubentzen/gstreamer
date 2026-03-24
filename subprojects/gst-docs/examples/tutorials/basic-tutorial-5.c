@@ -55,7 +55,7 @@ delete_event_cb (GtkWidget * widget, GdkEvent * event, CustomData * data)
 /* This function is called when the slider changes its position. We perform a seek to the
  * new position here. */
 static void
-slider_cb (GtkRange * range, CustomData * data)
+slider_cb (GtkRange * range, gdouble value G_GNUC_UNUSED, CustomData * data)
 {
   gdouble value = gtk_range_get_value (GTK_RANGE (data->slider));
   gst_element_seek_simple (data->playbin, GST_FORMAT_TIME,

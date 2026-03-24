@@ -373,7 +373,8 @@ static void gst_encoding_profile_class_init (GstEncodingProfileClass * klass);
 static gpointer gst_encoding_profile_parent_class = NULL;
 
 static void
-gst_encoding_profile_class_intern_init (gpointer klass)
+gst_encoding_profile_class_intern_init (gpointer klass,
+    gpointer class_data G_GNUC_UNUSED)
 {
   gst_encoding_profile_parent_class = g_type_class_peek_parent (klass);
   gst_encoding_profile_class_init ((GstEncodingProfileClass *) klass);
@@ -982,7 +983,7 @@ gst_encoding_container_profile_finalize (GObject * object)
 {
   GstEncodingContainerProfile *prof = (GstEncodingContainerProfile *) object;
 
-  g_list_foreach (prof->encodingprofiles, (GFunc) g_object_unref, NULL);
+  g_list_foreach (prof->encodingprofiles, g_destroy_notify_to_func, (GDestroyNotify) g_object_unref);
   g_list_free (prof->encodingprofiles);
 
   G_OBJECT_CLASS (gst_encoding_container_profile_parent_class)->finalize

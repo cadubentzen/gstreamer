@@ -904,7 +904,7 @@ gst_multi_handle_sink_remove_client_link (GstMultiHandleSink * sink,
   mhclient->disconnect_time_monotonic = g_get_monotonic_time () * GST_USECOND;
 
   /* free client buffers */
-  g_slist_foreach (mhclient->sending, (GFunc) gst_mini_object_unref, NULL);
+  g_slist_foreach (mhclient->sending, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_slist_free (mhclient->sending);
   mhclient->sending = NULL;
 

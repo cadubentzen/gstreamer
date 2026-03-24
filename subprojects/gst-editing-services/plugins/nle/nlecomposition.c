@@ -27,6 +27,13 @@
 
 #include "nle.h"
 
+/* Adapter for gst_object_ref as GCopyFunc (which takes 2 params) */
+static inline gpointer
+gst_object_ref_copy_func (gconstpointer src, gpointer data G_GNUC_UNUSED)
+{
+  return gst_object_ref ((gpointer) src);
+}
+
 /**
  * SECTION:element-nlecomposition
  *
@@ -844,7 +851,7 @@ _commit_values (NleComposition * comp)
   NleCompositionPrivate *priv = comp->priv;
 
   for (tmp = priv->objects_start; tmp; tmp = tmp->next) {
-    if (nle_object_commit (tmp->data, TRUE))
+    if (nle_object_commit (tmp->data, TRUE, NULL))
       commited = TRUE;
   }
 
@@ -877,7 +884,7 @@ _commit_all_values (NleComposition * comp, NleUpdateStackReason reason)
   return TRUE;
 }
 
-static gboolean
+static void
 _initialize_stack_func (NleComposition * comp, UpdateCompositionData * ucompo)
 {
   NleCompositionPrivate *priv = comp->priv;
@@ -924,8 +931,6 @@ _initialize_stack_func (NleComposition * comp, UpdateCompositionData * ucompo)
   _post_start_composition_update_done (comp, ucompo->seqnum, ucompo->reason);
 
   priv->initialized = TRUE;
-
-  return G_SOURCE_REMOVE;
 }
 
 static void
@@ -3471,7 +3476,7 @@ update_start_stop_duration (NleComposition * comp)
       GST_INFO_OBJECT (comp, "RE-setting all expandables duration and commit");
       for (tmp = priv->expandables; tmp; tmp = tmp->next) {
         g_object_set (tmp->data, "duration", obj->stop, NULL);
-        nle_object_commit (NLE_OBJECT (tmp->data), FALSE);
+        nle_object_commit (NLE_OBJECT (tmp->data), FALSE, NULL);
       }
     }
 
@@ -4261,7 +4266,7 @@ _nle_composition_add_object (NleComposition * comp, NleObject * object)
         "duration", (GstClockTimeDiff) NLE_OBJECT_STOP (comp), NULL);
 
     GST_INFO_OBJECT (object, "Used as expandable, commiting now");
-    nle_object_commit (NLE_OBJECT (object), FALSE);
+    nle_object_commit (NLE_OBJECT (object), FALSE, NULL);
   }
 
   /* ...and add it to the hash table */
@@ -4419,7 +4424,7 @@ nle_composition_get_nle_object_by_name (NleComposition * comp,
 
   /* FIXME Implement a task to retrieve objects if needed */
   objs =
-      g_list_copy_deep (priv->objects_start, (GCopyFunc) gst_object_ref, NULL);
+      g_list_copy_deep (priv->objects_start, gst_object_ref_copy_func, NULL);
   GST_OBJECT_UNLOCK (comp);
 
   /* Check in the list of objects, already added */

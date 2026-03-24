@@ -49,7 +49,8 @@
 #include <math.h>
 
 static void
-gst_stream_volume_class_init (GstStreamVolumeInterface * iface)
+gst_stream_volume_class_init (GstStreamVolumeInterface * iface,
+    gpointer class_data G_GNUC_UNUSED)
 {
   g_object_interface_install_property (iface,
       g_param_spec_double ("volume",

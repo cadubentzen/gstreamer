@@ -949,7 +949,7 @@ _error_cb (RunSyncData * data, GError * error, GstStructure * details)
 }
 
 static void
-_done_cb (RunSyncData * data)
+_done_cb (RunSyncData * data, gpointer user_data G_GNUC_UNUSED)
 {
   if (data->loop) {
     g_main_loop_quit (data->loop);

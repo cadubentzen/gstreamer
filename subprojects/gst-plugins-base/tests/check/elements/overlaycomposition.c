@@ -119,8 +119,10 @@ on_caps_changed (GstElement * element, GstCaps * caps, guint window_width,
 }
 
 static GstVideoOverlayComposition *
-on_draw (GstElement * element, GstSample * sample, State * s)
+on_draw (GstElement * element, GstSample * sample, gpointer user_data)
 {
+  State *s = (State *) user_data;
+
   fail_unless (s->valid);
   fail_unless (GST_IS_SAMPLE (sample));
 

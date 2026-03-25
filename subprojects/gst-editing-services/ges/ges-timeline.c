@@ -291,6 +291,15 @@ struct _GESTimelinePrivate
    * creation of the timeline */
     GWeakRef /*<GESTrackElement> */ parent_source;
 
+  /* Committed snapshot of parent clip coordinates for nested timelines.
+   * Set at commit time, read from message handler / composition threads. */
+  GstClockTime committed_parent_start;
+  GstClockTime committed_parent_inpoint;
+  GstClockTime committed_parent_duration;
+  GESTrack *committed_outer_track;      /* ref held, or NULL */
+  GESTimeline *committed_parent_timeline;       /* ref held, or NULL */
+  gboolean has_committed_parent_data;
+
   GMutex flushing_seek_info_lock;
   GPtrArray * /*<FlushingSeekInfo*> */ flushing_seek_infos;
 
@@ -520,6 +529,8 @@ ges_timeline_dispose (GObject * object)
 
   gst_clear_object (&priv->auto_transition_track);
   gst_clear_object (&priv->new_track);
+  gst_clear_object (&priv->committed_outer_track);
+  gst_clear_object (&priv->committed_parent_timeline);
   g_clear_error (&priv->track_selection_error);
   g_clear_pointer (&priv->flushing_seek_infos, g_ptr_array_unref);
   priv->track_selection_error = NULL;
@@ -549,20 +560,19 @@ ges_timeline_finalize (GObject * object)
  * Walks up the parent_uri_source chain, clamping to the visible window
  * [inpoint, inpoint+duration] then applying outer = inner - inpoint + start
  * at each level and resolving the track by type. */
+/* Uses committed snapshot data instead of live GES objects to avoid
+ * races with the GES thread that may concurrently remove clips. */
 static void
 translate_to_toplevel_coordinates (GESTimeline * timeline,
     GstClockTime * start, GstClockTime * end, GESTrack ** track)
 {
-  GESSource *parent_source = timeline_get_parent_uri_source (timeline);
-
-  if (!parent_source)
+  if (!timeline->priv->has_committed_parent_data)
     return;
 
-  GESTimelineElement *parent_clip = GES_TIMELINE_ELEMENT_PARENT (parent_source);
-  GstClockTime clip_start = GES_TIMELINE_ELEMENT_START (parent_clip);
-  GstClockTime clip_inpoint = GES_TIMELINE_ELEMENT_INPOINT (parent_clip);
+  GstClockTime clip_start = timeline->priv->committed_parent_start;
+  GstClockTime clip_inpoint = timeline->priv->committed_parent_inpoint;
   GstClockTime clip_end =
-      clip_inpoint + GES_TIMELINE_ELEMENT_DURATION (parent_clip);
+      clip_inpoint + timeline->priv->committed_parent_duration;
 
   /* Clamp inner coordinates to the visible window [inpoint, inpoint+duration]
    * to avoid unsigned underflow when inner < inpoint */
@@ -571,19 +581,14 @@ translate_to_toplevel_coordinates (GESTimeline * timeline,
   if (GST_CLOCK_TIME_IS_VALID (*end))
     *end = CLAMP (*end, clip_inpoint, clip_end) - clip_inpoint + clip_start;
 
-  GESTrack *outer_track =
-      ges_track_element_get_track (GES_TRACK_ELEMENT (parent_source));
-  if (outer_track) {
+  if (timeline->priv->committed_outer_track) {
     gst_object_unref (*track);
-    *track = gst_object_ref (outer_track);
+    *track = gst_object_ref (timeline->priv->committed_outer_track);
   }
 
-  GESTimeline *parent_tl =
-      ges_timeline_element_get_timeline (GES_TIMELINE_ELEMENT (parent_source));
-  g_object_unref (parent_source);
-
-  if (parent_tl)
-    translate_to_toplevel_coordinates (parent_tl, start, end, track);
+  if (timeline->priv->committed_parent_timeline)
+    translate_to_toplevel_coordinates (timeline->
+        priv->committed_parent_timeline, start, end, track);
 }
 
 static void
@@ -650,6 +655,7 @@ ges_timeline_handle_message (GstBin * bin, GstMessage * message)
       GST_DEBUG_OBJECT (timeline, "Setting rate = %f", rate);
       timeline->priv->rate = rate;
       GST_OBJECT_UNLOCK (timeline);
+
       if (timeline->priv->pool_manager) {
         GstClockTime outer_start = stack_start, outer_end = stack_end;
         GESTrack *outer_track = gst_object_ref (track);
@@ -1665,11 +1671,18 @@ timeline_set_parent_uri_source (GESTimeline * self, GESSource * source)
 {
   g_weak_ref_set (&self->priv->parent_source, source);
 
-  GESTimeline *parent_tl =
-      ges_timeline_element_get_timeline (GES_TIMELINE_ELEMENT (source));
-  if (parent_tl && parent_tl->priv->pool_manager) {
-    self->priv->pool_manager =
-        ges_pipeline_pool_manager_ref (parent_tl->priv->pool_manager);
+  if (source) {
+    GESTimeline *parent_tl =
+        ges_timeline_element_get_timeline (GES_TIMELINE_ELEMENT (source));
+    if (parent_tl && parent_tl->priv->pool_manager) {
+      self->priv->pool_manager =
+          ges_pipeline_pool_manager_ref (parent_tl->priv->pool_manager);
+    }
+  } else if (self->priv->pool_manager) {
+    ges_pipeline_pool_manager_deregister_nested_timeline (self->
+        priv->pool_manager, self);
+    g_clear_pointer (&self->priv->pool_manager,
+        ges_pipeline_pool_manager_unref);
   }
 }
 
@@ -3552,6 +3565,41 @@ ges_timeline_commit_unlocked (GESTimeline * timeline)
 
     /* Ensure clip priorities are correct after an edit */
     ges_layer_resync_priorities (layer);
+  }
+
+  /* Snapshot parent clip data for translate_to_toplevel_coordinates so the
+   * composition thread doesn't need to access live GES objects. */
+  {
+    GESSource *parent_source = timeline_get_parent_uri_source (timeline);
+
+    gst_clear_object (&timeline->priv->committed_outer_track);
+    gst_clear_object (&timeline->priv->committed_parent_timeline);
+    timeline->priv->has_committed_parent_data = FALSE;
+
+    if (parent_source) {
+      GESTimelineElement *parent_clip =
+          GES_TIMELINE_ELEMENT_PARENT (parent_source);
+      if (parent_clip) {
+        timeline->priv->committed_parent_start =
+            GES_TIMELINE_ELEMENT_START (parent_clip);
+        timeline->priv->committed_parent_inpoint =
+            GES_TIMELINE_ELEMENT_INPOINT (parent_clip);
+        timeline->priv->committed_parent_duration =
+            GES_TIMELINE_ELEMENT_DURATION (parent_clip);
+
+        GESTrack *outer_track =
+            ges_track_element_get_track (GES_TRACK_ELEMENT (parent_source));
+        timeline->priv->committed_outer_track = outer_track;
+
+        GESTimeline *parent_tl =
+            ges_timeline_element_get_timeline (GES_TIMELINE_ELEMENT
+            (parent_source));
+        timeline->priv->committed_parent_timeline = parent_tl;
+
+        timeline->priv->has_committed_parent_data = TRUE;
+      }
+      g_object_unref (parent_source);
+    }
   }
 
   timeline->priv->expected_commited =

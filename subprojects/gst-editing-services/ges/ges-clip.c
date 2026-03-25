@@ -4712,6 +4712,42 @@ ges_clip_apply_time_effect_on_seek (GESClip * clip,
   return FALSE;
 }
 
+void
+ges_clip_snapshot_time_effects (GESClip * clip, GESSource * source,
+    GList ** out_snapshots)
+{
+  GList *tmp;
+  GESTrack *track;
+  GList *time_effects;
+
+  /* Free any previous snapshots */
+  if (*out_snapshots) {
+    g_list_free_full (*out_snapshots,
+        (GDestroyNotify) ges_time_effect_snapshot_free);
+    *out_snapshots = NULL;
+  }
+
+  track = ges_track_element_get_track (GES_TRACK_ELEMENT (source));
+  if (!track)
+    return;
+
+  time_effects = _active_time_effects_in_track_after_priority (clip, track,
+      _PRIORITY (source));
+
+  for (tmp = time_effects; tmp; tmp = tmp->next) {
+    GESBaseEffect *effect = tmp->data;
+
+    if (!ges_track_element_is_active (GES_TRACK_ELEMENT (effect)))
+      continue;
+
+    GESTimeEffectSnapshot *snap =
+        ges_base_effect_snapshot_time_translation (effect);
+    if (snap)
+      *out_snapshots = g_list_append (*out_snapshots, snap);
+  }
+  g_list_free (time_effects);
+}
+
 /**
  * ges_clip_add_child_to_track:
  * @clip: A #GESClip

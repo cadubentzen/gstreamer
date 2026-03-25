@@ -50,6 +50,7 @@
 #include "ges-internal.h"
 #include "ges-track.h"
 #include "ges-track-element.h"
+#include "ges-uri-source.h"
 #include "ges-meta-container.h"
 #include "ges-video-track.h"
 #include "ges-audio-track.h"
@@ -1563,6 +1564,34 @@ ges_track_get_mixing (GESTrack * track)
  * Returns: %TRUE if pending changes were committed, or %FALSE if nothing
  * needed to be committed.
  */
+static void
+_snapshot_seek_translation_data (GESTrack * track)
+{
+  GSequenceIter *it;
+
+  for (it = g_sequence_get_begin_iter (track->priv->trackelements_by_start);
+      !g_sequence_iter_is_end (it); it = g_sequence_iter_next (it)) {
+    GESTrackElement *element = g_sequence_get (it);
+    GESUriSource *priv = NULL;
+
+    if (GES_IS_AUDIO_URI_SOURCE (element))
+      priv = GES_AUDIO_URI_SOURCE (element)->priv;
+    else if (GES_IS_VIDEO_URI_SOURCE (element))
+      priv = GES_VIDEO_URI_SOURCE (element)->priv;
+
+    if (!priv)
+      continue;
+
+    priv->committed_inpoint = GES_TIMELINE_ELEMENT_INPOINT (element);
+
+    GESTimelineElement *parent = GES_TIMELINE_ELEMENT_PARENT (element);
+    if (parent && GES_IS_CLIP (parent)) {
+      ges_clip_snapshot_time_effects (GES_CLIP (parent),
+          GES_SOURCE (element), &priv->committed_time_effects);
+    }
+  }
+}
+
 gboolean
 ges_track_commit (GESTrack * track)
 {
@@ -1572,6 +1601,7 @@ ges_track_commit (GESTrack * track)
 
   _LOCK (track);
   track_resort_and_fill_gaps (track);
+  _snapshot_seek_translation_data (track);
   res = ges_nle_object_commit (track->priv->composition, TRUE);
   _UNLOCK (track);
 

@@ -153,8 +153,7 @@ ges_base_effect_can_seek_in_ready_cb (GstElement * nleobject,
   GESTimelineElement *parent = GES_TIMELINE_ELEMENT_PARENT (self);
   if (parent && GES_IS_CLIP (parent)) {
     gboolean is_nested_timeline = FALSE;
-    GESAsset *asset =
-        ges_extractable_get_asset (GES_EXTRACTABLE (parent));
+    GESAsset *asset = ges_extractable_get_asset (GES_EXTRACTABLE (parent));
     if (asset)
       g_object_get (asset, "is-nested-timeline", &is_nested_timeline, NULL);
 
@@ -486,6 +485,32 @@ ges_base_effect_translate_source_to_sink_time (GESBaseEffect * effect,
     GST_ERROR_OBJECT (effect, "The time effect is missing its source to "
         "sink translation function");
   return time;
+}
+
+void
+ges_time_effect_snapshot_free (GESTimeEffectSnapshot * snap)
+{
+  if (snap->time_property_values)
+    g_hash_table_unref (snap->time_property_values);
+  g_free (snap);
+}
+
+GESTimeEffectSnapshot *
+ges_base_effect_snapshot_time_translation (GESBaseEffect * effect)
+{
+  GESBaseEffectPrivate *priv = effect->priv;
+  GESTimeEffectSnapshot *snap;
+
+  if (!priv->source_to_sink)
+    return NULL;
+
+  snap = g_new0 (GESTimeEffectSnapshot, 1);
+  snap->source_to_sink = priv->source_to_sink;
+  snap->time_property_values =
+      ges_base_effect_get_time_property_values (effect);
+  snap->translation_data = priv->translation_data;
+
+  return snap;
 }
 
 GstClockTime

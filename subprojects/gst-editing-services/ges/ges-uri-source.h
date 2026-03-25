@@ -38,9 +38,17 @@ struct _GESUriSource
   GWeakRef toplevel_pipeline;
 
   GList *parent_ges_uri_sources;
+  GList *child_ges_timelines;     /* GESTimelines we set parent_uri_source on */
   GMutex lock;
   gboolean controls_nested_timeline;
   gboolean disable_seek_in_ready;
+
+  /* Committed seek translation data — set at GES commit time,
+   * read by the composition thread via the translate-composition-seek
+   * callback. Avoids accessing GES objects (parent clip, time effects)
+   * from the composition thread. */
+  GList *committed_time_effects;            /* list of GESTimeEffectSnapshot */
+  GstClockTime committed_inpoint;           /* element inpoint at commit time */
 
   /* Seek event for positioning nested timeline sources during seek-in-ready.
    *

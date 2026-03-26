@@ -24,6 +24,26 @@
 #endif
 
 #include <gst/check/gstcheck.h>
+#include <unistd.h>
+
+#ifdef __EMSCRIPTEN__
+/* On emscripten, fd 1 (stdout) doesn't support poll() with NODERAWFS.
+ * Use a pipe write-end instead — it's always writable, same as stdout. */
+static gint _emscripten_writable_fd = -1;
+static gint _emscripten_pipe[2] = { -1, -1 };
+static gint
+get_writable_fd (void)
+{
+  if (_emscripten_writable_fd < 0) {
+    fail_if (pipe (_emscripten_pipe) < 0, "Could not create pipe");
+    _emscripten_writable_fd = _emscripten_pipe[1];
+  }
+  return _emscripten_writable_fd;
+}
+#define WRITABLE_FD get_writable_fd ()
+#else
+#define WRITABLE_FD 1
+#endif
 
 #ifdef G_OS_WIN32
 #include <winsock2.h>
@@ -48,6 +68,8 @@ GST_START_TEST (test_poll_wait)
 
 #ifdef G_OS_WIN32
   fail_if (_pipe (socks, 4096, _O_BINARY) < 0, "Could not create a pipe");
+#elif defined(__EMSCRIPTEN__)
+  fail_if (pipe (socks) < 0, "Could not create a pipe");
 #else
   fail_if (socketpair (PF_UNIX, SOCK_STREAM, 0, socks) < 0,
       "Could not create a pipe");
@@ -110,7 +132,7 @@ GST_START_TEST (test_poll_basic)
   GstPoll *set;
   GstPollFD fd = GST_POLL_FD_INIT;
 
-  fd.fd = 1;
+  fd.fd = WRITABLE_FD;
 
   set = gst_poll_new (FALSE);
   fail_if (set == NULL, "Failed to create a GstPoll");
@@ -184,7 +206,7 @@ delayed_restart (gpointer data)
   GstPoll *set = data;
   GstPollFD fd = GST_POLL_FD_INIT;
 
-  fd.fd = 1;
+  fd.fd = WRITABLE_FD;
 
   THREAD_START ();
 
@@ -202,7 +224,7 @@ GST_START_TEST (test_poll_wait_restart)
   GstPoll *set;
   GstPollFD fd = GST_POLL_FD_INIT;
 
-  fd.fd = 1;
+  fd.fd = WRITABLE_FD;
 
   set = gst_poll_new (TRUE);
   fail_if (set == NULL, "Failed to create a GstPoll");
@@ -272,7 +294,7 @@ delayed_control (gpointer data)
   GstPoll *set = data;
   GstPollFD fd = GST_POLL_FD_INIT;
 
-  fd.fd = 1;
+  fd.fd = WRITABLE_FD;
 
   THREAD_START ();
 
@@ -299,7 +321,7 @@ GST_START_TEST (test_poll_controllable)
   GstPoll *set;
   GstPollFD fd = GST_POLL_FD_INIT;
 
-  fd.fd = 1;
+  fd.fd = WRITABLE_FD;
 
   set = gst_poll_new (FALSE);
   fail_if (set == NULL, "Failed to create a GstPoll");

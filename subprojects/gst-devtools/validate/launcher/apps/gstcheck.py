@@ -318,10 +318,15 @@ class GstCheckTestsManager(MesonTestsManager):
     def init(self):
         return True
 
-    def check_binary_ts(self, binary):
+    def check_binary_ts(self, cache_key):
+        # Extract the binary path from the cache key for stat().
+        # cache_key may be a full command string or a plain binary path.
+        parts = cache_key.split()
+        # Skip 'node' wrapper if present
+        binary = parts[1] if len(parts) > 1 and os.path.basename(parts[0]) == 'node' else parts[0]
         try:
             last_touched = os.stat(binary).st_mtime
-            test_info = self.tests_info.get(binary)
+            test_info = self.tests_info.get(cache_key)
             if not test_info:
                 return last_touched, []
             elif test_info[0] == 0:
@@ -360,15 +365,21 @@ class GstCheckTestsManager(MesonTestsManager):
     def _list_gst_check_tests(self, test, recurse=False):
         binary = self._get_test_binary(test)
 
-        check_result = self.check_binary_ts(binary)
+        # For combined test binaries, multiple meson tests share the same
+        # binary but produce different test lists depending on the suite
+        # argument.  Use the full command as cache key so each suite gets
+        # its own cached test list.
+        cmd = self._get_test_cmd(test)
+        cache_key = ' '.join(cmd)
+
+        check_result = self.check_binary_ts(cache_key)
         if check_result is True:
             return
-        self.tests_info[binary] = check_result
+        self.tests_info[cache_key] = check_result
 
         tmpenv = os.environ.copy()
         tmpenv['GST_DEBUG'] = "0"
-        cmd = self._get_test_cmd(test) + ['--list-tests']
-        pe = subprocess.Popen(cmd,
+        pe = subprocess.Popen(cmd + ['--list-tests'],
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               env=tmpenv)
 
@@ -377,15 +388,15 @@ class GstCheckTestsManager(MesonTestsManager):
         except subprocess.TimeoutExpired:
             pe.kill()
             pe.communicate()
-            self.debug("%s timed out listing tests" % binary)
+            self.debug("%s timed out listing tests" % cache_key)
             return
         if pe.returncode != 0:
-            self.debug("%s not able to list tests" % binary)
+            self.debug("%s not able to list tests" % cache_key)
             return
         for t in output.split("\n"):
             test_name = re.findall(r'(?<=^Test: )\w+$', t)
             if len(test_name) == 1:
-                self.tests_info[binary][1].append(test_name[0])
+                self.tests_info[cache_key][1].append(test_name[0])
 
     def load_tests_info(self):
         dumpfile = os.path.join(self.options.privatedir, self.name + '.dat')
@@ -476,7 +487,8 @@ class GstCheckTestsManager(MesonTestsManager):
                 check_path = binary
             with open(check_path, 'rb') as f:
                 if b"gstcheck" not in f.read():
-                    self.tests_info[binary] = [0, []]
+                    cache_key = ' '.join(self._get_test_cmd(test))
+                    self.tests_info[cache_key] = [0, []]
                     continue
             to_inspect.append(test)
 
@@ -495,10 +507,10 @@ class GstCheckTestsManager(MesonTestsManager):
             name = self.get_test_name(test)
             if name in all_sublaunchers_tests:
                 continue
-            binary = self._get_test_binary(test)
-            if binary not in self.tests_info:
+            cache_key = ' '.join(self._get_test_cmd(test))
+            if cache_key not in self.tests_info:
                 continue
-            gst_tests = self.tests_info[binary][1]
+            gst_tests = self.tests_info[cache_key][1]
             if os.path.basename(test['cmd'][0]) in \
                     ['gst-tester-1.0', 'gst-tester-1.0.exe']:
                 fpath = test['cmd'][1]

@@ -34,7 +34,7 @@
 using namespace emscripten;
 
 static void gst_web_stream_src_uri_handler_init (
-    gpointer g_iface, gpointer iface_data);
+    gpointer g_iface);
 
 #define GST_TYPE_WEB_STREAM_SRC (gst_web_stream_src_get_type ())
 #define GST_CAT_DEFAULT gst_web_stream_src_debug
@@ -105,60 +105,62 @@ gst_web_stream_src_get_size (GstBaseSrc *bsrc, guint64 *size)
 /* Forward declaration — defined as EM_JS below */
 static void gst_web_stream_src_cancel_fetch (guintptr thiz);
 
+/* Invalidate the current fetch and drain the queue.  Called from
+ * create() on the streaming thread — no external locks are held
+ * so the fetch thread can be safely joined. */
 static void
-gst_web_stream_src_cleanup_unlocked (GstWebStreamSrc *self)
+gst_web_stream_src_reset_fetch (GstWebStreamSrc *self)
 {
-  /* Invalidate the running JS fetch so its callbacks become no-ops
-   * and abort the underlying network request */
+  GThread *thread;
+
+  GST_OBJECT_LOCK (self);
+
+  /* Bump generation so JS callbacks become no-ops, abort the request */
   self->fetch_generation++;
   gst_web_stream_src_cancel_fetch ((guintptr) self);
 
   self->flushing = TRUE;
   g_cond_signal (&self->qcond);
-
-  /* Wake the JS read loop if it is waiting for queue space */
   g_atomic_int_set (&self->queue_signal, 1);
   EM_ASM ({ Atomics.notify (HEAP32, $0 >> 2, 1); }, &self->queue_signal);
 
-  g_clear_pointer (&self->fetch_thread, g_thread_join);
+  thread = self->fetch_thread;
+  self->fetch_thread = NULL;
+  GST_OBJECT_UNLOCK (self);
+
+  /* Join outside the lock so the thread's EM_JS can complete */
+  if (thread)
+    g_thread_join (thread);
+
+  GST_OBJECT_LOCK (self);
   self->in_eos = FALSE;
   g_queue_clear_full (self->q, (GDestroyNotify) gst_buffer_unref);
   g_clear_pointer (&self->fetch_error, g_free);
   self->accumulated_data_size = 0;
   self->flushing = FALSE;
   self->queue_signal = 1;
-  self->content_length = -1;
-  self->download_start = -1;
-  self->download_end = -1;
-  self->download_offset = 0;
+  GST_OBJECT_UNLOCK (self);
 }
 
+/* Like souphttpsrc: do_seek just records the target position.
+ * The actual reconnection happens lazily in create(). */
 static gboolean
 gst_web_stream_src_do_seek (GstBaseSrc *bsrc, GstSegment *segment)
 {
   GstWebStreamSrc *self = GST_WEB_STREAM_SRC (bsrc);
 
-  g_return_val_if_fail (gst_web_stream_src_is_seekable (bsrc), FALSE);
-  g_return_val_if_fail (GST_CLOCK_TIME_IS_VALID (segment->start), FALSE);
+  GST_DEBUG_OBJECT (self, "do_seek(%" G_GUINT64_FORMAT "-%" G_GUINT64_FORMAT
+      ")", segment->start, segment->stop);
 
   if (segment->format != GST_FORMAT_BYTES) {
     GST_ERROR_OBJECT (self, "Only bytes format is supported for seeking");
     return FALSE;
   }
 
-  GST_OBJECT_LOCK (self);
-  {
-    /* Preserve the content length across seeks — the file size does not
-     * change and the new fetch with a non-zero offset skips the HEAD
-     * request, so we would lose the size permanently otherwise. */
-    gint64 saved_content_length = self->content_length;
-    gst_web_stream_src_cleanup_unlocked (self);
-    self->content_length = saved_content_length;
-  }
-  self->download_offset = self->download_start = segment->start;
+  /* Just record — create() will pick this up */
+  self->download_start = segment->start;
   self->download_end =
       GST_CLOCK_TIME_IS_VALID (segment->stop) ? segment->stop : -1;
-  GST_OBJECT_UNLOCK (self);
 
   return TRUE;
 }
@@ -167,8 +169,8 @@ static int
 gst_web_stream_src_chunk (guintptr thiz, guint32 gen, val chunk)
 {
   GstWebStreamSrc *self = (GstWebStreamSrc *) thiz;
-  GstBuffer *buffer = gst_web_utils_js_array_to_buffer (chunk);
-  guint chunk_size = gst_buffer_get_size (buffer);
+  GstBuffer *buffer;
+  guint chunk_size;
 
   enum
   {
@@ -176,6 +178,13 @@ gst_web_stream_src_chunk (guintptr thiz, guint32 gen, val chunk)
     GST_WEB_STREAM_CONTINUE = 1,
     GST_WEB_STREAM_WAIT = 2
   } ret = GST_WEB_STREAM_CONTINUE;
+
+  /* Check generation before allocating to avoid work on stale fetches */
+  if (gen != g_atomic_int_get ((gint *) &self->fetch_generation))
+    return GST_WEB_STREAM_STOP;
+
+  buffer = gst_web_utils_js_array_to_buffer (chunk);
+  chunk_size = gst_buffer_get_size (buffer);
 
   GST_DEBUG_OBJECT (self, "Received chunk of size: %u (gen %u)", chunk_size,
       gen);
@@ -320,34 +329,35 @@ EM_JS(void, gst_web_stream_fetch, (guintptr thiz, const char* url, const char *r
       // Fetch data using the Streams API
       fetch(fetchUrl, options)
         .then(response => response.body)
-        .then(rs => {
+        .then(async (rs) => {
              const reader = rs.getReader ();
+             try {
+                 let result = 1;
+                 while (result) {
+                     const { done, value } = await reader.read();
 
-             return new ReadableStream({
-                 async start(controller) {
-                     let result = 1;
-                     while (result) {
-                         const { done, value } = await reader.read();
-
-                         if (done) {
-                             Module.gst_web_stream_src_eos (thiz, gen);
-                             break;
-                         }
-
-                         result = Module.gst_web_stream_src_chunk(thiz, gen, value);
-
-                         /* If queue is full (WAIT=2), wait for the consumer
-                          * to notify space available via Atomics. */
-                         if (result === 2) {
-                             var w = Atomics.waitAsync(HEAP32, signalIdx, 0);
-                             if (w.async)
-                                 await w.value;
-                             result = 1;
-                         }
+                     if (done) {
+                         Module.gst_web_stream_src_eos (thiz, gen);
+                         break;
                      }
-                     reader.releaseLock();
-		 }
-             })
+
+                     result = Module.gst_web_stream_src_chunk(thiz, gen, value);
+
+                     /* If queue is full (WAIT=2), wait for the consumer
+                      * to notify space available via Atomics. */
+                     if (result === 2) {
+                         var w = Atomics.waitAsync(HEAP32, signalIdx, 0);
+                         if (w.async)
+                             await w.value;
+                         result = 1;
+                     }
+                 }
+             } catch (e) {
+                 if (e.name !== 'AbortError')
+                     Module.gst_web_stream_src_error (thiz, gen, e.toString());
+             } finally {
+                 reader.releaseLock();
+             }
         })
         .catch(fetchError => {
             if (fetchError.name === 'AbortError') return;
@@ -410,7 +420,7 @@ gst_web_stream_src_urihandler_get_uri (GstURIHandler *handler)
 }
 
 static void
-gst_web_stream_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_web_stream_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *uri_iface = (GstURIHandlerInterface *) g_iface;
 
@@ -428,7 +438,12 @@ gst_web_stream_src_init (GstWebStreamSrc *self)
   self->queue_max_size = 1024 * 1024;
 
   gst_base_src_set_dynamic_size (GST_BASE_SRC (self), TRUE);
-  gst_web_stream_src_cleanup_unlocked (self);
+  self->flushing = FALSE;
+  self->queue_signal = 1;
+  self->content_length = -1;
+  self->download_start = 0;
+  self->download_end = -1;
+  self->download_offset = 0;
 }
 
 static gpointer
@@ -443,7 +458,7 @@ gst_web_stream_fetch_thread (gpointer data)
         GST_TIME_ARGS (self->download_start),
         GST_TIME_ARGS (self->download_end));
   }
-  
+
   gchar *range;
   gint64 s = self->download_start, e = self->download_end;
 
@@ -477,9 +492,21 @@ gst_web_stream_src_create (GstPushSrc *psrc, GstBuffer **outbuf)
   if (G_UNLIKELY (self->flushing))
     return GST_FLOW_FLUSHING;
 
+  /* If a seek changed download_start, tear down the old fetch and
+   * start a new one at the requested offset — like souphttpsrc. */
+  if (self->fetch_thread &&
+      self->download_offset != self->download_start) {
+    GST_DEBUG_OBJECT (self,
+        "Seek detected (offset %" G_GINT64_FORMAT " != start %"
+        G_GINT64_FORMAT "), restarting fetch",
+        self->download_offset, self->download_start);
+    gst_web_stream_src_reset_fetch (self);
+  }
+
   if (!self->fetch_thread) {
     gchar *thr_name =
         g_strdup_printf ("%s_fetch_thread", GST_OBJECT_NAME (self));
+    self->download_offset = self->download_start;
     self->fetch_thread =
         g_thread_new (thr_name, gst_web_stream_fetch_thread, self);
 
@@ -548,9 +575,7 @@ gst_web_stream_src_change_state (
       }
       break;
     case GST_STATE_CHANGE_PAUSED_TO_READY:
-      GST_OBJECT_LOCK (self);
-      gst_web_stream_src_cleanup_unlocked (self);
-      GST_OBJECT_UNLOCK (self);
+      gst_web_stream_src_reset_fetch (self);
       break;
     default:
       break;
@@ -598,8 +623,10 @@ gst_web_stream_src_finalize (GObject *obj)
 {
   GstWebStreamSrc *self = GST_WEB_STREAM_SRC (obj);
 
+  gst_web_stream_src_reset_fetch (self);
   g_free (self->uri);
   g_cond_clear (&self->qcond);
+  g_queue_clear_full (self->q, (GDestroyNotify) gst_buffer_unref);
   g_queue_free (self->q);
 
   G_OBJECT_CLASS (gst_web_stream_src_parent_class)->finalize (obj);

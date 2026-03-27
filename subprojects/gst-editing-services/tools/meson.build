@@ -23,16 +23,52 @@ if host_system == 'emscripten'
   ges_web_app_files = files('ges-web-app.c')
   ges_web_app_deps = [ges_dep, gstpbutils_dep, gio_dep, gstvideo_dep, gstaudio_dep]
 
+  gstvalidate_wasm_dep = dependency('gstreamer-validate-1.0',
+      version: gst_req, required: false)
+  if gstvalidate_wasm_dep.found()
+    ges_validate_wasm_deps = [ges_dep, gstpbutils_dep, gio_dep, gstvideo_dep,
+                              gstaudio_dep, gstvalidate_wasm_dep]
+    gst_tools += {'ges-validate-wasm': {
+      'files': files('ges-validate-wasm.c'),
+      'deps': ges_validate_wasm_deps,
+      'extra_c_args': ['-DHAVE_CONFIG_H', '-DGST_USE_UNSTABLE_API'],
+      'name_suffix': 'js',
+      'extra_link_args': [
+        '-sERROR_ON_UNDEFINED_SYMBOLS=0',
+        '-sASSERTIONS=1',
+        '-sMIN_WEBGL_VERSION=2',
+        '-sMAX_WEBGL_VERSION=2',
+        '-sFULL_ES3',
+        '-sNODE_HOST_ENV=0',
+        '-sNODERAWFS=0',
+        '-sENVIRONMENT=web,worker',
+        '-sFORCE_FILESYSTEM=1',
+        '-sASYNCIFY_IMPORTS=["_emval_await","__emscripten_promise_await","emscripten_sleep","_emscripten_receive_on_main_thread_js"]',
+        '-sASYNCIFY_STACK_SIZE=1048576',
+        '-sINITIAL_MEMORY=536870912',
+        '-lGL',
+      ],
+    }}
+  endif
+
   gst_tools += {'ges-web-app': {
     'files': ges_web_app_files,
     'deps': ges_web_app_deps,
     'extra_c_args': ['-DHAVE_CONFIG_H'],
     'extra_link_args': [
-      '-sEXPORTED_RUNTIME_METHODS=stringToNewUTF8',
+      '-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,stringToNewUTF8',
       '-sEXPORTED_FUNCTIONS=_main,_free,_ges_web_app_play,_ges_web_app_pause,_ges_web_app_toggle_playback,_ges_web_app_seek,_ges_web_app_get_position,_ges_web_app_get_duration,_ges_web_app_is_playing,_ges_web_app_add_test_clip,_ges_web_app_remove_clip,_ges_web_app_add_effect,_ges_web_app_set_clip_duration,_ges_web_app_set_clip_start,_ges_web_app_get_layer_count,_ges_web_app_get_clip_count,_ges_web_app_get_clip_start,_ges_web_app_get_clip_duration,_ges_web_app_add_layer,_ges_web_app_split_clip',
       '-sMIN_WEBGL_VERSION=2',
       '-sMAX_WEBGL_VERSION=2',
       '-sFULL_ES3',
+      '-sNODE_HOST_ENV=0',
+      '-sNODERAWFS=0',
+      '-sENVIRONMENT=web,worker',
+      '-sFORCE_FILESYSTEM=1',
+      '-sASYNCIFY_IMPORTS=["_emval_await","__emscripten_promise_await","emscripten_sleep","_emscripten_receive_on_main_thread_js"]',
+      '-sASYNCIFY_STACK_SIZE=1048576',
+      '-sINITIAL_MEMORY=536870912',
+      '-lGL',
     ],
   }}
 endif

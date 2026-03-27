@@ -655,27 +655,6 @@ if building_full
     endforeach
   endif
 
-  # Build WASM sample apps
-  if host_machine.system() == 'emscripten'
-    gstweb_dep = dependency('gstweb', required: false)
-    gstemscripten_dep = dependency('gstreamer-emscripten-1.0', required: false)
-    if gstweb_dep.found() and gstemscripten_dep.found()
-      gst_wasm_subproj = subproject('gst.wasm')
-      codecs_example_src = gst_wasm_subproj.get_variable('codecs_example_src')
-      executable('codecs-example',
-        codecs_example_src,
-        dependencies: [gst_full_dep, gstemscripten_dep,
-                       dependency('gstreamer-video-1.0'),
-                       dependency('gstopengl'), dependency('gstopenal'),
-                       dependency('gstaudioconvert'), dependency('gstisomp4')],
-        link_args: [
-          '-sPTHREAD_POOL_SIZE=32', '-sINITIAL_MEMORY=536870912',
-          '-sASYNCIFY', '-sPROXY_TO_PTHREAD', '-lGL', '-sOFFSCREENCANVAS_SUPPORT',
-        ],
-        name_suffix: 'js',
-      )
-    endif
-  endif
 else # not gst_full
   foreach tool, data: all_tools
     gst_tools += tool

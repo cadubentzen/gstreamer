@@ -191,6 +191,11 @@ def main():
 
             page.on("console", on_console)
 
+            def on_pageerror(err):
+                print(f"[browser] PAGE ERROR: {err}", file=sys.stderr)
+
+            page.on("pageerror", on_pageerror)
+
             url = f"http://localhost:{port}/_gst_validate_wasm_test_{test_id}.html"
             page.goto(url)
 

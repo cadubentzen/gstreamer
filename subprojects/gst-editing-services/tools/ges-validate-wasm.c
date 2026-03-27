@@ -1,8 +1,8 @@
-/* GStreamer
+/* GStreamer Editing Services
  *
  * Copyright (C) 2025 Thibault Saunier <tsaunier@igalia.com>
  *
- * gst-validate-wasm.c - Validate runner for WASM/WebCodecs
+ * ges-validate-wasm.c - GES Validate runner for WASM/browser
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -28,26 +28,20 @@
 #include <emscripten.h>
 #include <emscripten/stack.h>
 #include <gst/gst.h>
-#include <gst/video/videooverlay.h>
 #include <gst/gl/gl.h>
 #include <gst/gl/web/gstgldisplay_web.h>
 #include <gst/validate/validate.h>
 #include <gst/validate/gst-validate-scenario.h>
 #include <gst/validate/gst-validate-utils.h>
 #include <gst/validate/gst-validate-pipeline-monitor.h>
+#include <ges/ges.h>
 
-GST_DEBUG_CATEGORY_STATIC (validate_wasm_dbg);
-#define GST_CAT_DEFAULT validate_wasm_dbg
+GST_DEBUG_CATEGORY_STATIC (ges_validate_wasm_dbg);
+#define GST_CAT_DEFAULT ges_validate_wasm_dbg
 
 static gint ret = 0;
 static GMainLoop *mainloop;
 static GstElement *pipeline;
-
-/* no extra measurement functions needed */
-
-#ifdef HAVE_RSVALIDATE
-void gst_plugin_rsvalidate_register (void);
-#endif
 
 typedef struct
 {
@@ -56,8 +50,6 @@ typedef struct
 } BusCallbackData;
 
 static GstGLDisplay *shared_gl_display = NULL;
-
-static int sync_handler_depth = 0;
 
 static GstBusSyncReply
 sync_bus_handler (GstBus * bus, GstMessage * msg, gpointer user_data)
@@ -68,14 +60,8 @@ sync_bus_handler (GstBus * bus, GstMessage * msg, gpointer user_data)
     if (g_strcmp0 (ctx_type, GST_GL_DISPLAY_CONTEXT_TYPE) == 0) {
       GstContext *ctx = gst_context_new (GST_GL_DISPLAY_CONTEXT_TYPE, TRUE);
       gst_context_set_gl_display (ctx, shared_gl_display);
-      sync_handler_depth++;
-      EM_ASM({ console.error("sync_bus_handler depth=" + $0 + " element=" + UTF8ToString($1)); },
-          sync_handler_depth, GST_OBJECT_NAME (GST_MESSAGE_SRC (msg)));
       gst_element_set_context (GST_ELEMENT (GST_MESSAGE_SRC (msg)), ctx);
-      sync_handler_depth--;
       gst_context_unref (ctx);
-      GST_DEBUG ("Provided GL display to %" GST_PTR_FORMAT,
-          GST_MESSAGE_SRC (msg));
       return GST_BUS_DROP;
     }
   }
@@ -114,6 +100,7 @@ bus_callback (GstBus * bus, GstMessage * message, gpointer data)
           dbg ? dbg : "none");
       g_clear_error (&err);
       g_free (dbg);
+      ret = -1;
       g_main_loop_quit (loop);
       break;
     }
@@ -179,6 +166,82 @@ bus_callback (GstBus * bus, GstMessage * message, gpointer data)
   }
 }
 
+static GESTimeline *
+create_timeline (gchar ** args)
+{
+  GESTimeline *timeline = NULL;
+  GESProject *project;
+  gint i;
+
+  /* Look for a project URI in args (-l <uri> or --load <uri>) */
+  for (i = 0; args[i]; i++) {
+    if ((g_strcmp0 (args[i], "-l") == 0 || g_strcmp0 (args[i], "--load") == 0)
+        && args[i + 1]) {
+      const gchar *uri = args[i + 1];
+      GST_INFO ("Loading project from %s", uri);
+      project = ges_project_new (uri);
+      timeline =
+          GES_TIMELINE (ges_asset_extract (GES_ASSET (project), NULL));
+      gst_object_unref (project);
+      if (timeline)
+        return timeline;
+      GST_ERROR ("Failed to load project from %s", uri);
+      return NULL;
+    }
+  }
+
+  /* No project specified — create a simple timeline with a test clip */
+  GST_INFO ("No project specified, creating test timeline");
+  timeline = ges_timeline_new_audio_video ();
+
+  {
+    GESLayer *layer = ges_timeline_append_layer (timeline);
+    GESClip *clip =
+        GES_CLIP (ges_test_clip_new_for_nick ((gchar *) "smpte"));
+    g_object_set (clip, "duration", (guint64) 5 * GST_SECOND, NULL);
+    ges_layer_add_clip (layer, clip);
+  }
+
+  return timeline;
+}
+
+static void
+setup_gl_display (void)
+{
+  GstGLDisplayWeb *gl_display;
+  GstContext *display_context;
+
+  gl_display = gst_gl_display_web_new ((gpointer) "#canvas");
+  shared_gl_display = GST_GL_DISPLAY (gl_display);
+  display_context = gst_context_new (GST_GL_DISPLAY_CONTEXT_TYPE, TRUE);
+  gst_context_set_gl_display (display_context, shared_gl_display);
+  gst_element_set_context (pipeline, display_context);
+  gst_context_unref (display_context);
+}
+
+static void
+configure_sinks (GESPipeline * ges_pipeline, gchar ** args)
+{
+  GstElement *videosink = NULL, *audiosink = NULL;
+  gint i;
+
+  for (i = 0; args[i]; i++) {
+    if (g_strcmp0 (args[i], "--videosink") == 0 && args[i + 1]) {
+      videosink = gst_parse_launch (args[i + 1], NULL);
+    } else if (g_strcmp0 (args[i], "--audiosink") == 0 && args[i + 1]) {
+      audiosink = gst_parse_launch (args[i + 1], NULL);
+    }
+  }
+
+  if (!videosink)
+    videosink = gst_element_factory_make ("glimagesink", NULL);
+  if (!audiosink)
+    audiosink = gst_element_factory_make ("fakesink", NULL);
+
+  ges_pipeline_preview_set_video_sink (ges_pipeline, videosink);
+  ges_pipeline_preview_set_audio_sink (ges_pipeline, audiosink);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -192,8 +255,10 @@ main (int argc, char **argv)
   GstStateChangeReturn sret;
   int rep_err;
   GstStructure *meta;
+  GESTimeline *timeline;
+  GESPipeline *ges_pipeline;
 
-  g_set_prgname ("gst-validate-" GST_API_VERSION);
+  g_set_prgname ("ges-validate-wasm-" GST_API_VERSION);
 
   {
     size_t stack_base = (size_t) emscripten_stack_get_base ();
@@ -205,27 +270,11 @@ main (int argc, char **argv)
     fflush (stdout);
   }
 
-  /* Measure V8 native stack depth on this pthread worker */
-  EM_ASM({
-    function measureJsDepth() {
-      var d = 0;
-      function f() { d++; f(); }
-      try { f(); } catch(e) {}
-      return d;
-    }
-    var jsDepth = measureJsDepth();
-    console.log("V8 JS stack depth on pthread: " + jsDepth + " frames");
-  });
-  /* empty — measurement code removed */
-
   gst_init (NULL, NULL);
-  GST_DEBUG_CATEGORY_INIT (validate_wasm_dbg, "validate-wasm", 0,
-      "GstValidate WASM runner");
+  ges_init ();
 
-
-
-  /* g_main_loop_run() uses emscripten_set_main_loop internally via the
-   * GLib ASYNCIFY patch, so no need for gst_emscripten_init(). */
+  GST_DEBUG_CATEGORY_INIT (ges_validate_wasm_dbg, "ges-validate-wasm", 0,
+      "GES Validate WASM runner");
 
   gst_validate_init_debug ();
 
@@ -240,9 +289,8 @@ main (int argc, char **argv)
 
   gst_validate_init ();
 
-#ifdef HAVE_RSVALIDATE
-  gst_plugin_rsvalidate_register ();
-#endif
+  /* Register GES-specific validate actions (add-clip, split-clip, etc.) */
+  ges_validate_register_action_types ();
 
   runner = gst_validate_runner_new ();
   if (!runner) {
@@ -250,46 +298,31 @@ main (int argc, char **argv)
     return 1;
   }
 
-  /* Create the pipeline */
-  GST_INFO ("Creating pipeline: %s", args[0]);
-  pipeline = gst_parse_launch (args[0], &err);
-  if (!pipeline) {
-    GST_ERROR ("Failed to create pipeline: %s",
-        err ? err->message : "unknown");
-    g_clear_error (&err);
+  /* Create GES timeline */
+  timeline = create_timeline (args);
+  if (!timeline) {
+    GST_ERROR ("Failed to create timeline");
     return 1;
   }
-  if (err) {
-    GST_WARNING ("Erroneous pipeline: %s", err->message);
-    g_clear_error (&err);
-  }
 
-  if (!GST_IS_PIPELINE (pipeline)) {
-    GstElement *new_pipeline = gst_pipeline_new ("");
-    gst_bin_add (GST_BIN (new_pipeline), pipeline);
-    pipeline = new_pipeline;
-  }
+  /* Create GES pipeline — set up GL display BEFORE adding timeline
+   * so all internal elements get the shared WebGL context. */
+  ges_pipeline = ges_pipeline_new ();
+  pipeline = GST_ELEMENT (ges_pipeline);
+  setup_gl_display ();
 
-  /* Provide a GL display targeting the dedicated canvas element so that
-   * glimagesink (and any GL element) creates its WebGL context on
-   * #gst-gl-canvas instead of the default #canvas. */
-  {
-    GstGLDisplayWeb *gl_display;
-    GstContext *display_context;
+  configure_sinks (ges_pipeline, args);
 
-    gl_display = gst_gl_display_web_new ((gpointer) "#canvas");
-    shared_gl_display = GST_GL_DISPLAY (gl_display);
-    display_context = gst_context_new (GST_GL_DISPLAY_CONTEXT_TYPE, TRUE);
-    gst_context_set_gl_display (display_context, shared_gl_display);
-    gst_element_set_context (pipeline, display_context);
-    gst_context_unref (display_context);
-    /* Keep gl_display alive via shared_gl_display — don't unref */
+  if (!ges_pipeline_set_timeline (ges_pipeline, timeline)) {
+    GST_ERROR ("Failed to set timeline on pipeline");
+    gst_object_unref (timeline);
+    gst_object_unref (ges_pipeline);
+    return 1;
   }
 
   gst_pipeline_set_auto_flush_bus (GST_PIPELINE (pipeline), FALSE);
 
-  /* Set a sync bus handler so NEED_CONTEXT messages are handled
-   * immediately during state changes (before the main loop runs). */
+  /* Sync bus handler for immediate GL context delivery */
   {
     GstBus *sync_bus = gst_element_get_bus (pipeline);
     gst_bus_set_sync_handler (sync_bus, sync_bus_handler, NULL, NULL);
@@ -302,9 +335,6 @@ main (int argc, char **argv)
       runner, NULL);
   gst_validate_reporter_set_handle_g_logs (GST_VALIDATE_REPORTER (monitor));
 
-  /* Disable position verbosity to avoid gst_element_query_duration()
-   * during sync bus EOS handling — the combined call depth of EOS
-   * processing + duration query exceeds Mac Chrome's V8 worker stack. */
   {
     GstValidateVerbosityFlags verbosity;
     g_object_get (monitor, "verbosity", &verbosity, NULL);
@@ -320,7 +350,7 @@ main (int argc, char **argv)
   g_signal_connect (bus, "message", (GCallback) bus_callback,
       &bus_callback_data);
 
-  GST_INFO ("Starting pipeline");
+  GST_INFO ("Starting GES pipeline");
   g_object_get (monitor, "handles-states", &monitor_handles_state, NULL);
   if (!monitor_handles_state) {
     sret = gst_element_set_state (pipeline, GST_STATE_PLAYING);
@@ -337,10 +367,6 @@ main (int argc, char **argv)
 
   g_main_loop_run (mainloop);
 
-  /* Signal result immediately after mainloop exits.
-   * Use emscripten_dispatch_to_thread_async to post to the main thread
-   * without blocking — MAIN_THREAD_ASYNC_EM_ASM may not fire if the
-   * main thread is busy processing GL proxy calls. */
   gst_validate_printf (NULL, "\n=======> Test %s (Return value: %i)\n\n",
       ret == 0 ? "PASSED" : "FAILED", ret);
 
@@ -360,7 +386,6 @@ main (int argc, char **argv)
   gst_validate_printf (NULL, "\n=======> Test %s (Return value: %i)\n\n",
       ret == 0 ? "PASSED" : "FAILED", ret);
 
-  /* Clean up */
   gst_bus_set_flushing (bus, TRUE);
   gst_bus_remove_signal_watch (bus);
   gst_object_unref (bus);
@@ -374,6 +399,7 @@ exit:
   g_strfreev (args);
 
   gst_validate_deinit ();
+  ges_deinit ();
   gst_deinit ();
 
   return ret;

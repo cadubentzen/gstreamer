@@ -15,9 +15,8 @@ gst_tools += {'gst-validate-wasm': {
     'extra_link_args': [
       '-sERROR_ON_UNDEFINED_SYMBOLS=0',
       '-sASSERTIONS=1',
-      '-sASYNCIFY',
-      '-sASYNCIFY_IMPORTS=["_emval_await","__emscripten_promise_await","emscripten_sleep"]',
-      '-sASYNCIFY_STACK_SIZE=65536',
+      '-sASYNCIFY_IMPORTS=["_emval_await","__emscripten_promise_await","emscripten_sleep","_emscripten_receive_on_main_thread_js"]',
+      '-sASYNCIFY_STACK_SIZE=1048576',
       '-sPROXY_TO_PTHREAD',
       '-sPTHREAD_POOL_SIZE=32',
       '-sINITIAL_MEMORY=536870912',

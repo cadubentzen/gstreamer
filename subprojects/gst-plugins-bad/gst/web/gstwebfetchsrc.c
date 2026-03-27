@@ -30,7 +30,7 @@
 #include <string.h>
 
 static void gst_web_fetch_src_uri_handler_init (
-    gpointer g_iface, gpointer iface_data);
+    gpointer g_iface);
 
 #define GST_TYPE_WEB_FETCH_SRC (gst_web_fetch_src_get_type ())
 #define GST_CAT_DEFAULT gst_web_fetch_src_debug
@@ -122,7 +122,7 @@ gst_web_fetch_src_urihandler_get_uri (GstURIHandler *handler)
 }
 
 static void
-gst_web_fetch_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_web_fetch_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *uri_iface = (GstURIHandlerInterface *) g_iface;
 

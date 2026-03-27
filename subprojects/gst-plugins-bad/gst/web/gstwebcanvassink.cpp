@@ -147,7 +147,7 @@ gst_web_canvas_sink_navigation_send_event (
 
 static void
 gst_web_canvas_sink_navigation_interface_init (
-    GstNavigationInterface *iface, gpointer iface_data)
+    GstNavigationInterface *iface)
 {
   iface->send_event_simple = gst_web_canvas_sink_navigation_send_event;
 }

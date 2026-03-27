@@ -743,8 +743,7 @@ gst_web_codecs_audio_decoder_finalize (GObject *object)
 
   g_mutex_clear (&self->dequeue_lock);
   g_cond_clear (&self->dequeue_cond);
-  g_queue_foreach (&self->output_buffers, (GFunc) gst_buffer_unref, NULL);
-  g_queue_clear (&self->output_buffers);
+  g_queue_clear_full (&self->output_buffers, (GDestroyNotify) gst_buffer_unref);
 
   GST_DEBUG_OBJECT (self, "End of finalize");
   G_OBJECT_CLASS (parent_class)->finalize (object);

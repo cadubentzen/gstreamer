@@ -206,7 +206,7 @@ gst_web_transport_src_urihandler_get_uri (GstURIHandler *handler)
 }
 
 static void
-gst_web_transport_src_uri_handler_init (gpointer g_iface, gpointer iface_data)
+gst_web_transport_src_uri_handler_init (gpointer g_iface)
 {
   GstURIHandlerInterface *uri_iface = (GstURIHandlerInterface *) g_iface;
 
@@ -252,7 +252,7 @@ gst_web_transport_src_transferable_transfer (GstWebTransferable *transferable,
 }
 
 static void
-gst_web_transport_src_transferable_init (gpointer g_iface, gpointer iface_data)
+gst_web_transport_src_transferable_init (gpointer g_iface)
 {
   GstWebTransferableInterface *iface = (GstWebTransferableInterface *) g_iface;
 

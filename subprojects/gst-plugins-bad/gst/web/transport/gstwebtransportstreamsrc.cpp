@@ -53,7 +53,7 @@ G_DECLARE_FINAL_TYPE (GstWebTransportStreamSrc, gst_web_transport_stream_src,
 
 static void
 gst_web_transport_stream_src_transferable_init (
-    gpointer g_iface, gpointer iface_data)
+    gpointer g_iface)
 {
 }
 

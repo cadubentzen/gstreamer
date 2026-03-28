@@ -231,7 +231,7 @@ dtrace = 'false'
 
 [libxml2:project options]
 output = 'enabled'
-tests = 'false'
+tests = 'disabled'
 
 [libffi:project options]
 tests = 'false'

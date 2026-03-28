@@ -1,0 +1,131 @@
+From f0c2429c2288a6062f128d730d65104c4fe8670a Mon Sep 17 00:00:00 2001
+From: Thibault Saunier <tsaunier@igalia.com>
+Date: Sat, 28 Mar 2026 16:07:29 +0000
+Subject: [PATCH] meson: Add option to disable tests
+
+Allow disabling tests with `-Dtests=disabled`, useful when
+cross-compiling or embedding libxml2 as a subproject where
+running tests is not needed.
+---
+ meson.build       | 88 ++++++++++++++++++++++++-----------------------
+ meson_options.txt |  6 ++++
+ 2 files changed, 51 insertions(+), 43 deletions(-)
+
+diff --git a/meson.build b/meson.build
+index 0771268..f830186 100644
+--- a/meson.build
++++ b/meson.build
+@@ -495,51 +495,53 @@ endif
+ 
+ ## testdso module
+ 
+-testdso_mod = shared_module(
+-    'testdso',
+-    files('testdso.c'),
+-    build_rpath: get_option('libdir'),
+-    include_directories: config_dir,
+-    name_prefix: '',
+-)
+-
+ ## tests
+ 
+-checks = {
+-    'runsuite': [],
+-    'runtest': threads_dep,
+-    'runxmlconf': [],
+-# Disabled for now, see #694
+-#    'testModule': [],
+-    'testapi': [],
+-    'testcatalog': [],
+-    'testchar': [],
+-    'testdict': [],
+-    'testlimits': [],
+-    'testparser': [],
+-    'testrecurse': [],
+-}
+-
+-foreach check, deps : checks
+-    exe = executable(
+-        check,
+-        files(check + '.c'),
+-        dependencies: [deps, xml_dep],
+-        include_directories: config_dir,
+-    )
+-    if check != 'testlimits'
+-        test(check, exe, timeout: 0, workdir: meson.current_source_dir())
+-    endif
+-endforeach
+-
+-add_test_setup(
+-  'valgrind',
+-  exe_wrapper: [
+-    'valgrind', '--quiet', '--leak-check=full', '--error-exitcode=1',
+-  ],
+-  # default timeout in meson is 30s
+-  timeout_multiplier: 4,
+-)
++if not get_option('tests').disabled()
++  testdso_mod = shared_module(
++      'testdso',
++      files('testdso.c'),
++      build_rpath: get_option('libdir'),
++      include_directories: config_dir,
++      name_prefix: '',
++  )
++
++  checks = {
++      'runsuite': [],
++      'runtest': threads_dep,
++      'runxmlconf': [],
++  # Disabled for now, see #694
++  #    'testModule': [],
++      'testapi': [],
++      'testcatalog': [],
++      'testchar': [],
++      'testdict': [],
++      'testlimits': [],
++      'testparser': [],
++      'testrecurse': [],
++  }
++
++  foreach check, deps : checks
++      exe = executable(
++          check,
++          files(check + '.c'),
++          dependencies: [deps, xml_dep],
++          include_directories: config_dir,
++      )
++      if check != 'testlimits'
++          test(check, exe, timeout: 0, workdir: meson.current_source_dir())
++      endif
++  endforeach
++
++  add_test_setup(
++    'valgrind',
++    exe_wrapper: [
++      'valgrind', '--quiet', '--leak-check=full', '--error-exitcode=1',
++    ],
++    # default timeout in meson is 30s
++    timeout_multiplier: 4,
++  )
++endif
+ 
+ if want_output
+     sh = find_program('sh', required: false)
+diff --git a/meson_options.txt b/meson_options.txt
+index 9bc02b3..45d6a56 100644
+--- a/meson_options.txt
++++ b/meson_options.txt
+@@ -168,3 +168,9 @@ option('minimum',
+   value: false,
+   description: 'build a minimally sized library'
+ )
++
++option('tests',
++  type: 'feature',
++  description: 'Build and run tests',
++  yield: true
++)
+-- 
+2.49.0
+

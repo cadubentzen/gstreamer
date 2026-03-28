@@ -24,8 +24,6 @@
 #include <config.h>
 #endif
 
-#include <gst/emscripten/gstemscripten.h>
-
 #include <SDL2/SDL.h>
 
 #include <gst/gst.h>
@@ -238,7 +236,7 @@ gst_sdl2_sink_setcaps (GstBaseSink * bsink, GstCaps * caps)
 
   /* Can't run twice for now */
   g_assert (self->render.queue == NULL);
-  gst_emscripten_ui_attach_callback (gst_sdl2_sink_render_mainloop, self, gst_object_unref);
+  /* TODO: SDL2 sink needs rework for emscripten without gstemscripten helper */
 
   GST_DEBUG_OBJECT (self, "Setting");
   self->info = info;
@@ -320,7 +318,7 @@ gst_sdl2_sink_stop (GstBaseSink * bsink)
 
   GST_DEBUG_OBJECT (self, "Stop");
   
-  gst_emscripten_ui_remove_callback (gst_sdl2_sink_render_mainloop, self);
+  /* TODO: SDL2 sink needs rework for emscripten without gstemscripten helper */
   g_clear_pointer (&self->render.queue, g_async_queue_unref);
 
   if (self->render.target) {

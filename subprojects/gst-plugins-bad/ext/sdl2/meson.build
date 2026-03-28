@@ -10,7 +10,7 @@ sdl2_lib = static_library('gstsdl2',
   c_args: ['-DHAVE_CONFIG_H', '-sUSE_SDL=2', '-Wall', '-Werror'],
   link_args: sdl2_lib_link_args,
   include_directories: [include_directories('.'), libinc],
-  dependencies: [gstemscripten_dep, gstvideo_dep],
+  dependencies: [gstvideo_dep],
   install: true,
   install_dir: plugins_install_dir,
 )

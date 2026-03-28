@@ -16,3 +16,7 @@ foreach plugin : ['accurip', 'adpcmdec', 'adpcmenc', 'aiff', 'asfmux',
                   'vmnc', 'y4m']
   subdir(plugin)
 endforeach
+
+if host_system == 'emscripten'
+  subdir('web')
+endif

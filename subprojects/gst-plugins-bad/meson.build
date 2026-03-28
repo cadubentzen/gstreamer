@@ -655,6 +655,11 @@ foreach plugin: plugins
   endif
 endforeach
 
+if host_system == 'emscripten'
+  gst_plugins += [gstwebplugin_dep]
+  plugin_names += ['web']
+endif
+
 summary({
     'Plugins': plugin_names,
       '(A)GPL license allowed': gpl_allowed,

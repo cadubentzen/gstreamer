@@ -27,3 +27,14 @@ subdir('wayland')
 subdir('webrtc')
 subdir('winrt')
 subdir('analytics')
+
+if host_system == 'emscripten'
+  # Variables expected by the web and emscripten meson.build files
+  # (originally defined in the gst.wasm subproject)
+  libinc = libsinc
+  common_deps = [gst_dep]
+  gst_plugins_web_args = ['-DHAVE_CONFIG_H']
+  gst_plugins_web_cpp_args = gst_plugins_web_args + ['-std=c++17']
+
+  subdir('web')
+endif

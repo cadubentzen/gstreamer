@@ -80,3 +80,7 @@ configure_file(input : 'gst-validate-launcher.in',
                configuration : tmpconf)
 
 launcher = find_program(meson.current_build_dir() + '/gst-validate-launcher')
+
+devenv = environment()
+devenv.append('PATH', meson.current_build_dir())
+meson.add_devenv(devenv)

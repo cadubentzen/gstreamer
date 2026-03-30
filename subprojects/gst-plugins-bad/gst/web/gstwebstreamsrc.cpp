@@ -26,6 +26,7 @@
 
 #include <emscripten/bind.h>
 #include <emscripten.h>
+#include <emscripten/threading.h>
 #include <gst/base/gstpushsrc.h>
 #include <stdio.h>
 #include <string.h>
@@ -60,7 +61,6 @@ typedef struct _GstWebStreamSrc
   guint queue_max_size;
   guint accumulated_data_size;
   GCond qcond;
-  GThread *fetch_thread;
   gboolean flushing;
   gint32 queue_signal; /* 0 = full (wait), 1 = has space (proceed) */
   gint64 download_start;
@@ -68,6 +68,9 @@ typedef struct _GstWebStreamSrc
   gint64 download_offset;
   gint64 content_length;
   guint32 fetch_generation;
+  gboolean fetch_active;
+  gboolean seek_pending;
+  gchar *pending_range;
 } GstWebStreamSrc;
 
 G_DECLARE_FINAL_TYPE (
@@ -105,35 +108,26 @@ gst_web_stream_src_get_size (GstBaseSrc *bsrc, guint64 *size)
 /* Forward declaration — defined as EM_JS below */
 static void gst_web_stream_src_cancel_fetch (guintptr thiz);
 
-/* Invalidate the current fetch and drain the queue.  Called from
- * create() on the streaming thread — no external locks are held
- * so the fetch thread can be safely joined. */
+/* Invalidate the current fetch and drain the queue. */
 static void
 gst_web_stream_src_reset_fetch (GstWebStreamSrc *self)
 {
-  GThread *thread;
-
   GST_OBJECT_LOCK (self);
 
-  /* Bump generation so JS callbacks become no-ops, abort the request */
+  /* Bump generation so JS callbacks become no-ops.  The AbortController
+   * for the in-flight fetch is aborted when the next fetch starts (the
+   * fetch EM_JS always aborts the previous controller for this element).
+   * We don't call cancel_fetch here because it would need to dispatch to
+   * the main thread, and an async dispatch races with start_fetch. */
   self->fetch_generation++;
-  gst_web_stream_src_cancel_fetch ((guintptr) self);
 
   self->flushing = TRUE;
   g_cond_signal (&self->qcond);
   g_atomic_int_set (&self->queue_signal, 1);
   EM_ASM ({ Atomics.notify (HEAP32, $0 >> 2, 1); }, &self->queue_signal);
 
-  thread = self->fetch_thread;
-  self->fetch_thread = NULL;
-  GST_OBJECT_UNLOCK (self);
-
-  /* Join outside the lock so the thread's EM_JS can complete */
-  if (thread)
-    g_thread_join (thread);
-
-  GST_OBJECT_LOCK (self);
   self->in_eos = FALSE;
+  self->fetch_active = FALSE;
   g_queue_clear_full (self->q, (GDestroyNotify) gst_buffer_unref);
   g_clear_pointer (&self->fetch_error, g_free);
   self->accumulated_data_size = 0;
@@ -161,6 +155,7 @@ gst_web_stream_src_do_seek (GstBaseSrc *bsrc, GstSegment *segment)
   self->download_start = segment->start;
   self->download_end =
       GST_CLOCK_TIME_IS_VALID (segment->stop) ? segment->stop : -1;
+  self->seek_pending = TRUE;
 
   return TRUE;
 }
@@ -238,6 +233,7 @@ gst_web_stream_src_eos (guintptr thiz, guint32 gen)
     return;
   }
   self->in_eos = TRUE;
+  self->fetch_active = FALSE;
   g_cond_signal (&self->qcond);
   GST_OBJECT_UNLOCK (self);
 }
@@ -261,6 +257,7 @@ gst_web_stream_src_error (guintptr thiz, guint32 gen, val vmsg)
   GST_ERROR_OBJECT (self, "Download failed: %s", msg);
   g_free (self->fetch_error);
   self->fetch_error = g_strdup (msg);
+  self->fetch_active = FALSE;
   g_cond_signal (&self->qcond);
   GST_OBJECT_UNLOCK (self);
 }
@@ -282,15 +279,24 @@ gst_web_stream_src_set_content_length (GstWebStreamSrc *self, gint64 length)
       gst_message_new_duration_changed (GST_OBJECT (self)));
 }
 
+static void
+gst_web_stream_src_set_content_length_from_js (guintptr thiz, double length)
+{
+  GstWebStreamSrc *self = (GstWebStreamSrc *) thiz;
+  gst_web_stream_src_set_content_length (self, (gint64) length);
+}
+
 EMSCRIPTEN_BINDINGS (gst_web_stream_src)
 {
   function ("gst_web_stream_src_error", &gst_web_stream_src_error);
   function ("gst_web_stream_src_eos", &gst_web_stream_src_eos);
   function ("gst_web_stream_src_chunk", &gst_web_stream_src_chunk);
+  function ("gst_web_stream_src_set_content_length_from_js",
+      &gst_web_stream_src_set_content_length_from_js);
 }
 
 // clang-format off
-EM_JS(void, gst_web_stream_src_cancel_fetch, (guintptr thiz), {
+EM_JS(void, gst_web_stream_src_cancel_fetch_js, (guintptr thiz), {
     if (Module._fetchControllers && Module._fetchControllers[thiz]) {
         Module._fetchControllers[thiz].abort();
         delete Module._fetchControllers[thiz];
@@ -298,19 +304,30 @@ EM_JS(void, gst_web_stream_src_cancel_fetch, (guintptr thiz), {
 });
 // clang-format on
 
-// clang-format off
-EM_JS(double, gst_web_stream_src_head_content_length, (const char* url), {
-      var xhr = new XMLHttpRequest();
-      xhr.open('HEAD', UTF8ToString(url), false);
-      xhr.send();
-      var cl = xhr.getResponseHeader('Content-Length');
-      return cl ? parseInt(cl, 10) : -1;
-});
+/* Dispatch cancel to the main thread where _fetchControllers lives.
+ * Use async dispatch to avoid deadlocks — cancel_fetch may be called
+ * with GST_OBJECT_LOCK held, and the main thread's chunk callback
+ * also takes that lock. */
+static void
+gst_web_stream_src_cancel_fetch (guintptr thiz)
+{
+  emscripten_async_run_in_main_runtime_thread (
+      EM_FUNC_SIG_VI, gst_web_stream_src_cancel_fetch_js, thiz);
+}
 
-EM_JS(void, gst_web_stream_fetch, (guintptr thiz, const char* url, const char *range, guintptr signal_addr, guint32 generation), {
+/* The fetch must run on the main browser thread because the streaming
+ * pthread blocks in g_cond_wait after calling this, preventing promise
+ * callbacks from firing on that thread's microtask queue.
+ *
+ * We use EM_JS + emscripten_async_run_in_main_runtime_thread to
+ * dispatch the fetch to the main thread without blocking. */
+
+// clang-format off
+EM_JS(void, gst_web_stream_src_fetch_on_main, (const char* url, guintptr thiz, guintptr signal_addr, guint32 generation, const char *range), {
       const fetchUrl = UTF8ToString (url);
       const signalIdx = signal_addr >> 2;
       const gen = generation;
+      const rangeStr = range ? UTF8ToString (range) : null;
 
       /* Set up an AbortController so we can cancel this fetch */
       if (!Module._fetchControllers) Module._fetchControllers = {};
@@ -319,16 +336,21 @@ EM_JS(void, gst_web_stream_fetch, (guintptr thiz, const char* url, const char *r
       const abortCtrl = new AbortController();
       Module._fetchControllers[thiz] = abortCtrl;
 
-      const options = range ?
-      {
-          headers: { 'Range': UTF8ToString (range) },
-          signal: abortCtrl.signal
+      var options = { signal: abortCtrl.signal };
+      if (rangeStr) {
+          options.headers = { 'Range': rangeStr };
       }
-      : { signal: abortCtrl.signal };
 
       // Fetch data using the Streams API
       fetch(fetchUrl, options)
-        .then(response => response.body)
+        .then(response => {
+             // Extract Content-Length from response headers
+             const cl = response.headers.get('Content-Length');
+             if (cl) {
+               Module.gst_web_stream_src_set_content_length_from_js(thiz, parseInt(cl, 10));
+             }
+             return response.body;
+        })
         .then(async (rs) => {
              const reader = rs.getReader ();
              try {
@@ -363,7 +385,7 @@ EM_JS(void, gst_web_stream_fetch, (guintptr thiz, const char* url, const char *r
             if (fetchError.name === 'AbortError') return;
             Module.gst_web_stream_src_error (thiz, gen, fetchError.toString());
         });
-   });
+});
 // clang-format on
 
 static GstURIType
@@ -446,21 +468,14 @@ gst_web_stream_src_init (GstWebStreamSrc *self)
   self->download_offset = 0;
 }
 
-static gpointer
-gst_web_stream_fetch_thread (gpointer data)
+static void
+gst_web_stream_src_start_fetch (GstWebStreamSrc *self)
 {
-  GstWebStreamSrc *self = GST_WEB_STREAM_SRC (data);
-
-  GST_INFO_OBJECT (self, "Start fetching from %s", self->uri);
-  if (self->download_start != -1) {
-    GST_INFO_OBJECT (self,
-        "Range [%" GST_TIME_FORMAT " -- %" GST_TIME_FORMAT "]",
-        GST_TIME_ARGS (self->download_start),
-        GST_TIME_ARGS (self->download_end));
-  }
-
   gchar *range;
   gint64 s = self->download_start, e = self->download_end;
+
+  GST_INFO_OBJECT (self, "Start fetching from %s (offset %" G_GINT64_FORMAT ")",
+      self->uri, s);
 
   if (s != -1 && e != -1) {
      range = g_strdup_printf ("bytes=%" G_GINT64_FORMAT "-%" G_GINT64_FORMAT, s, e);
@@ -470,18 +485,23 @@ gst_web_stream_fetch_thread (gpointer data)
      range = NULL;
   }
 
-  /* Get file size via a HEAD request before starting the streaming
-   * fetch.  This runs on a worker thread so synchronous XHR is fine. */
-  if (s <= 0) {
-    double cl = gst_web_stream_src_head_content_length (self->uri);
-    if (cl > 0)
-      gst_web_stream_src_set_content_length (self, (gint64) cl);
-  }
-
-  gst_web_stream_fetch ((guintptr) self, self->uri, range,
-      (guintptr) &self->queue_signal, self->fetch_generation);
-  g_free (range);
-  return NULL;
+  /* Fire the async JS fetch on the main browser thread.  We must use
+   * async dispatch because sync dispatch deadlocks with the GStreamer
+   * seek flow (main thread calls unlock() which waits for create() to
+   * return, but create() is blocked waiting for the main thread).
+   *
+   * String lifetime: self->uri lives as long as the element.  range is
+   * stored in self->pending_range so it survives until the main thread
+   * reads it via UTF8ToString. */
+  g_free (self->pending_range);
+  self->pending_range = range;    /* takes ownership, freed on next call */
+  self->fetch_active = TRUE;
+  emscripten_async_run_in_main_runtime_thread (
+      EM_FUNC_SIG_VIIIII,
+      gst_web_stream_src_fetch_on_main,
+      self->uri, (guintptr) self,
+      (guintptr) &self->queue_signal, self->fetch_generation,
+      self->pending_range);
 }
 
 static GstFlowReturn
@@ -492,25 +512,34 @@ gst_web_stream_src_create (GstPushSrc *psrc, GstBuffer **outbuf)
   if (G_UNLIKELY (self->flushing))
     return GST_FLOW_FLUSHING;
 
-  /* If a seek changed download_start, tear down the old fetch and
-   * start a new one at the requested offset — like souphttpsrc. */
-  if (self->fetch_thread &&
-      self->download_offset != self->download_start) {
+  /* If do_seek was called, cancel the current fetch and start a new
+   * one at the requested offset — like souphttpsrc. */
+  if (self->seek_pending) {
     GST_DEBUG_OBJECT (self,
-        "Seek detected (offset %" G_GINT64_FORMAT " != start %"
-        G_GINT64_FORMAT "), restarting fetch",
-        self->download_offset, self->download_start);
-    gst_web_stream_src_reset_fetch (self);
+        "Seek pending (start %" G_GINT64_FORMAT "), restarting fetch",
+        self->download_start);
+    self->seek_pending = FALSE;
+    self->in_eos = FALSE;
+    if (self->fetch_active)
+      gst_web_stream_src_reset_fetch (self);
   }
 
-  if (!self->fetch_thread) {
-    gchar *thr_name =
-        g_strdup_printf ("%s_fetch_thread", GST_OBJECT_NAME (self));
+  if (!self->fetch_active && !self->in_eos) {
+    /* No active fetch and not at EOS — start a new fetch.
+     * Drain any leftover buffers from a previous fetch (e.g. after a
+     * seek) BEFORE starting the new fetch.  start_fetch dispatches
+     * synchronously to the main thread and the first chunk callback
+     * may fire before it returns — clearing after would lose data. */
+    if (!g_queue_is_empty (self->q)) {
+      g_queue_clear_full (self->q, (GDestroyNotify) gst_buffer_unref);
+      self->accumulated_data_size = 0;
+    }
     self->download_offset = self->download_start;
-    self->fetch_thread =
-        g_thread_new (thr_name, gst_web_stream_fetch_thread, self);
-
-    g_free (thr_name);
+    g_clear_pointer (&self->fetch_error, g_free);
+    /* Bump generation so any pending EOS/chunk/error callbacks from
+     * the previous fetch are ignored by their generation check. */
+    self->fetch_generation++;
+    gst_web_stream_src_start_fetch (self);
   }
 
   GST_OBJECT_LOCK (self);
@@ -625,6 +654,7 @@ gst_web_stream_src_finalize (GObject *obj)
 
   gst_web_stream_src_reset_fetch (self);
   g_free (self->uri);
+  g_free (self->pending_range);
   g_cond_clear (&self->qcond);
   g_queue_clear_full (self->q, (GDestroyNotify) gst_buffer_unref);
   g_queue_free (self->q);

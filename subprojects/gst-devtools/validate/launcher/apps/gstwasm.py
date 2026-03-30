@@ -30,6 +30,8 @@ class GstWasmTest(Test):
             "--media-root", self.media_root,
             "--src-dir", self.src_dir,
         )
+        if not self.options.mute:
+            self.add_arguments("--unmute")
 
     def get_subproc_env(self):
         env = super().get_subproc_env()
@@ -51,10 +53,6 @@ class GstWasmTestsManager(TestsManager):
         return True
 
     def set_settings(self, options, args, reporter):
-        # WASM browser tests need a display for WebGL2 support.
-        # Force --no-display (which starts Xvfb) when no DISPLAY is set.
-        if not os.environ.get("DISPLAY"):
-            options.no_display = True
         super().set_settings(options, args, reporter)
 
     def populate_testsuite(self):

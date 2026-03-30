@@ -98,6 +98,7 @@ class Xvfb(VirtualFrameBufferServer):
                 printc("ERROR", Colors.FAIL)
                 self._process.terminate()
                 self._process = None
+                return (False, "Xvfb did not start properly")
         except Exception as ex:
             return (False, "Could not launch %s %s\n"
                     "Make sure Xvfb is installed" % (self._command, ex))

@@ -304,7 +304,7 @@ invalid_format:
 }
 
 static GstEvent *
-translate_outgoing_segment (NleObject * object, NlePadPrivate * priv,
+translate_outgoing_segment (NleObject * object, NleGhostPad * priv,
     GstEvent * event)
 {
   const GstSegment *orig;
@@ -450,7 +450,7 @@ internalpad_event_function (GstPad * internal, GstObject * parent,
     case GST_PAD_SRC:{
       switch (GST_EVENT_TYPE (event)) {
         case GST_EVENT_SEGMENT:
-          event = translate_outgoing_segment (object, priv, event);
+          event = translate_outgoing_segment (object, nle_ghost, event);
           break;
         case GST_EVENT_EOS:
           break;
@@ -762,7 +762,7 @@ ghostpad_query_function (GstPad * ghostpad, GstObject * parent,
         gst_segment_free (input_segment);
 
         /* Forward the query upstream with the updated segment */
-        pret = priv->queryfunc (ghostpad, parent, query);
+        pret = nle_ghost->ghostpad_queryfunc (ghostpad, parent, query);
 
         GST_DEBUG_OBJECT (ghostpad,
             "Returning from nle-query-source-segment query with result %d",

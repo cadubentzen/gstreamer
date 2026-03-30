@@ -251,7 +251,7 @@ static gint private_offset = 0;
 #define META_TAG_VIDEO meta_tag_video_quark
 static GQuark meta_tag_video_quark;
 
-static void gst_video_encoder_class_init (GstVideoEncoderClass * klass);
+static void gst_video_encoder_class_init (GstVideoEncoderClass * klass, gpointer class_data G_GNUC_UNUSED);
 static void gst_video_encoder_init (GstVideoEncoder * enc,
     GstVideoEncoderClass * klass);
 
@@ -333,7 +333,7 @@ gst_video_encoder_load_preset (GstPreset * preset, const gchar * name)
 }
 
 static void
-gst_video_encoder_preset_interface_init (GstPresetInterface * iface)
+gst_video_encoder_preset_interface_init (GstPresetInterface * iface, gpointer iface_data G_GNUC_UNUSED)
 {
   parent_load_preset = iface->load_preset;
   g_assert (parent_load_preset);
@@ -424,7 +424,7 @@ gst_video_encoder_get_property (GObject * object, guint prop_id, GValue * value,
 }
 
 static void
-gst_video_encoder_class_init (GstVideoEncoderClass * klass)
+gst_video_encoder_class_init (GstVideoEncoderClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
@@ -547,7 +547,7 @@ gst_video_encoder_reset (GstVideoEncoder * encoder, gboolean hard)
     priv->tags_merge_mode = GST_TAG_MERGE_APPEND;
     priv->tags_changed = FALSE;
 
-    g_list_foreach (priv->headers, (GFunc) gst_event_unref, NULL);
+    g_list_foreach (priv->headers, g_destroy_notify_to_func, (GDestroyNotify) gst_event_unref);
     g_list_free (priv->headers);
     priv->headers = NULL;
     priv->new_headers = FALSE;
@@ -683,8 +683,7 @@ gst_video_encoder_set_headers (GstVideoEncoder * video_encoder, GList * headers)
 
   GST_DEBUG_OBJECT (video_encoder, "new headers %p", headers);
   if (video_encoder->priv->headers) {
-    g_list_foreach (video_encoder->priv->headers, (GFunc) gst_buffer_unref,
-        NULL);
+    g_list_foreach (video_encoder->priv->headers, g_destroy_notify_to_func, (GDestroyNotify) gst_buffer_unref);
     g_list_free (video_encoder->priv->headers);
   }
   video_encoder->priv->headers = headers;

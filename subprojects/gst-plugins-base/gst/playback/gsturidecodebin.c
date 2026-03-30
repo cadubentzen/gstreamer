@@ -144,7 +144,7 @@ struct _GstURIDecodeBinClass
   /* signal fired when a autoplugged element that is not linked downstream
    * or exposed wants to query something */
     gboolean (*autoplug_query) (GstElement * element, GstPad * pad,
-      GstQuery * query);
+      GstElement * child, GstQuery * query);
 
   /* emitted when all data is decoded */
   void (*drained) (GstElement * element);
@@ -407,7 +407,7 @@ gst_uri_decode_bin_autoplug_select (GstElement * element, GstPad * pad,
 
 static gboolean
 gst_uri_decode_bin_autoplug_query (GstElement * element, GstPad * pad,
-    GstQuery * query)
+    GstElement * child G_GNUC_UNUSED, GstQuery * query)
 {
   /* No query handled here */
   return FALSE;

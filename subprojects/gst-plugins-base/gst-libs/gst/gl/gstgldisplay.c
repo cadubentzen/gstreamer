@@ -132,8 +132,9 @@ _unlock_main_thread (GstGLDisplay * display)
 }
 
 static gpointer
-_event_thread_main (GstGLDisplay * display)
+_event_thread_main (gpointer data)
 {
+  GstGLDisplay *display = data;
   g_mutex_lock (&display->priv->thread_lock);
 
   display->main_context = g_main_context_new ();
@@ -199,7 +200,7 @@ gst_gl_display_init (GstGLDisplay * display)
   g_mutex_init (&display->priv->window_lock);
 
   display->priv->event_thread = g_thread_new ("gldisplay-event",
-      (GThreadFunc) _event_thread_main, display);
+      _event_thread_main, display);
 
   g_mutex_lock (&display->priv->thread_lock);
   while (!display->main_loop)

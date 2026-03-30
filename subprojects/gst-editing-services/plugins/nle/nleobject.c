@@ -932,7 +932,7 @@ nle_object_change_state (GstElement * element, GstStateChange transition)
             && !NLE_OBJECT_IS_COMPOSITION (NLE_OBJECT (element))) {
           GST_INFO ("Adding nleobject to something that is not a composition,"
               " commiting ourself");
-          nle_object_commit (NLE_OBJECT (element), FALSE, NULL);
+          nle_object_commit (NLE_OBJECT (element), FALSE);
         }
 
         gst_object_unref (parent);
@@ -987,8 +987,7 @@ nle_object_set_commit_needed (NleObject * object)
 }
 
 gboolean
-nle_object_commit (NleObject * object, gboolean recurse,
-    gpointer user_data G_GNUC_UNUSED)
+nle_object_commit (NleObject * object, gboolean recurse)
 {
   gboolean ret;
 

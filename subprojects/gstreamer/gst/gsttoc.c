@@ -302,7 +302,7 @@ gst_toc_entry_new (GstTocEntryType type, const gchar * uid)
 static void
 gst_toc_free (GstToc * toc)
 {
-  //g_list_foreach (toc->entries, (GFunc) gst_mini_object_unref, NULL);
+  //g_list_foreach (toc->entries, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   //g_list_free (toc->entries);
   g_list_free_full (toc->entries, (GDestroyNotify) gst_mini_object_unref);
 
@@ -321,7 +321,7 @@ gst_toc_entry_free (GstTocEntry * entry)
 {
   g_return_if_fail (entry != NULL);
 
-  //g_list_foreach (entry->subentries, (GFunc) gst_mini_object_unref, NULL);
+  //g_list_foreach (entry->subentries, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   //g_list_free (entry->subentries);
   g_list_free_full (entry->subentries, (GDestroyNotify) gst_mini_object_unref);
 

@@ -5048,8 +5048,9 @@ pause:
  * It just sends any seek events queued by the streaming thread.
  */
 static gpointer
-gst_ogg_demux_loop_push (GstOggDemux * ogg)
+gst_ogg_demux_loop_push (gpointer data)
 {
+  GstOggDemux *ogg = data;
   GstEvent *event = NULL;
 
   g_mutex_lock (&ogg->seek_event_mutex);
@@ -5187,7 +5188,7 @@ gst_ogg_demux_sink_activate_mode (GstPad * sinkpad, GstObject * parent,
         ogg->seek_event_thread_stop = FALSE;
         ogg->seek_thread_started = FALSE;
         ogg->seek_event_thread = g_thread_new ("seek_event_thread",
-            (GThreadFunc) gst_ogg_demux_loop_push, gst_object_ref (ogg));
+            gst_ogg_demux_loop_push, gst_object_ref (ogg));
         /* And wait for the thread to start.
          * FIXME : This is hackish. And one wonders why we need a separate thread to
          * seek to a certain offset */

@@ -687,7 +687,7 @@ _free_seek_data (SeekData * seekd)
   g_free (seekd);
 }
 
-static NleCompositionUpdateResult
+static void
 _seek_pipeline_func (NleComposition * comp, SeekData * seekd)
 {
   gdouble rate;
@@ -806,8 +806,6 @@ _seek_pipeline_func (NleComposition * comp, SeekData * seekd)
   if (!initializing_stack && !preparing_toplevel_seek)
     _post_start_composition_update_done (seekd->comp,
         gst_event_get_seqnum (seekd->event), COMP_UPDATE_STACK_ON_SEEK);
-
-  return res;
 }
 
 /*  Must be called with OBJECTS_LOCK taken */
@@ -851,7 +849,7 @@ _commit_values (NleComposition * comp)
   NleCompositionPrivate *priv = comp->priv;
 
   for (tmp = priv->objects_start; tmp; tmp = tmp->next) {
-    if (nle_object_commit (tmp->data, TRUE, NULL))
+    if (nle_object_commit (tmp->data, TRUE))
       commited = TRUE;
   }
 
@@ -908,15 +906,12 @@ _initialize_stack_func (NleComposition * comp, UpdateCompositionData * ucompo)
      * reason is correctly set to COMP_UPDATE_STACK_INITIALIZE */
     gst_event_replace (&priv->awaited_toplevel_seek, stack_setup_seek);
 
-    NleCompositionUpdateResult res = _seek_pipeline_func (comp, seekd);
+    _seek_pipeline_func (comp, seekd);
     _free_seek_data (seekd);
 
-    if (res != NLE_COMPOSITION_UPDATE_SEEK_FROM_PARENT) {
-      gst_clear_event (&priv->awaited_toplevel_seek);
-    }
+    gst_clear_event (&priv->awaited_toplevel_seek);
 
-    GST_FIXME_OBJECT (comp, "Handle result?");
-    return TRUE;
+    return;
   } else {
     comp->priv->next_base_time = 0;
     if (toplevel_seqnum != GST_SEQNUM_INVALID) {
@@ -3476,7 +3471,7 @@ update_start_stop_duration (NleComposition * comp)
       GST_INFO_OBJECT (comp, "RE-setting all expandables duration and commit");
       for (tmp = priv->expandables; tmp; tmp = tmp->next) {
         g_object_set (tmp->data, "duration", obj->stop, NULL);
-        nle_object_commit (NLE_OBJECT (tmp->data), FALSE, NULL);
+        nle_object_commit (NLE_OBJECT (tmp->data), FALSE);
       }
     }
 
@@ -4266,7 +4261,7 @@ _nle_composition_add_object (NleComposition * comp, NleObject * object)
         "duration", (GstClockTimeDiff) NLE_OBJECT_STOP (comp), NULL);
 
     GST_INFO_OBJECT (object, "Used as expandable, commiting now");
-    nle_object_commit (NLE_OBJECT (object), FALSE, NULL);
+    nle_object_commit (NLE_OBJECT (object), FALSE);
   }
 
   /* ...and add it to the hash table */

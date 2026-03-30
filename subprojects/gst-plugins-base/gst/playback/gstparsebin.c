@@ -3005,9 +3005,10 @@ gst_parse_group_hide (GstParseGroup * group)
  *
  * Not MT-safe, call with parent's chain lock!
  */
-static void
-gst_parse_chain_free_hidden_groups (GList * old_groups)
+static gpointer
+gst_parse_chain_free_hidden_groups (gpointer data)
 {
+  GList *old_groups = data;
   GList *l;
 
   for (l = old_groups; l; l = l->next) {
@@ -3016,6 +3017,7 @@ gst_parse_chain_free_hidden_groups (GList * old_groups)
     gst_parse_group_free (group);
   }
   g_list_free (old_groups);
+  return NULL;
 }
 
 static void
@@ -3039,7 +3041,7 @@ gst_parse_chain_start_free_hidden_groups_thread (GstParseChain * chain)
 
   chain->old_groups = NULL;
   thread = g_thread_try_new ("free-hidden-groups",
-      (GThreadFunc) gst_parse_chain_free_hidden_groups, old_groups, &error);
+      gst_parse_chain_free_hidden_groups, old_groups, &error);
   if (!thread || error) {
     GST_ERROR ("Failed to start free-hidden-groups thread: %s",
         error ? error->message : "unknown reason");

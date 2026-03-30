@@ -58,9 +58,9 @@ enum
 static GESTrackElement *_create_track_element (GESClip
     * self, GESTrackType type);
 static void _child_added (GESContainer * container,
-    GESTimelineElement * element, gpointer user_data);
+    GESTimelineElement * element);
 static void _child_removed (GESContainer * container,
-    GESTimelineElement * element, gpointer user_data);
+    GESTimelineElement * element);
 
 /* Internal methods */
 static void
@@ -305,8 +305,7 @@ ges_transition_clip_init (GESTransitionClip * self)
 }
 
 static void
-_child_removed (GESContainer * container, GESTimelineElement * element,
-    gpointer user_data G_GNUC_UNUSED)
+_child_removed (GESContainer * container, GESTimelineElement * element)
 {
   GESTransitionClipPrivate *priv = GES_TRANSITION_CLIP (container)->priv;
 
@@ -318,12 +317,11 @@ _child_removed (GESContainer * container, GESTimelineElement * element,
   }
   /* call parent method */
   GES_CONTAINER_CLASS (ges_transition_clip_parent_class)->child_removed
-      (container, element, NULL);
+      (container, element);
 }
 
 static void
-_child_added (GESContainer * container, GESTimelineElement * element,
-    gpointer user_data G_GNUC_UNUSED)
+_child_added (GESContainer * container, GESTimelineElement * element)
 {
   GESTransitionClipPrivate *priv = GES_TRANSITION_CLIP (container)->priv;
 
@@ -341,7 +339,7 @@ _child_added (GESContainer * container, GESTimelineElement * element,
   }
   /* call parent method */
   GES_CONTAINER_CLASS (ges_transition_clip_parent_class)->child_added
-      (container, element, NULL);
+      (container, element);
 }
 
 static GESTrackElement *

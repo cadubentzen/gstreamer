@@ -730,7 +730,7 @@ ges_container_add (GESContainer * container, GESTimelineElement * child)
   /* copy to use at end, since container->children may have child
    * added to it */
   current_children = g_list_copy_deep (container->children,
-      (GCopyFunc) gst_object_ref, NULL);
+      gst_object_ref_copy_func, NULL);
   for (tmp = current_children; tmp; tmp = tmp->next)
     g_object_freeze_notify (G_OBJECT (tmp->data));
   g_object_freeze_notify (G_OBJECT (child));
@@ -848,7 +848,7 @@ ges_container_remove (GESContainer * container, GESTimelineElement * child)
   /* copy to use at end, since container->children may have child
    * removed from it */
   current_children = g_list_copy_deep (container->children,
-      (GCopyFunc) gst_object_ref, NULL);
+      gst_object_ref_copy_func, NULL);
   for (tmp = current_children; tmp; tmp = tmp->next)
     g_object_freeze_notify (G_OBJECT (tmp->data));
 
@@ -902,7 +902,7 @@ _get_children_recursively (GESContainer * container, GList ** children)
 
   *children =
       g_list_concat (*children, g_list_copy_deep (container->children,
-          (GCopyFunc) gst_object_ref, NULL));
+          gst_object_ref_copy_func, NULL));
 
   for (tmp = container->children; tmp; tmp = tmp->next) {
     GESTimelineElement *element = tmp->data;
@@ -938,7 +938,7 @@ ges_container_get_children (GESContainer * container, gboolean recursive)
 
   if (!recursive)
     children = g_list_copy_deep (container->children,
-        (GCopyFunc) gst_object_ref, NULL);
+        gst_object_ref_copy_func, NULL);
   else
     _get_children_recursively (container, &children);
 
@@ -1063,7 +1063,7 @@ ges_container_group (GList * containers)
    * ->grouping_priority is private? */
   children_types = g_type_children (GES_TYPE_CONTAINER, &n_children);
   g_sort_array (children_types, n_children, sizeof (GType),
-      (GCompareDataFunc) compare_grouping_prio, NULL);
+      g_compare_func_to_compare_data_func, compare_grouping_prio);
 
   for (i = 0; i < n_children; i++) {
     clip_class = g_type_class_peek (children_types[i]);

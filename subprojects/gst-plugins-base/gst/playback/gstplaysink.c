@@ -855,8 +855,7 @@ gst_play_sink_dispose (GObject * object)
 
   playsink->stream_synchronizer = NULL;
 
-  g_list_foreach (playsink->colorbalance_channels, (GFunc) gst_object_unref,
-      NULL);
+  g_list_foreach (playsink->colorbalance_channels, g_destroy_notify_to_func, (GDestroyNotify) g_object_unref);
   g_list_free (playsink->colorbalance_channels);
   playsink->colorbalance_channels = NULL;
 

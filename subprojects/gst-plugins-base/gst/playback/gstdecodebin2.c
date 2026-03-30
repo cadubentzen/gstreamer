@@ -220,7 +220,7 @@ struct _GstDecodeBinClass
   /* signal fired when a autoplugged element that is not linked downstream
    * or exposed wants to query something */
     gboolean (*autoplug_query) (GstElement * element, GstPad * pad,
-      GstQuery * query);
+      GstElement * child, GstQuery * query);
 
   /* fired when the last group is drained */
   void (*drained) (GstElement * element);
@@ -310,7 +310,7 @@ static GValueArray *gst_decode_bin_autoplug_sort (GstElement * element,
 static GstAutoplugSelectResult gst_decode_bin_autoplug_select (GstElement *
     element, GstPad * pad, GstCaps * caps, GstElementFactory * factory);
 static gboolean gst_decode_bin_autoplug_query (GstElement * element,
-    GstPad * pad, GstQuery * query);
+    GstPad * pad, GstElement * child, GstQuery * query);
 
 static void gst_decode_bin_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec);
@@ -1516,7 +1516,7 @@ gst_decode_bin_autoplug_select (GstElement * element, GstPad * pad,
 
 static gboolean
 gst_decode_bin_autoplug_query (GstElement * element, GstPad * pad,
-    GstQuery * query)
+    GstElement * child G_GNUC_UNUSED, GstQuery * query)
 {
   /* No query handled here */
   return FALSE;
@@ -3734,9 +3734,10 @@ gst_decode_group_hide (GstDecodeGroup * group)
  *
  * Not MT-safe, call with parent's chain lock!
  */
-static void
-gst_decode_chain_free_hidden_groups (GList * old_groups)
+static gpointer
+gst_decode_chain_free_hidden_groups (gpointer data)
 {
+  GList *old_groups = data;
   GList *l;
 
   for (l = old_groups; l; l = l->next) {
@@ -3745,6 +3746,7 @@ gst_decode_chain_free_hidden_groups (GList * old_groups)
     gst_decode_group_free (group);
   }
   g_list_free (old_groups);
+  return NULL;
 }
 
 static void
@@ -3778,7 +3780,7 @@ gst_decode_chain_start_free_hidden_groups_thread (GstDecodeChain * chain)
   }
 
   thread = g_thread_try_new ("free-hidden-groups",
-      (GThreadFunc) gst_decode_chain_free_hidden_groups, old_groups, &error);
+      gst_decode_chain_free_hidden_groups, old_groups, &error);
   if (!thread || error) {
     GST_ERROR ("Failed to start free-hidden-groups thread: %s",
         error ? error->message : "unknown reason");

@@ -239,9 +239,10 @@ ges_discoverer_manager_class_init (GESDiscovererManagerClass * klass)
       G_TYPE_ERROR);
 }
 
-static void
-ges_discoverer_manager_cleanup_discoverers (GESDiscovererManager * self)
+static gpointer
+ges_discoverer_manager_cleanup_discoverers (gpointer data)
 {
+  GESDiscovererManager *self = data;
   while (TRUE) {
     GHashTableIter iter;
     GESDiscovererData *discoverer_data;
@@ -254,7 +255,7 @@ ges_discoverer_manager_cleanup_discoverers (GESDiscovererManager * self)
     g_mutex_unlock (&self->cleanup_thread_mutex);
 
     if (self->finalized) {
-      return;
+      return NULL;
     }
 
     g_rec_mutex_lock (&self->lock);
@@ -276,7 +277,7 @@ ges_discoverer_manager_cleanup_discoverers (GESDiscovererManager * self)
     g_rec_mutex_unlock (&self->lock);
 
     if (not_discovering) {
-      return;
+      return NULL;
     }
   }
 }
@@ -412,7 +413,7 @@ ges_discoverer_start_cleanup_thread_if_needed (GESDiscovererManager * self)
   g_rec_mutex_lock (&self->lock);
   if (!self->cleanup_thread) {
     self->cleanup_thread = g_thread_new ("ges-discoverer-manager-cleanup",
-        (GThreadFunc) ges_discoverer_manager_cleanup_discoverers, self);
+        ges_discoverer_manager_cleanup_discoverers, self);
   }
   g_rec_mutex_unlock (&self->lock);
 

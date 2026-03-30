@@ -699,7 +699,7 @@ ges_layer_get_clips (GESLayer * layer)
   }
 
   res = g_list_sort (g_list_copy_deep (layer->priv->clips_start,
-          (GCopyFunc) gst_object_ref, NULL),
+          gst_object_ref_copy_func, NULL),
       (GCompareFunc) element_start_compare);
   _UNLOCK (layer);
 

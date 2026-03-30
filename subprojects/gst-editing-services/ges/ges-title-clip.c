@@ -66,9 +66,9 @@ static GESTrackElement
     * ges_title_clip_create_track_element (GESClip * clip, GESTrackType type);
 
 static void _child_added (GESContainer * container,
-    GESTimelineElement * element, gpointer user_data);
+    GESTimelineElement * element);
 static void _child_removed (GESContainer * container,
-    GESTimelineElement * element, gpointer user_data);
+    GESTimelineElement * element);
 
 static void
 ges_title_clip_get_property (GObject * object, guint property_id,
@@ -748,8 +748,7 @@ ges_title_clip_get_ypos (GESTitleClip * self)
 }
 
 static void
-_child_removed (GESContainer * container, GESTimelineElement * element,
-    gpointer user_data G_GNUC_UNUSED)
+_child_removed (GESContainer * container, GESTimelineElement * element)
 {
   GESTitleClipPrivate *priv = GES_TITLE_CLIP (container)->priv;
 
@@ -761,12 +760,11 @@ _child_removed (GESContainer * container, GESTimelineElement * element,
   }
 
   GES_CONTAINER_CLASS (ges_title_clip_parent_class)->child_removed (container,
-      element, NULL);
+      element);
 }
 
 static void
-_child_added (GESContainer * container, GESTimelineElement * element,
-    gpointer user_data G_GNUC_UNUSED)
+_child_added (GESContainer * container, GESTimelineElement * element)
 {
   GESTitleClipPrivate *priv = GES_TITLE_CLIP (container)->priv;
 
@@ -777,7 +775,7 @@ _child_added (GESContainer * container, GESTimelineElement * element,
   }
 
   GES_CONTAINER_CLASS (ges_title_clip_parent_class)->child_added (container,
-      element, NULL);
+      element);
 }
 
 static GESTrackElement *

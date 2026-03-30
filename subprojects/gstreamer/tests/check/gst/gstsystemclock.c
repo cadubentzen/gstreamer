@@ -118,8 +118,9 @@ GST_END_TEST;
 
 static gboolean
 test_async_full_slave_callback (GstClock * master, GstClockTime time,
-    GstClockID id, GstClock * clock)
+    GstClockID id, gpointer user_data)
 {
+  GstClock *clock = user_data;
   GstClockTime stime, mtime;
   gdouble r_squared;
 
@@ -166,7 +167,7 @@ GST_START_TEST (test_async_full)
   clockid = gst_clock_new_periodic_id (master,
       gst_clock_get_time (master), gst_clock_get_timeout (slave));
   gst_clock_id_wait_async (clockid,
-      (GstClockCallback) test_async_full_slave_callback,
+      test_async_full_slave_callback,
       gst_object_ref (slave), (GDestroyNotify) gst_object_unref);
 
   /* wait for the shot to be fired and test_async_full_slave_callback to be

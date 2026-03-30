@@ -284,7 +284,7 @@
  *   g_list_free (targets);
  * }
  *
- * g_list_foreach (categories, (GFunc) g_free, NULL);
+ * g_list_foreach (categories, g_destroy_notify_to_func, (GDestroyNotify) g_free);
  * g_list_free (categories);
  *
  * ...

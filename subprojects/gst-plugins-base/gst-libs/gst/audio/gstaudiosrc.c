@@ -179,9 +179,10 @@ typedef guint (*ReadFunc)
  * pointer.
  * The start/stop methods control the thread.
  */
-static void
-audioringbuffer_thread_func (GstAudioRingBuffer * buf)
+static gpointer
+audioringbuffer_thread_func (gpointer data)
 {
+  GstAudioRingBuffer *buf = data;
   GstAudioSrc *src;
   GstAudioSrcClass *csrc;
   GstAudioSrcRingBuffer *abuf = GST_AUDIO_SRC_RING_BUFFER (buf);
@@ -263,13 +264,13 @@ audioringbuffer_thread_func (GstAudioRingBuffer * buf)
 
   /* Will never be reached */
   g_assert_not_reached ();
-  return;
+  return NULL;
 
   /* ERROR */
 no_function:
   {
     GST_DEBUG ("no write function, exit thread");
-    return;
+    return NULL;
   }
 stop_running:
   {
@@ -286,7 +287,7 @@ stop_running:
 
     if (G_UNLIKELY (!__gst_audio_restore_thread_priority (handle)))
       GST_WARNING_OBJECT (src, "failed to restore thread priority");
-    return;
+    return NULL;
   }
 }
 
@@ -397,7 +398,7 @@ gst_audio_src_ring_buffer_acquire (GstAudioRingBuffer * buf,
 
   /* FIXME: handle thread creation failure */
   src->thread = g_thread_try_new ("audiosrc-ringbuffer",
-      (GThreadFunc) audioringbuffer_thread_func, buf, NULL);
+      audioringbuffer_thread_func, buf, NULL);
 
   GST_AUDIO_SRC_RING_BUFFER_WAIT (buf);
 

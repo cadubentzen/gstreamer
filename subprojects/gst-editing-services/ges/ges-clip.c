@@ -2042,8 +2042,7 @@ _remove_child (GESContainer * container, GESTimelineElement * element)
 }
 
 static void
-_child_added (GESContainer * container, GESTimelineElement * element,
-    gpointer user_data G_GNUC_UNUSED)
+_child_added (GESContainer * container, GESTimelineElement * element)
 {
   GESClip *self = GES_CLIP (container);
 
@@ -2062,8 +2061,7 @@ _child_added (GESContainer * container, GESTimelineElement * element,
 }
 
 static void
-_child_removed (GESContainer * container, GESTimelineElement * element,
-    gpointer user_data G_GNUC_UNUSED)
+_child_removed (GESContainer * container, GESTimelineElement * element)
 {
   GESClip *self = GES_CLIP (container);
 

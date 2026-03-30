@@ -375,9 +375,9 @@ enum
 static GstElementClass *parent_class = NULL;
 static gint base_parse_private_offset = 0;
 
-static void gst_base_parse_class_init (GstBaseParseClass * klass);
+static void gst_base_parse_class_init (GstBaseParseClass * klass, gpointer class_data G_GNUC_UNUSED);
 static void gst_base_parse_init (GstBaseParse * parse,
-    GstBaseParseClass * klass);
+    GstBaseParseClass * bclass);
 
 GType
 gst_base_parse_get_type (void)
@@ -487,32 +487,31 @@ static void gst_base_parse_push_pending_events (GstBaseParse * parse);
 static void
 gst_base_parse_clear_queues (GstBaseParse * parse)
 {
-  g_slist_foreach (parse->priv->buffers_queued, (GFunc) gst_buffer_unref, NULL);
+  g_slist_foreach (parse->priv->buffers_queued, g_destroy_notify_to_func, (GDestroyNotify) gst_buffer_unref);
   g_slist_free (parse->priv->buffers_queued);
   parse->priv->buffers_queued = NULL;
-  g_slist_foreach (parse->priv->buffers_pending, (GFunc) gst_buffer_unref,
-      NULL);
+  g_slist_foreach (parse->priv->buffers_pending, g_destroy_notify_to_func, (GDestroyNotify) gst_buffer_unref);
   g_slist_free (parse->priv->buffers_pending);
   parse->priv->buffers_pending = NULL;
-  g_slist_foreach (parse->priv->buffers_head, (GFunc) gst_buffer_unref, NULL);
+  g_slist_foreach (parse->priv->buffers_head, g_destroy_notify_to_func, (GDestroyNotify) gst_buffer_unref);
   g_slist_free (parse->priv->buffers_head);
   parse->priv->buffers_head = NULL;
-  g_slist_foreach (parse->priv->buffers_send, (GFunc) gst_buffer_unref, NULL);
+  g_slist_foreach (parse->priv->buffers_send, g_destroy_notify_to_func, (GDestroyNotify) gst_buffer_unref);
   g_slist_free (parse->priv->buffers_send);
   parse->priv->buffers_send = NULL;
 
-  g_list_foreach (parse->priv->detect_buffers, (GFunc) gst_buffer_unref, NULL);
+  g_list_foreach (parse->priv->detect_buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_buffer_unref);
   g_list_free (parse->priv->detect_buffers);
   parse->priv->detect_buffers = NULL;
   parse->priv->detect_buffers_size = 0;
 
   g_queue_foreach (&parse->priv->queued_frames,
-      (GFunc) gst_base_parse_frame_free, NULL);
+      g_destroy_notify_to_func, (GDestroyNotify) gst_base_parse_frame_free);
   g_queue_clear (&parse->priv->queued_frames);
 
   gst_buffer_replace (&parse->priv->cache, NULL);
 
-  g_list_foreach (parse->priv->pending_events, (GFunc) gst_event_unref, NULL);
+  g_list_foreach (parse->priv->pending_events, g_destroy_notify_to_func, (GDestroyNotify) gst_event_unref);
   g_list_free (parse->priv->pending_events);
   parse->priv->pending_events = NULL;
 
@@ -538,7 +537,7 @@ gst_base_parse_finalize (GObject * object)
 }
 
 static void
-gst_base_parse_class_init (GstBaseParseClass * klass)
+gst_base_parse_class_init (GstBaseParseClass * klass, gpointer class_data G_GNUC_UNUSED)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
@@ -894,8 +893,7 @@ gst_base_parse_reset (GstBaseParse * parse)
 
   parse->priv->skip = 0;
 
-  g_list_foreach (parse->priv->pending_events, (GFunc) gst_mini_object_unref,
-      NULL);
+  g_list_foreach (parse->priv->pending_events, g_destroy_notify_to_func, (GDestroyNotify) gst_mini_object_unref);
   g_list_free (parse->priv->pending_events);
   parse->priv->pending_events = NULL;
 
@@ -904,7 +902,7 @@ gst_base_parse_reset (GstBaseParse * parse)
     parse->priv->cache = NULL;
   }
 
-  g_slist_foreach (parse->priv->pending_seeks, (GFunc) g_free, NULL);
+  g_slist_foreach (parse->priv->pending_seeks, g_destroy_notify_to_func, (GDestroyNotify) g_free);
   g_slist_free (parse->priv->pending_seeks);
   parse->priv->pending_seeks = NULL;
 
@@ -923,7 +921,7 @@ gst_base_parse_reset (GstBaseParse * parse)
 
   parse->priv->first_buffer = TRUE;
 
-  g_list_foreach (parse->priv->detect_buffers, (GFunc) gst_buffer_unref, NULL);
+  g_list_foreach (parse->priv->detect_buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_buffer_unref);
   g_list_free (parse->priv->detect_buffers);
   parse->priv->detect_buffers = NULL;
   parse->priv->detect_buffers_size = 0;
@@ -3236,8 +3234,7 @@ gst_base_parse_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer)
         GST_DEBUG_OBJECT (parse, "Draining but did not detect format yet");
         return GST_FLOW_ERROR;
       } else if (parse->priv->flushing) {
-        g_list_foreach (parse->priv->detect_buffers, (GFunc) gst_buffer_unref,
-            NULL);
+        g_list_foreach (parse->priv->detect_buffers, g_destroy_notify_to_func, (GDestroyNotify) gst_buffer_unref);
         g_list_free (parse->priv->detect_buffers);
         parse->priv->detect_buffers = NULL;
         parse->priv->detect_buffers_size = 0;

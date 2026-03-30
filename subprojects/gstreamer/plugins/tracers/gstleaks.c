@@ -846,8 +846,9 @@ unlock_mutex (gpointer data)
 }
 
 static gpointer
-gst_leaks_tracer_signal_thread (struct signal_thread_data *data)
+gst_leaks_tracer_signal_thread (gpointer data_ptr)
 {
+  struct signal_thread_data *data = data_ptr;
   static GMainContext *signal_ctx;
   GSource *source1, *source2, *unlock_source;
 
@@ -929,7 +930,7 @@ gst_leaks_tracer_setup_signals (GstLeaksTracer * leaks)
     g_mutex_init (&data.lock);
     g_cond_init (&data.cond);
     signal_thread = g_thread_new ("gstleak-signal",
-        (GThreadFunc) gst_leaks_tracer_signal_thread, &data);
+        gst_leaks_tracer_signal_thread, &data);
 
     g_mutex_lock (&data.lock);
     while (!data.ready)

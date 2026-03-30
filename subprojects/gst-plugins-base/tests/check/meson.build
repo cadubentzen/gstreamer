@@ -33,8 +33,7 @@ base_tests = [
   [ 'libs/xmpwriter.c' ],
   [ 'elements/adder.c', get_option('adder').disabled()],
   [ 'elements/appsink.c', get_option('app').disabled()],
-  # WASM: appsrc test hangs due to threading limitations
-  [ 'elements/appsrc.c', get_option('app').disabled() or host_machine.system() == 'emscripten'],
+  [ 'elements/appsrc.c', get_option('app').disabled()],
   [ 'elements/audioconvert.c', get_option('audioconvert').disabled()],
   [ 'elements/audiointerleave.c', get_option('audiomixer').disabled()],
   [ 'elements/audiomixer.c', get_option('audiomixer').disabled(), [ gst_controller_dep ] ],
@@ -59,7 +58,7 @@ base_tests = [
   [ 'pipelines/simple-launch-lines.c' ],
   [ 'pipelines/basetime.c' ],
   [ 'pipelines/capsfilter-renegotiation.c' ],
-  [ 'pipelines/gio.c', host_machine.system() == 'emscripten' ],
+  [ 'pipelines/gio.c' ],
   [ 'pipelines/streamsynchronizer.c' ],
 ]
 

@@ -118,6 +118,7 @@ VALGRIND_BLACKLIST = [
     (r'check.gst-libav.generic_plugin_test', '?'),
     (r'check.gst-libav.generic_libavcodec_locking', '?'),
     (r'check.gst-libav.elements_avdemux_ape', '?'),
+    (r'check.gst-editing-services.check_edit_in_frames_with_framerate_mismatch', 'Massive external library leaks (PipeWire, ALSA, OpenAL) during audio sink autodetection'),
     (r'check.gst-editing-services.pythontests', 'Need to figure out how to introduce python suppressions'),
     (r'check.gst-editing-services.check_keyframes_in_compositor_two_sources', 'Valgrind exit with an exitcode 20 but shows no issue: https://gitlab.freedesktop.org/thiblahute/gst-editing-services/-/jobs/4079972'),
     (r'check.gst-plugins-good.elements_splitmuxsrc.test_splitmuxsrc_sparse_streams', 'https://gitlab.freedesktop.org/gstreamer/gstreamer/-/issues/739'),
@@ -128,10 +129,6 @@ VALGRIND_BLACKLIST = [
 ]
 
 BLACKLIST = [
-    (r'check.gst-editing-services.check_keyframes_in_compositor_two_sources', '!!! FIX BEFORE UPSTREAMING !!! Timeout - deadlock in test clock'),
-    (r'check.gst-editing-services.glvideomixer_exposed_properties', '!!! FIX BEFORE UPSTREAMING !!! glvideomixer not used (compositor has higher rank)'),
-    (r'check.gst-editing-services.validate.nle.no_update_for_1sec_paused_scrubing', '!!! FIX BEFORE UPSTREAMING !!! Timeout + flow expectation mismatch'),
-    (r'check.gst-editing-services.validate.nle.uridecodepoolsrc_new_stack_no_seek', '!!! FIX BEFORE UPSTREAMING !!! Timeout'),
     (r'check.gstreamer.gst_gstsystemclock.test_stress_cleanup_unschedule', 'flaky under high server load'),
     (r'check.gstreamer.gst_gstsystemclock.test_stress_reschedule', 'flaky under high server load'),
     (r'check.gstreamer.pipelines_seek.test_loopback_2$', '?'),
@@ -176,13 +173,10 @@ BLACKLIST = [
     (r'check.gstreamer-sharp.SdpTests$', 'https://gitlab.freedesktop.org/gstreamer/gstreamer/-/issues/801'),
     (r'check.gst-devtools.validate.launcher_tests.test_validate.launch_pipeline.not_negotiated.caps_query_failure.play_15s$', '?'),
     (r'check.gst-editing-services.nle_simple.test_one_bin_after_other$', 'https://gitlab.freedesktop.org/gstreamer/gstreamer/-/issues/802'),
-    (r'check.gstreamer-vaapi.*$', 'only run the tests explicitly'),
     (r'check.gst-rtsp-server.gst_rtspserver.test_multiple_transports', 'https://gitlab.freedesktop.org/gstreamer/gstreamer/-/issues/767'),
 ]
 
 CI_BLACKLIST = [
-    (r'check.gst-plugins-bad.elements_vk*', 'Mesa in the CI image is older, will start passing once we update to llvm16 and mesa 23.1'),
-    (r'check.gst-plugins-bad.libs_vk*', 'Mesa in the CI image is older, will start passing once we update to llvm16 and mesa 23.1'),
     (r'check.gst-plugins-good.elements_souphttpsrc2.test_icy_stream', 'flaky in valgrind, leaks in CI but not locally'),
 ]
 
@@ -270,6 +264,58 @@ KNOWN_ISSUES = {
 }
 
 
+EMSCRIPTEN_KNOWN_ISSUES = {
+    "Emscripten WASM flaky timeouts — thread startup overhead": {
+        "tests": [
+            "check.gst-plugins-base.elements_inputselector.stress_test",
+            "check.gstreamer.libs_collectpads.test_collect_twice",
+            "check.gstreamer.pipelines_cleanup.test_pipeline_unref",
+            "check.gstreamer.gst_gstpipeline.test_async_state_change_empty",
+            "check.gst-plugins-base.libs_rtphdrext.rtp_header_ext_write",
+        ],
+        "issues": [
+            {
+                'returncode': None,
+                'sometimes': True,
+            },
+            {
+                'returncode': 1,
+                'sometimes': True,
+            },
+        ],
+    },
+}
+
+EMSCRIPTEN_BLACKLIST = [
+    # _fd_sync / filesystem operations crash with PROXY_TO_PTHREAD
+    (r'vpx:validate_rtcd\.', 'RTCD header validation not applicable on emscripten'),
+    (r'gst-editing-services.ges_group.test_group_serialization', '_fd_sync crash with PROXY_TO_PTHREAD'),
+    (r'gst-editing-services.ges_project.test_project_add_properties', '_fd_sync crash with PROXY_TO_PTHREAD'),
+    (r'gst-editing-services.ges_project.test_project_auto_transition', '_fd_sync crash with PROXY_TO_PTHREAD'),
+    (r'gst-editing-services.ges_project.test_project_load_xges', '_fd_sync crash with PROXY_TO_PTHREAD'),
+    (r'gstreamer.elements_filesink.test_seeking', '_fd_sync not supported'),
+    (r'gstreamer.gst_gstdeinit\.', 'deinit thread mismatch with PROXY_TO_PTHREAD'),
+    (r'gst-editing-services.ges_negative.test_inconsistent_init_deinit_thread', 'deinit thread mismatch with PROXY_TO_PTHREAD'),
+    # Threading limitations
+    (r'gst-plugins-base.elements_appsrc\.', 'appsrc hangs due to threading limitations'),
+    # Missing libraries / plugins
+    (r'gst-plugins-base.elements_playbin.test_missing_primary_decoder', 'no decoder available on emscripten'),
+    (r'gst-editing-services.ges_overlays\.', 'pango not available on emscripten'),
+    (r'gst-editing-services.ges_titles\.', 'pango not available on emscripten'),
+    (r'gst-editing-services.ges_clip.test_children_property_bindings_with_rate_effects', 'pango not available'),
+    (r'gst-editing-services.ges_clip.test_convert_time', 'pango not available'),
+    (r'gst-editing-services.ges_clip.test_duration_limit', 'pango not available'),
+    (r'gst-editing-services.ges_clip.test_rate_effects_duration_limit', 'pango not available'),
+    (r'gst-editing-services.ges_effects.test_move_time_effect', 'pango not available'),
+    (r'gst-editing-services.ges_clip.test_copy_paste_children_properties', 'timecodestamper not available'),
+    (r'gst-editing-services.nle_tempochange\.', 'soundtouch not available on emscripten'),
+    (r'gst-editing-services.ges_uriclip.test_filesource_images', 'PNG decoder not available'),
+    # Unsupported syscalls / APIs
+    (r'gst-plugins-base.libs_pbutils.test_pb_utils_install_plugins', 'getpwuid_r not available on emscripten'),
+    (r'gst-plugins-base.pipelines_gio\.', 'GIO streams not working on emscripten'),
+]
+
+
 def setup_tests(test_manager, options):
     if options.gst_check_leak_trace_testnames == 'known-not-leaky':
         options.gst_check_leak_trace_testnames = KNOWN_NOT_LEAKY
@@ -281,6 +327,9 @@ def setup_tests(test_manager, options):
 
     if 'CI_COMMIT_SHA' in os.environ:
         test_manager.set_default_blacklist(CI_BLACKLIST)
+
+    test_manager.emscripten_blacklist = EMSCRIPTEN_BLACKLIST
+    test_manager.emscripten_known_issues = EMSCRIPTEN_KNOWN_ISSUES
 
     test_manager.add_expected_issues(KNOWN_ISSUES)
 

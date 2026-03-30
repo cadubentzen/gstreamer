@@ -15,7 +15,7 @@ core_tests = [
   [ 'gst/gstcaps.c' ],
   [ 'gst/gstcapsfeatures.c' ],
   [ 'gst/gstdatetime.c' ],
-  [ 'gst/gstdeinit.c', host_machine.system() == 'emscripten' ],
+  [ 'gst/gstdeinit.c' ],
   [ 'gst/gstdevice.c' ],
   [ 'gst/gstelement.c', not gst_registry or not gst_parse],
   [ 'gst/gstelementfactory.c', not gst_registry ],

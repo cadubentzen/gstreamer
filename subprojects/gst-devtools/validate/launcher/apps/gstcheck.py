@@ -308,39 +308,6 @@ class MesonTestsManager(TestsManager):
         return sublauncher_tests
 
 
-# Tests known to fail on emscripten/WASM due to missing libraries,
-# unsupported syscalls, or platform limitations.  Detected by checking
-# whether the test binary is a .js file (emscripten output).
-# Format: suite_name or suite_name.test_case_name
-EMSCRIPTEN_KNOWN_ISSUES = {
-    # Network/socket tests — emscripten has no Unix/TCP socket support
-    'elements_multifdsink', 'elements_multisocketsink', 'pipelines_tcp',
-    'libs_rtspconnection',
-    # Missing pango library — textoverlay, titles, overlays need pango
-    # (requires fontconfig, freetype, harfbuzz — not available for WASM)
-    'ges_overlays', 'ges_titles',
-    'ges_clip.test_children_property_bindings_with_rate_effects',
-    'ges_clip.test_convert_time',
-    'ges_clip.test_duration_limit',
-    'ges_clip.test_rate_effects_duration_limit',
-    'ges_effects.test_move_time_effect',
-    # Missing timecodestamper plugin
-    'ges_clip.test_copy_paste_children_properties',
-    # Missing soundtouch library (pitch element)
-    'nle_tempochange',
-    # No PNG decoder element in static plugin set
-    'ges_uriclip.test_filesource_images',
-    # getpwuid_r not available on emscripten
-    'libs_pbutils.test_pb_utils_install_plugins',
-    # ges_deinit thread mismatch with PROXY_TO_PTHREAD
-    'ges_negative.test_inconsistent_init_deinit_thread',
-    # GIO stream not working on emscripten
-    'pipelines_gio.test_memory_stream',
-    # RTP header extension timeout
-    'libs_rtphdrext.rtp_header_ext_write',
-}
-
-
 class GstCheckTestsManager(MesonTestsManager):
     name = "check"
 
@@ -560,27 +527,15 @@ class GstCheckTestsManager(MesonTestsManager):
                     )
                 )
             elif not gst_tests:
-                is_wasm = self._get_test_binary(test).endswith('.js')
-                if is_wasm:
-                    suite_name = name.split('.')[-1] if '.' in name else name
-                    if suite_name in EMSCRIPTEN_KNOWN_ISSUES:
-                        continue
                 child_env = self.get_child_env(name)
                 self.add_test(GstCheckTest(name, self.options, self.reporter, test,
                                            child_env))
             else:
-                is_wasm = self._get_test_binary(test).endswith('.js')
                 for ltest in gst_tests:
                     name = self.get_test_name(test) + '.' + ltest
                     child_env = self.get_child_env(name, ltest)
                     t = GstCheckTest(name, self.options, self.reporter, test,
                                      child_env)
-                    if is_wasm:
-                        suite_name = name.split('.')[-2] if '.' in name else ''
-                        full_id = suite_name + '.' + ltest
-                        if (suite_name in EMSCRIPTEN_KNOWN_ISSUES
-                                or full_id in EMSCRIPTEN_KNOWN_ISSUES):
-                            continue
                     self.add_test(t)
         self.save_tests_info()
         self._registered = True

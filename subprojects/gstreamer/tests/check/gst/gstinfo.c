@@ -660,7 +660,7 @@ GST_START_TEST (info_context_log_periodic)
 
 #ifdef __EMSCRIPTEN__
   /* Emscripten logging overhead can exceed 10ms per call */
-  interval = 250;
+  gint interval G_GNUC_UNUSED = 250;
 #endif
 
   GST_LOG_CONTEXT_INIT (ctx, GST_LOG_CONTEXT_FLAG_THROTTLE, {

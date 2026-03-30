@@ -218,8 +218,9 @@ introspection = 'disabled'
 [gst-plugins-rs:project options]
 auto_plugin_features = 'disabled'
 tracers = 'enabled'
-isobmff = 'enabled'
+fmp4 = 'enabled'
 validate = 'enabled'
+threadshare = 'disabled'
 
 [glib:project options]
 libmount = 'disabled'
@@ -230,8 +231,9 @@ introspection = 'disabled'
 dtrace = 'false'
 
 [libxml2:project options]
-output = 'enabled'
+output = 'true'
 tests = 'disabled'
+python = 'false'
 
 [libffi:project options]
 tests = 'false'

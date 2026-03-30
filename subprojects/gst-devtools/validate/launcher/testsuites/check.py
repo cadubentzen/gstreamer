@@ -313,6 +313,9 @@ EMSCRIPTEN_BLACKLIST = [
     # Unsupported syscalls / APIs
     (r'gst-plugins-base.libs_pbutils.test_pb_utils_install_plugins', 'getpwuid_r not available on emscripten'),
     (r'gst-plugins-base.pipelines_gio\.', 'GIO streams not working on emscripten'),
+    # Timeouts — WASM thread startup overhead
+    (r'gst-plugins-base.elements_subparse\.', 'consistent timeout on emscripten'),
+    (r'gst-plugins-base.elements_overlaycomposition\.', 'consistent timeout on emscripten'),
 ]
 
 

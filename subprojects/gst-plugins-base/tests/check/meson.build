@@ -260,6 +260,7 @@ if host_machine.system() == 'emscripten'
       env.set('GST_CHECKS_IGNORE', 'audiodecoder_plc_on_gap_event_with_delay')
     elif fname == 'libs/videodecoder.c'
       env.set('GST_CHECKS_IGNORE', 'videodecoder_backwards_buffer_after_segment')
+      test_timeout = 6 * 60
     elif fname == 'libs/rtpbasedepayload.c'
       env.set('GST_CHECKS_IGNORE', 'rtp_base_depayload_multiple_exts')
     elif fname == 'generic/states.c'

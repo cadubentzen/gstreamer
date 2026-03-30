@@ -8264,7 +8264,7 @@ register_action_types (void)
       },
       {
         .name="features-rank",
-        .description=g_bytes_get_data (meta_features_rank_doc, NULL),
+        .description=META_DOC_DATA (meta_features_rank_doc),
         .mandatory = FALSE,
         .types = "bool",
         .possible_variables = NULL,

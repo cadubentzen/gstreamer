@@ -235,5 +235,8 @@ output = 'true'
 tests = 'disabled'
 python = 'false'
 
+[libpng:project options]
+tests = 'false'
+
 [libffi:project options]
 tests = 'false'

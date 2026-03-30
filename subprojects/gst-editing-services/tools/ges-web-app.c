@@ -144,8 +144,8 @@ bus_message_cb (GstBus * bus, GstMessage * message, gpointer user_data)
         GstState old_state, new_state;
         gst_message_parse_state_changed (message, &old_state, &new_state, NULL);
         gst_print ("Pipeline state: %s -> %s\n",
-            gst_state_get_name (old_state),
-            gst_state_get_name (new_state));
+            gst_element_state_get_name (old_state),
+            gst_element_state_get_name (new_state));
       }
       break;
     default:

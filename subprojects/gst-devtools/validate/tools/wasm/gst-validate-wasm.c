@@ -130,8 +130,8 @@ bus_callback (GstBus * bus, GstMessage * message, gpointer data)
         gst_message_parse_state_changed (message, &oldstate, &newstate,
             &pending);
         GST_DEBUG ("State changed (old: %s, new: %s, pending: %s)",
-            gst_state_get_name (oldstate),
-            gst_state_get_name (newstate), gst_state_get_name (pending));
+            gst_element_state_get_name (oldstate),
+            gst_element_state_get_name (newstate), gst_element_state_get_name (pending));
       }
       break;
     case GST_MESSAGE_BUFFERING:

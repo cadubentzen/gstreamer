@@ -1,7 +1,7 @@
 [wrap-git]
 directory = glib
 url = https://gitlab.gnome.org/thiblahute/glib.git
-revision = gst.wasm
+revision = gst.wasm.2.88.0
 depth = 1
 
 [provide]

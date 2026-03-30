@@ -2402,7 +2402,7 @@ update_requested_selection (GstDecodebin3 * dbin,
   if (tmp) {
     /* Finally set the requested selection */
     new_collection->requested_selection =
-        g_list_copy_deep (tmp, (GCopyFunc) g_strdup, NULL);
+        g_list_copy_deep (tmp, g_strdup_copy_func, NULL);
     new_collection->posted_streams_selected_msg = FALSE;
     g_list_free (tmp);
   }

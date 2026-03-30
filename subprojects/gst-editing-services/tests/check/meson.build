@@ -67,6 +67,9 @@ if host_machine.system() == 'emscripten'
     '-sNODERAWFS',
     '-sPTHREAD_POOL_SIZE=0',
     '-sMIN_WEBGL_VERSION=1',
+    # Exclude large test functions from ASYNCIFY instrumentation to avoid
+    # V8's "local count too large" compilation error.
+    '-sASYNCIFY_REMOVE=test_can_set_duration_limit,test_rate_effects_duration_limit,test_children_max_duration,test_convert_time,test_adding_children_to_track,test_duration_limit',
   ]
 endif
 

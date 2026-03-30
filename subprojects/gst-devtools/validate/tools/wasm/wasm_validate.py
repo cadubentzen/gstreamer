@@ -9,14 +9,13 @@ import argparse
 import http.server
 import json
 import os
-import socketserver
 import sys
 import threading
 import uuid
 
 
 class COOPCOEPHandler(http.server.SimpleHTTPRequestHandler):
-    """HTTP handler that adds COOP/COEP headers for SharedArrayBuffer."""
+    """HTTP handler that adds COOP/COEP headers and Range request support."""
 
     def __init__(self, *args, builddir=None, media_root=None,
                  src_dir=None, **kwargs):
@@ -31,6 +30,48 @@ class COOPCOEPHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache")
         super().end_headers()
 
+    def do_GET(self):
+        """Handle GET with Range request support for seeking."""
+        range_header = self.headers.get("Range")
+        if not range_header:
+            return super().do_GET()
+
+        path = self.translate_path(self.path)
+        try:
+            f = open(path, "rb")
+        except OSError:
+            self.send_error(404, "File not found")
+            return
+
+        try:
+            file_size = os.fstat(f.fileno()).st_size
+            # Parse "bytes=start-end" or "bytes=start-"
+            range_spec = range_header.replace("bytes=", "")
+            parts = range_spec.split("-")
+            start = int(parts[0]) if parts[0] else 0
+            end = int(parts[1]) if parts[1] else file_size - 1
+            end = min(end, file_size - 1)
+            length = end - start + 1
+
+            self.send_response(206)
+            self.send_header("Content-Type", self.guess_type(path))
+            self.send_header("Content-Length", str(length))
+            self.send_header("Content-Range",
+                             f"bytes {start}-{end}/{file_size}")
+            self.send_header("Accept-Ranges", "bytes")
+            self.end_headers()
+
+            f.seek(start)
+            remaining = length
+            while remaining > 0:
+                chunk = f.read(min(remaining, 65536))
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+                remaining -= len(chunk)
+        finally:
+            f.close()
+
     def translate_path(self, path):
         if path.startswith("/media/"):
             return os.path.join(self.media_root, path[len("/media/"):])
@@ -43,9 +84,31 @@ class COOPCOEPHandler(http.server.SimpleHTTPRequestHandler):
         pass  # Suppress HTTP logs
 
 
-class ThreadedHTTPServer(socketserver.ThreadingMixIn,
-                         http.server.HTTPServer):
+class PoolHTTPServer(http.server.HTTPServer):
+    """HTTP server using a fixed thread pool to avoid thread exhaustion
+    from aborted fetch requests accumulating handler threads."""
     allow_reuse_address = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        import concurrent.futures
+        self._pool = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+
+    def process_request(self, request, client_address):
+        self._pool.submit(self.process_request_thread, request,
+                          client_address)
+
+    def process_request_thread(self, request, client_address):
+        try:
+            self.finish_request(request, client_address)
+        except Exception:
+            self.handle_error(request, client_address)
+        finally:
+            self.shutdown_request(request)
+
+    def server_close(self):
+        super().server_close()
+        self._pool.shutdown(wait=False)
 
 
 def make_handler(builddir, media_root, src_dir):
@@ -67,13 +130,21 @@ def generate_test_html(test_content, port, ws_server=None, uuid=None):
     pre_run_lines.append(
         f'FS.writeFile("/test.validatetest", {test_content_json});')
 
-    # Set environment variables
+    # Set environment variables via ENV object (plain JS strings)
     if ws_server:
         pre_run_lines.append(
-            f'ENV["GST_VALIDATE_SERVER"] = allocateUTF8("{ws_server}");')
+            f'ENV.GST_VALIDATE_SERVER = "{ws_server}";')
     if uuid:
         pre_run_lines.append(
-            f'ENV["GST_VALIDATE_UUID"] = allocateUTF8("{uuid}");')
+            f'ENV.GST_VALIDATE_UUID = "{uuid}";')
+
+    # Propagate GStreamer debug env vars from host environment
+    for env_var in ['GST_DEBUG', 'GST_DEBUG_FILE', 'GST_DEBUG_NO_COLOR']:
+        val = os.environ.get(env_var)
+        if val:
+            val_json = json.dumps(val)
+            pre_run_lines.append(
+                f'ENV["{env_var}"] = {val_json};')
 
     pre_run_js = "\n                ".join(pre_run_lines)
 
@@ -136,11 +207,13 @@ def main():
                         help="Test UUID for IPC")
     parser.add_argument("--timeout", type=int, default=60,
                         help="Test timeout in seconds")
+    parser.add_argument("--unmute", action="store_true", default=False,
+                        help="Run browser in headful (visible) mode")
     args = parser.parse_args()
 
     # Start HTTP server
     handler = make_handler(args.builddir, args.media_root, args.src_dir)
-    httpd = ThreadedHTTPServer(("localhost", 0), handler)
+    httpd = PoolHTTPServer(("localhost", 0), handler)
     port = httpd.server_address[1]
 
     http_thread = threading.Thread(target=httpd.serve_forever,
@@ -166,7 +239,7 @@ def main():
 
         with sync_playwright() as p:
             browser = p.chromium.launch(
-                headless=True,
+                headless=not args.unmute,
                 args=[
                     "--no-sandbox",
                     "--enable-features=SharedArrayBuffer",

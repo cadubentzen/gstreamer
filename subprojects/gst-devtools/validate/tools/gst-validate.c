@@ -74,7 +74,7 @@ typedef struct
   GstValidateMonitor *monitor;
 } BusCallbackData;
 
-static gboolean
+static void
 bus_callback (GstBus * bus, GstMessage * message, gpointer data)
 {
   BusCallbackData *bus_callback_data = data;
@@ -209,8 +209,6 @@ bus_callback (GstBus * bus, GstMessage * message, gpointer data)
     default:
       break;
   }
-
-  return TRUE;
 }
 
 static gboolean

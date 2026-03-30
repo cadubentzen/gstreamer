@@ -331,7 +331,7 @@ class GstCheckTestsManager(MesonTestsManager):
                 return last_touched, []
             elif test_info[0] == 0:
                 return True
-            elif test_info[0] == last_touched:
+            elif test_info[0] == last_touched and test_info[1]:
                 return True
         except FileNotFoundError:
             return None

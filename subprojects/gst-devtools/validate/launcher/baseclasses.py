@@ -733,7 +733,7 @@ class Test(Loggable):
 
         self.server_command = self.launch_server()
         self.queue = queue
-        self.command = [self.application]
+        self.command = shlex.split(self.application)
         self._starting_time = time.time()
         self.build_arguments()
         self.proc_env = self.get_subproc_env()
@@ -1484,7 +1484,7 @@ class GstValidateEncodingTestInterface(object):
         """ % (reference_file_uri, self.dest_file)
         pipeline_desc = pipeline_desc.replace("\n", "")
 
-        command = [GstValidateBaseTestManager.COMMAND] + \
+        command = GstValidateBaseTestManager.COMMAND.split(" ") + \
             shlex.split(pipeline_desc)
         msg = "## Running IQA tests on results of: " \
             + "%s\n### Command: \n```\n%s\n```\n" % (
@@ -2553,8 +2553,8 @@ class ScenarioManager(Loggable):
         logs = open(log_path, 'w')
 
         try:
-            command = [GstValidateBaseTestManager.COMMAND,
-                       "--scenarios-defs-output-file", scenario_defs]
+            command = GstValidateBaseTestManager.COMMAND.split(" ") + \
+                ["--scenarios-defs-output-file", scenario_defs]
             command.extend(scenario_paths)
             subprocess.check_call(command, stdout=logs, stderr=logs)
         except subprocess.CalledProcessError as e:
@@ -2640,7 +2640,10 @@ class GstValidateBaseTestManager(TestsManager):
                              'MEDIA_CHECK_': 'gst-validate-media-check',
                              'RTSP_SERVER_': 'gst-validate-rtsp-server',
                              'INSPECT_': 'gst-inspect'}.items():
-            setattr(cls, varname + 'COMMAND', which(cmd + '-1.0', extra_paths))
+            found = which(cmd + '-1.0', extra_paths)
+            if found and found.endswith('.js'):
+                found = "node " + found
+            setattr(cls, varname + 'COMMAND', found)
 
     @classmethod
     def has_feature(cls, featurename):

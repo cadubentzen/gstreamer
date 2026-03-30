@@ -151,6 +151,10 @@ def which(name, extra_path=None):
             pext = p + e
             if os.access(pext, os.X_OK):
                 return pext
+        # Emscripten/WASM builds produce .js files that aren't executable
+        js = p + '.js'
+        if os.path.isfile(js):
+            return js
     return None
 
 

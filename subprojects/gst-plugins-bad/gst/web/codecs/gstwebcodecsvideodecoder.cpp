@@ -304,9 +304,14 @@ gst_web_codecs_video_decoder_on_error (guintptr self_, val error)
   GstWebCodecsVideoDecoder *self = (GstWebCodecsVideoDecoder *) self_;
   std::string msg = error["message"].as<std::string> ();
 
-  GST_ERROR_OBJECT (self, "WebCodecs error: %s", msg.c_str ());
-
   g_mutex_lock (&self->dequeue_lock);
+  if (self->flushing) {
+    GST_DEBUG_OBJECT (self, "Ignoring WebCodecs error during flush: %s",
+        msg.c_str ());
+    g_mutex_unlock (&self->dequeue_lock);
+    return;
+  }
+  GST_ERROR_OBJECT (self, "WebCodecs error: %s", msg.c_str ());
   self->has_error = TRUE;
   g_cond_signal (&self->dequeue_cond);
   g_mutex_unlock (&self->dequeue_lock);
@@ -760,12 +765,8 @@ gst_web_codecs_video_decoder_do_reset (gpointer data)
       (GstWebCodecsVideoDecoderConfigureData *) data;
   GstWebCodecsVideoDecoder *self = conf_data->self;
 
-  /* The decoder may be in "closed" state (e.g. from an error during flush),
-   * in which case reset() would throw.  Recreate the decoder entirely to
-   * guarantee a clean state. */
   GST_DEBUG_OBJECT (self, "Recreating WebCodecs decoder for flush");
   gst_web_codecs_video_decoder_ctor (self);
-
   GST_DEBUG_OBJECT (self, "Reconfiguring after recreate");
   gst_web_codecs_video_decoder_configure (data);
 }

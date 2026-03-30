@@ -316,6 +316,7 @@ EMSCRIPTEN_BLACKLIST = [
     # Timeouts — WASM thread startup overhead
     (r'gst-plugins-base.elements_subparse\.', 'consistent timeout on emscripten'),
     (r'gst-plugins-base.elements_overlaycomposition\.', 'consistent timeout on emscripten'),
+    (r'gst-plugins-base.libs_videodecoder\.', 'consistent timeout on emscripten'),
 ]
 
 

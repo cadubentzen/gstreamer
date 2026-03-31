@@ -31,10 +31,11 @@ if host_system == 'emscripten'
     gst_tools += {'ges-validate-wasm': {
       'files': files('ges-validate-wasm.c'),
       'deps': ges_validate_wasm_deps,
-      'extra_c_args': ['-DHAVE_CONFIG_H', '-DGST_USE_UNSTABLE_API'],
+      'extra_c_args': ['-DHAVE_CONFIG_H', '-DGST_USE_UNSTABLE_API', '-DHAVE_GST_VALIDATE'],
       'name_suffix': 'js',
       'extra_link_args': [
-        '-sERROR_ON_UNDEFINED_SYMBOLS=0',
+        '-sERROR_ON_UNDEFINED_SYMBOLS=1',
+        '-Wl,--allow-multiple-definition',
         '-sASSERTIONS=1',
         '-sMIN_WEBGL_VERSION=2',
         '-sMAX_WEBGL_VERSION=2',
@@ -45,6 +46,9 @@ if host_system == 'emscripten'
         '-sFORCE_FILESYSTEM=1',
         '-sASYNCIFY_IMPORTS=["_emval_await","__emscripten_promise_await","emscripten_sleep","_emscripten_receive_on_main_thread_js"]',
         '-sASYNCIFY_STACK_SIZE=1048576',
+        # Remove hot pad data/event/query paths from asyncify to avoid JS
+        # call stack overflow. These never proxy to the main thread.
+        '-sASYNCIFY_REMOVE=gst_validate_pad_monitor_downstream_event_check,gst_validate_pad_monitor_pad_probe,gst_validate_pad_monitor_event_probe,gst_validate_pad_monitor_sink_event_check,gst_validate_pad_monitor_src_event_check,gst_validate_pad_monitor_common_event_check,gst_validate_pad_monitor_query_func,probe_hook_marshal,do_probe_callbacks,gst_pad_push_event_unchecked,gst_pad_push_event,gst_pad_event_default,event_forward_func,gst_pad_forward,gst_pad_send_event_unchecked,gst_pad_send_event,gst_pad_push,gst_pad_chain_data_unchecked,gst_pad_push_data,gst_pad_query,gst_pad_peer_query,gst_pad_query_default,gst_iterator_fold,query_latency_default_fold,gst_pad_iterate_internal_links_default,gst_pad_pull_range,gst_pad_get_range_unchecked,gst_pad_get_range',
         '-sINITIAL_MEMORY=536870912',
         '-lGL',
       ],

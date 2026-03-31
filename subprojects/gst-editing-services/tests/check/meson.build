@@ -182,7 +182,7 @@ else
   endforeach
 endif
 
-if gstvalidate_dep.found() and not get_option('tools').disabled()
+if gstvalidate_dep.found() and not get_option('tools').disabled() and not static_build
   # filename: is .validatetest
   scenarios = {
     'check_video_track_restriction_scale': false,

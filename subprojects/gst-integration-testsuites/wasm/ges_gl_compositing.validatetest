@@ -1,20 +1,13 @@
 meta,
     handles-states=true,
+    tool = "ges-validate-wasm-$(gst_api_version)",
+    ges = "converter-type=gl, compositor-factory=glvideomixer",
     args = {
-        "--track-types video --videosink glimagesink +test-clip smpte d=5.0 +effect gleffects_glow +test-clip blue d=5.0 inpoint=0 start=2000000000 +transition crossfade d=3000000000",
+
+        "--videosink glimagesink",
     }
 
-# GES GL compositing test (browser only — requires WebGL context):
-#  - Two video clips (SMPTE + blue) with a 3s crossfade transition
-#  - GL glow effect on the first clip
-#  - Compositing via GES smart mixer → glvideomixer
-#  - Rendered to glimagesink (WebGL)
-#
-# Timeline layout:
-#   0s ──── smpte + glow ──────── 5s
-#                2s ──── blue ──────── 7s
-#                2s ── crossfade ── 5s
+add-clip, name=clip, asset-id="blue", layer-priority=0, type=GESTestClip, duration=5.0
+add-clip, name=clip1, asset-id="red", layer-priority=0, type=GESTestClip, duration=5.0
 
-set-state, state=playing
-wait, duration=6.0
-stop
+play

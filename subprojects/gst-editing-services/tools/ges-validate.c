@@ -105,7 +105,7 @@ find_max_compositor_rank (void)
   return max_rank;
 }
 
-static void
+void
 apply_ges_validate_defaults (void)
 {
   const gchar *old_uridecodepoolsrc = g_getenv ("GES_ENABLE_URIDECODEPOOLSRC");
@@ -141,7 +141,7 @@ apply_ges_validate_defaults (void)
   }
 }
 
-static void
+void
 process_ges_validate_structure (GstStructure * ges_struct)
 {
   const gchar *str_value;
@@ -282,7 +282,7 @@ bin_element_added (GstTracer * runner, GstClockTime ts,
   } while (parent);
 }
 
-static void
+void
 ges_validate_register_issues (void)
 {
   gst_validate_issue_register (gst_validate_issue_new (WRONG_DECODER_ADDED,

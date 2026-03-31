@@ -167,40 +167,17 @@ bus_callback (GstBus * bus, GstMessage * message, gpointer data)
 }
 
 static GESTimeline *
-create_timeline (gchar ** args)
+create_timeline (gchar ** tokens, gint n_tokens)
 {
   GESTimeline *timeline = NULL;
   GESProject *project;
   gint i;
 
-  /* Look for a project URI in args (-l <uri> or --load <uri>) */
-  for (i = 0; args[i]; i++) {
-    if ((g_strcmp0 (args[i], "-l") == 0 || g_strcmp0 (args[i], "--load") == 0)
-        && args[i + 1]) {
-      const gchar *uri = args[i + 1];
-      GST_INFO ("Loading project from %s", uri);
-      project = ges_project_new (uri);
-      timeline =
-          GES_TIMELINE (ges_asset_extract (GES_ASSET (project), NULL));
-      gst_object_unref (project);
-      if (timeline)
-        return timeline;
-      GST_ERROR ("Failed to load project from %s", uri);
-      return NULL;
-    }
-  }
-
-  /* No project specified — create a simple timeline with a test clip */
-  GST_INFO ("No project specified, creating test timeline");
-  timeline = ges_timeline_new_audio_video ();
-
-  {
-    GESLayer *layer = ges_timeline_append_layer (timeline);
-    GESClip *clip =
-        GES_CLIP (ges_test_clip_new_for_nick ((gchar *) "smpte"));
-    g_object_set (clip, "duration", (guint64) 5 * GST_SECOND, NULL);
-    ges_layer_add_clip (layer, clip);
-  }
+  /* Create a video-only timeline with a default layer.
+   * Clips are added by validate scenario actions (add-clip). */
+  timeline = ges_timeline_new ();
+  ges_timeline_add_track (timeline, GES_TRACK (ges_video_track_new ()));
+  ges_timeline_append_layer (timeline);
 
   return timeline;
 }
@@ -220,16 +197,16 @@ setup_gl_display (void)
 }
 
 static void
-configure_sinks (GESPipeline * ges_pipeline, gchar ** args)
+configure_sinks (GESPipeline * ges_pipeline, gchar ** tokens, gint n_tokens)
 {
   GstElement *videosink = NULL, *audiosink = NULL;
   gint i;
 
-  for (i = 0; args[i]; i++) {
-    if (g_strcmp0 (args[i], "--videosink") == 0 && args[i + 1]) {
-      videosink = gst_parse_launch (args[i + 1], NULL);
-    } else if (g_strcmp0 (args[i], "--audiosink") == 0 && args[i + 1]) {
-      audiosink = gst_parse_launch (args[i + 1], NULL);
+  for (i = 0; i < n_tokens; i++) {
+    if (g_strcmp0 (tokens[i], "--videosink") == 0 && i + 1 < n_tokens) {
+      videosink = gst_parse_launch (tokens[i + 1], NULL);
+    } else if (g_strcmp0 (tokens[i], "--audiosink") == 0 && i + 1 < n_tokens) {
+      audiosink = gst_parse_launch (tokens[i + 1], NULL);
     }
   }
 
@@ -278,7 +255,7 @@ main (int argc, char **argv)
 
   gst_validate_init_debug ();
 
-  /* Load the test file from the preloaded virtual filesystem */
+  /* Load test file BEFORE gst_validate_init (required by API) */
   meta = gst_validate_setup_test_file ("/test.validatetest", FALSE);
   if (!meta)
     gst_validate_abort ("Failed to load test file");
@@ -287,9 +264,35 @@ main (int argc, char **argv)
   if (!args)
     gst_validate_abort ("No 'args' in test file meta");
 
-  gst_validate_init ();
+  /* Process GES-specific configuration (converter-type, compositor-factory) */
+  {
+    const gchar *ges_config = gst_structure_get_string (meta, "ges");
+    if (ges_config) {
+      gchar *struct_str = g_strdup_printf ("ges,%s", ges_config);
+      GstStructure *ges_struct = gst_structure_from_string (struct_str, NULL);
+      if (ges_struct) {
+        const gchar *converter = gst_structure_get_string (ges_struct, "converter-type");
+        if (converter)
+          g_setenv ("GES_CONVERTER_TYPE", converter, TRUE);
 
-  /* Register GES-specific validate actions (add-clip, split-clip, etc.) */
+        const gchar *compositor = gst_structure_get_string (ges_struct, "compositor-factory");
+        if (compositor) {
+          GstElementFactory *factory = gst_element_factory_find (compositor);
+          if (factory) {
+            gst_plugin_feature_set_rank (GST_PLUGIN_FEATURE (factory),
+                GST_RANK_PRIMARY + 1000);
+            gst_object_unref (factory);
+          }
+        }
+        gst_structure_free (ges_struct);
+      }
+      g_free (struct_str);
+    }
+  }
+
+  /* Register GES action types BEFORE gst_validate_init processes the
+   * test file scenario. ges_validate_register_action_types calls
+   * gst_validate_init internally which then parses the scenario. */
   ges_validate_register_action_types ();
 
   runner = gst_validate_runner_new ();
@@ -298,10 +301,19 @@ main (int argc, char **argv)
     return 1;
   }
 
+  /* Tokenize args[0] — it's a single command string */
+  gchar **tokens = NULL;
+  gint n_tokens = 0;
+  if (!g_shell_parse_argv (args[0], &n_tokens, &tokens, NULL) || !tokens) {
+    GST_ERROR ("Failed to parse args: %s", args[0]);
+    return 1;
+  }
+
   /* Create GES timeline */
-  timeline = create_timeline (args);
+  timeline = create_timeline (tokens, n_tokens);
   if (!timeline) {
     GST_ERROR ("Failed to create timeline");
+    g_strfreev (tokens);
     return 1;
   }
 
@@ -311,7 +323,7 @@ main (int argc, char **argv)
   pipeline = GST_ELEMENT (ges_pipeline);
   setup_gl_display ();
 
-  configure_sinks (ges_pipeline, args);
+  configure_sinks (ges_pipeline, tokens, n_tokens);
 
   if (!ges_pipeline_set_timeline (ges_pipeline, timeline)) {
     GST_ERROR ("Failed to set timeline on pipeline");

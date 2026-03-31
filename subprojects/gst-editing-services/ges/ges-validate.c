@@ -1468,16 +1468,8 @@ ges_validate_register_action_types (void)
 #ifdef HAVE_GST_VALIDATE
   GstValidateActionType *validate_seek, *seek_override;
 
-
-  gst_validate_init ();
-  validate_seek = gst_validate_get_action_type ("seek");
-
-  /*  *INDENT-OFF* */
-  seek_override = gst_validate_register_action_type("seek", "ges", validate_seek->execute,
-                                    validate_seek->parameters, validate_seek->description,
-                                    validate_seek->flags);
-  gst_mini_object_unref(GST_MINI_OBJECT(validate_seek));
-  seek_override->prepare = prepare_seek_action;
+  /* Register all GES action types BEFORE calling gst_validate_init,
+   * so they are available when init processes test file scenarios. */
 
   gst_validate_register_action_type ("edit-container", "ges", _edit,
       (GstValidateActionParameter [])  {
@@ -2344,6 +2336,17 @@ ges_validate_register_action_types (void)
       }, "Check the pool manager state (pooled sources, prepared sources, nested timelines).",
       GST_VALIDATE_ACTION_TYPE_CHECK);
   /*  *INDENT-ON* */
+
+  /* Override the default seek action type — needs gst_validate_init
+   * to get the existing seek type. Done AFTER all other registrations
+   * so they are available when init processes test file scenarios. */
+  gst_validate_init ();
+  validate_seek = gst_validate_get_action_type ("seek");
+  seek_override = gst_validate_register_action_type("seek", "ges",
+      validate_seek->execute, validate_seek->parameters,
+      validate_seek->description, validate_seek->flags);
+  gst_mini_object_unref(GST_MINI_OBJECT(validate_seek));
+  seek_override->prepare = prepare_seek_action;
 
   return TRUE;
 #else

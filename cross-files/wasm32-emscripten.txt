@@ -231,9 +231,9 @@ introspection = 'disabled'
 dtrace = 'false'
 
 [libxml2:project options]
-output = 'true'
+output = 'enabled'
 tests = 'disabled'
-python = 'false'
+python = 'disabled'
 
 [libpng:project options]
 tests = 'false'

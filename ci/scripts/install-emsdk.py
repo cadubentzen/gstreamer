@@ -31,6 +31,7 @@ def run(cmd, **kwargs):
 
 
 def install_emsdk(prefix, warm_cache=True):
+    prefix = os.path.abspath(prefix)
     if os.path.exists(prefix):
         print(f"emsdk already exists at {prefix}, skipping clone")
     else:

@@ -42,6 +42,9 @@ static void gst_web_stream_src_uri_handler_init (
 #define parent_class gst_web_stream_src_parent_class
 
 #define PROP_LOCATION_DEFAULT NULL
+#define DEFAULT_RETRIES 3
+#define RETRY_BACKOFF_BASE_MS 500
+#define RETRY_BACKOFF_MAX_MS 30000
 
 enum
 {
@@ -72,6 +75,7 @@ typedef struct _GstWebStreamSrc
   gboolean seek_pending;
   guint http_status;       /* HTTP response status code, 0 = not received */
   gboolean seekable;       /* server supports Range requests */
+  guint retry_count;
 } GstWebStreamSrc;
 
 G_DECLARE_FINAL_TYPE (
@@ -532,6 +536,7 @@ gst_web_stream_src_init (GstWebStreamSrc *self)
   self->download_offset = 0;
   self->http_status = 0;
   self->seekable = TRUE;
+  self->retry_count = 0;
 }
 
 static void
@@ -574,6 +579,7 @@ gst_web_stream_src_create (GstPushSrc *psrc, GstBuffer **outbuf)
 {
   GstWebStreamSrc *self = GST_WEB_STREAM_SRC (psrc);
 
+retry:
   GST_OBJECT_LOCK (self);
 
   if (G_UNLIKELY (self->flushing)) {
@@ -589,6 +595,7 @@ gst_web_stream_src_create (GstPushSrc *psrc, GstBuffer **outbuf)
         "Seek pending (start %" G_GINT64_FORMAT "), restarting fetch",
         self->download_start);
     self->seek_pending = FALSE;
+    self->retry_count = 0;
     self->in_eos = FALSE;
     GST_OBJECT_UNLOCK (self);
     if (was_active)
@@ -625,8 +632,42 @@ gst_web_stream_src_create (GstPushSrc *psrc, GstBuffer **outbuf)
     gchar *err = self->fetch_error;
     /* status == 0 means a network-level error (not an HTTP response) */
     guint status = self->http_status;
+    gboolean retryable = (status == 0 || status >= 500);
     self->fetch_error = NULL;
     self->http_status = 0;
+
+    if (retryable && self->retry_count < DEFAULT_RETRIES) {
+      gint64 resume_offset = self->download_offset;
+      guint attempt = ++self->retry_count;
+      GST_OBJECT_UNLOCK (self);
+
+      guint backoff_ms =
+          MIN (RETRY_BACKOFF_BASE_MS << (attempt - 1), RETRY_BACKOFF_MAX_MS);
+      GST_WARNING_OBJECT (self,
+          "Retryable error (%s), attempt %u/%u, backing off %u ms", err,
+          attempt, DEFAULT_RETRIES, backoff_ms);
+      g_free (err);
+
+      /* Interruptible backoff — wake on flush */
+      gint64 deadline =
+          g_get_monotonic_time () + (gint64) backoff_ms * 1000;
+      GST_OBJECT_LOCK (self);
+      while (!self->flushing && g_get_monotonic_time () < deadline)
+        g_cond_wait_until (
+            &self->qcond, GST_OBJECT_GET_LOCK (self), deadline);
+      if (self->flushing) {
+        GST_OBJECT_UNLOCK (self);
+        return GST_FLOW_FLUSHING;
+      }
+      GST_OBJECT_UNLOCK (self);
+
+      gst_web_stream_src_reset_fetch (self);
+      GST_OBJECT_LOCK (self);
+      self->download_start = resume_offset;
+      GST_OBJECT_UNLOCK (self);
+      goto retry;
+    }
+
     GST_OBJECT_UNLOCK (self);
 
     if (status == 404) {
@@ -669,6 +710,7 @@ gst_web_stream_src_create (GstPushSrc *psrc, GstBuffer **outbuf)
 
   GST_DEBUG_OBJECT (self, "Buffer of size %" G_GSIZE_FORMAT " ready",
       gst_buffer_get_size (*outbuf));
+  self->retry_count = 0;
   GST_OBJECT_UNLOCK (self);
 
   return GST_FLOW_OK;

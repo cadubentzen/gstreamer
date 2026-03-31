@@ -1,0 +1,4 @@
+meta,
+    args = {
+        "webstreamsrc location=\"$(GST_WASM_BASE_URL)/test/transient-fail/2/media/mp4/raw_h264.0.mp4\" ! qtdemux name=demux demux.video_0 ! video/x-h264 ! webcodecsviddech264sw ! fakesink sync=true",
+    }

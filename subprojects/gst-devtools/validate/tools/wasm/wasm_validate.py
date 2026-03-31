@@ -108,6 +108,29 @@ class COOPCOEPHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_error(404, "File not found")
             return
 
+        if route == "transient-fail":
+            # /test/transient-fail/<count>/media/path — fail <count>
+            # times with 503, then serve normally
+            try:
+                fail_count = int(parts[3]) if len(parts) > 3 else 1
+            except ValueError:
+                fail_count = 1
+            actual_path = "/" + "/".join(parts[4:])
+            key = self.path
+            if not hasattr(self.server, '_fail_counts'):
+                self.server._fail_counts = {}
+            current = self.server._fail_counts.get(key, 0)
+            self.server._fail_counts[key] = current + 1
+            if current < fail_count:
+                self.send_response(503)
+                self.send_header("Content-Length", "0")
+                self.send_header("Retry-After", "1")
+                self.end_headers()
+                return
+            # Serve normally after exhausting failures
+            self.path = actual_path
+            return self.do_GET()
+
         self.send_error(404, "Unknown test route")
 
     def translate_path(self, path):

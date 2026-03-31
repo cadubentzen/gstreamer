@@ -681,7 +681,9 @@ get_terminal_width (void)
       return csbi.srWindow.Right - csbi.srWindow.Left + 1;
     }
   }
-#else
+#elif !defined(__EMSCRIPTEN__)
+  /* Emscripten's ioctl(TIOCGWINSZ) JS implementation crashes when TTY
+   * ops are not fully initialized (PROXY_TO_PTHREAD). Skip entirely. */
   struct winsize ws;
   if (ioctl (STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0) {
     return ws.ws_col;

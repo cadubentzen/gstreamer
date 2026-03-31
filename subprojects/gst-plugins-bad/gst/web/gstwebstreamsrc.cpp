@@ -70,6 +70,7 @@ typedef struct _GstWebStreamSrc
   guint32 fetch_generation;
   gboolean fetch_active;
   gboolean seek_pending;
+  guint http_status;       /* HTTP response status code, 0 = not received */
 } GstWebStreamSrc;
 
 G_DECLARE_FINAL_TYPE (
@@ -126,6 +127,7 @@ gst_web_stream_src_reset_fetch (GstWebStreamSrc *self)
   self->fetch_active = FALSE;
   g_queue_clear_full (self->q, (GDestroyNotify) gst_buffer_unref);
   g_clear_pointer (&self->fetch_error, g_free);
+  self->http_status = 0;
   self->accumulated_data_size = 0;
   self->flushing = FALSE;
   GST_OBJECT_UNLOCK (self);
@@ -260,6 +262,32 @@ gst_web_stream_src_error (guintptr thiz, guint32 gen, val vmsg)
 }
 
 static void
+gst_web_stream_src_http_error_from_js (
+    guintptr thiz, guint32 gen, int status, val vmsg)
+{
+  GstWebStreamSrc *self = (GstWebStreamSrc *) thiz;
+  std::string stds = vmsg.as<std::string> ();
+  const char *msg = stds.c_str ();
+
+  GST_OBJECT_LOCK (self);
+  if (gen != self->fetch_generation) {
+    GST_DEBUG_OBJECT (self,
+        "Stale HTTP error (gen %u vs %u), ignoring: %d %s", gen,
+        self->fetch_generation, status, msg);
+    GST_OBJECT_UNLOCK (self);
+    return;
+  }
+
+  GST_ERROR_OBJECT (self, "HTTP error %d: %s", status, msg);
+  self->http_status = (guint) status;
+  g_free (self->fetch_error);
+  self->fetch_error = g_strdup_printf ("HTTP %d: %s", status, msg);
+  self->fetch_active = FALSE;
+  g_cond_signal (&self->qcond);
+  GST_OBJECT_UNLOCK (self);
+}
+
+static void
 gst_web_stream_src_set_content_length (GstWebStreamSrc *self, gint64 length)
 {
   GST_INFO_OBJECT (self, "Content-Length: %" G_GINT64_FORMAT, length);
@@ -290,6 +318,8 @@ EMSCRIPTEN_BINDINGS (gst_web_stream_src)
   function ("gst_web_stream_src_chunk", &gst_web_stream_src_chunk);
   function ("gst_web_stream_src_set_content_length_from_js",
       &gst_web_stream_src_set_content_length_from_js);
+  function ("gst_web_stream_src_http_error_from_js",
+      &gst_web_stream_src_http_error_from_js);
 }
 
 /* The fetch must run on the main browser thread because the streaming
@@ -324,6 +354,11 @@ EM_JS(void, gst_web_stream_src_fetch_on_main, (const char* url, guintptr thiz, g
       // Fetch data using the Streams API
       fetch(fetchUrl, options)
         .then(response => {
+             if (!response.ok) {
+               Module.gst_web_stream_src_http_error_from_js(thiz, gen,
+                   response.status, response.statusText);
+               return null;
+             }
              /* Extract total file size from response headers.
               * For 206 Partial Content, Content-Length is the range size,
               * not the total — use Content-Range: bytes X-Y/TOTAL instead. */
@@ -340,6 +375,7 @@ EM_JS(void, gst_web_stream_src_fetch_on_main, (const char* url, guintptr thiz, g
              return response.body;
         })
         .then(async (rs) => {
+             if (!rs) return;
              const reader = rs.getReader ();
              try {
                  let result = 1;
@@ -454,6 +490,7 @@ gst_web_stream_src_init (GstWebStreamSrc *self)
   self->download_start = 0;
   self->download_end = -1;
   self->download_offset = 0;
+  self->http_status = 0;
 }
 
 static void
@@ -545,10 +582,23 @@ gst_web_stream_src_create (GstPushSrc *psrc, GstBuffer **outbuf)
 
   if (self->fetch_error) {
     gchar *err = self->fetch_error;
+    /* status == 0 means a network-level error (not an HTTP response) */
+    guint status = self->http_status;
     self->fetch_error = NULL;
+    self->http_status = 0;
     GST_OBJECT_UNLOCK (self);
-    GST_ELEMENT_ERROR (
-        self, RESOURCE, FAILED, ("Fetch failed: %s", err), (NULL));
+
+    if (status == 404) {
+      GST_ELEMENT_ERROR (
+          self, RESOURCE, NOT_FOUND, ("%s", err), (NULL));
+    } else if (status == 401 || status == 403 || status == 407) {
+      GST_ELEMENT_ERROR (
+          self, RESOURCE, NOT_AUTHORIZED, ("%s", err), (NULL));
+    } else {
+      GST_ELEMENT_ERROR (
+          self, RESOURCE, FAILED, ("%s", err), (NULL));
+    }
+
     g_free (err);
     return GST_FLOW_ERROR;
   }

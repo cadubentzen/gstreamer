@@ -1,0 +1,10 @@
+# expect-error
+meta,
+    handles-states=true,
+    args = {
+        "webstreamsrc location=\"$(GST_WASM_BASE_URL)/test/http-error/404\" ! fakesink",
+    }
+
+set-state, state=playing
+wait, duration=3.0
+stop

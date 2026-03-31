@@ -32,6 +32,9 @@ class COOPCOEPHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         """Handle GET with Range request support for seeking."""
+        if self.path.startswith("/test/"):
+            return self.handle_test_route()
+
         range_header = self.headers.get("Range")
         if not range_header:
             return super().do_GET()
@@ -71,6 +74,24 @@ class COOPCOEPHandler(http.server.SimpleHTTPRequestHandler):
                 remaining -= len(chunk)
         finally:
             f.close()
+
+    def handle_test_route(self):
+        """Handle special /test/ routes for validate tests."""
+        parts = self.path.split("/")
+        route = parts[2] if len(parts) > 2 else ""
+
+        if route == "http-error":
+            # /test/http-error/<status> — return that HTTP status code
+            try:
+                status = int(parts[3]) if len(parts) > 3 else 500
+            except ValueError:
+                status = 500
+            self.send_response(status)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+
+        self.send_error(404, "Unknown test route")
 
     def translate_path(self, path):
         if path.startswith("/media/"):
@@ -186,7 +207,9 @@ def build_test_content(test_file, media_url):
     with open(test_file, "r") as f:
         original = f.read()
 
-    set_globals = f'set-globals, GST_WASM_MEDIA_URL="{media_url}"\n'
+    base_url = media_url.rsplit("/media", 1)[0]
+    set_globals = (f'set-globals, GST_WASM_MEDIA_URL="{media_url}", '
+                   f'GST_WASM_BASE_URL="{base_url}"\n')
     return set_globals + original
 
 
@@ -220,6 +243,15 @@ def main():
                                    kwargs={"poll_interval": 0.05})
     http_thread.daemon = True
     http_thread.start()
+
+    # Parse expect-error directive from test file — if present, the test
+    # is expected to produce a pipeline error (non-zero exit code).
+    expect_error = False
+    with open(args.test_file, "r") as f:
+        for line in f:
+            if line.strip() == "# expect-error":
+                expect_error = True
+                break
 
     # Build test content with set-globals for media URL
     media_url = f"http://localhost:{port}/media"
@@ -301,7 +333,11 @@ def main():
     except OSError:
         pass
 
-    sys.exit(ret)
+    if expect_error:
+        # Test expects a pipeline error — pass if non-zero, fail if zero
+        sys.exit(0 if ret != 0 else 1)
+    else:
+        sys.exit(ret)
 
 
 if __name__ == "__main__":

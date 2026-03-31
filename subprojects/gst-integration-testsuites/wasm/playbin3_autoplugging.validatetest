@@ -1,0 +1,10 @@
+meta,
+    handles-states=true,
+    args = {
+        "playbin3 uri=\"$(GST_WASM_MEDIA_URL)/mp4/raw_h264.0.mp4\" video-sink=fakesink",
+    }
+
+set-state, state=playing
+wait, duration=3.0
+dot-pipeline, name=playbin3-playing
+stop

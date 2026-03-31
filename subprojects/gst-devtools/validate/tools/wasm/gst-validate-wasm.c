@@ -222,8 +222,6 @@ main (int argc, char **argv)
   GST_DEBUG_CATEGORY_INIT (validate_wasm_dbg, "validate-wasm", 0,
       "GstValidate WASM runner");
 
-
-
   /* g_main_loop_run() uses emscripten_set_main_loop internally via the
    * GLib ASYNCIFY patch, so no need for gst_emscripten_init(). */
 

@@ -87,7 +87,7 @@ G_DEFINE_TYPE_WITH_CODE (GstWebStreamSrc, gst_web_stream_src,
     G_IMPLEMENT_INTERFACE (
         GST_TYPE_URI_HANDLER, gst_web_stream_src_uri_handler_init));
 GST_ELEMENT_REGISTER_DEFINE (web_stream_src, "webstreamsrc",
-    GST_RANK_SECONDARY, GST_TYPE_WEB_STREAM_SRC);
+    GST_RANK_PRIMARY, GST_TYPE_WEB_STREAM_SRC);
 GST_DEBUG_CATEGORY_STATIC (gst_web_stream_src_debug);
 
 static gboolean

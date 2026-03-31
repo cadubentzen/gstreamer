@@ -80,6 +80,8 @@ if static_build
   gstbad_proj = subproject('gst-plugins-bad')
   extra_link_with = plugins + gst_proj.get_variable('plugins') + gstbase_proj.get_variable('plugins') + gstgood_proj.get_variable('plugins') + gstbad_proj.get_variable('plugins')
 
+  gstrsges_dep = dependency('gstrsges', required: false)
+
   generate_static_plugins_init = find_program(
     join_paths(meson.global_source_root(), 'scripts', 'generate_static_plugins_init.py'))
   all_test_plugins = extra_link_with
@@ -87,6 +89,9 @@ if static_build
   foreach p : all_test_plugins
     plugin_names += p.name().substring(3) # strip 'gst' prefix
   endforeach
+  if gstrsges_dep.found()
+    plugin_names += 'rsges'
+  endif
   static_plugins_init_c = custom_target('static-plugins-init',
     output: 'static-plugins-init.c',
     command: [generate_static_plugins_init,
@@ -118,6 +123,11 @@ if host_machine.system() == 'emscripten'
     combined_sources += [static_plugins_init_c]
   endif
 
+  ges_test_deps = libges_deps + [gstcheck_dep, ges_dep]
+  if gstrsges_dep.found()
+    ges_test_deps += [gstrsges_dep]
+  endif
+
   combined_exe = executable('gst-check-combined',
     combined_sources + files('ges/test-utils.c', 'nle/common.c', 'combined_main.c'),
     c_args : ges_c_args + test_defines + ['-DGST_CHECK_COMBINED_BUILD'],
@@ -125,7 +135,7 @@ if host_machine.system() == 'emscripten'
     include_directories : [configinc],
     link_with : extra_link_with,
     link_args : link_args,
-    dependencies : libges_deps + [gstcheck_dep, ges_dep],
+    dependencies : ges_test_deps,
   )
 
   foreach test_name, fname : combined_tests_map

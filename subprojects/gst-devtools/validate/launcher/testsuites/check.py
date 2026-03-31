@@ -316,6 +316,15 @@ EMSCRIPTEN_BLACKLIST = [
     # Timeouts — WASM thread startup overhead
     (r'gst-plugins-base.elements_subparse\.', 'consistent timeout on emscripten'),
     (r'gst-plugins-base.elements_overlaycomposition\.', 'consistent timeout on emscripten'),
+    # Missing discoverer plugins
+    (r'gst-plugins-base.libs_discoverer.test_disco_missing_plugins', 'discoverer needs missing plugins on emscripten'),
+    # Timezone / locale issues
+    (r'gst-plugins-base.libs_videotimecode.videotimecode_dailyjam_todatetime', 'timezone handling differs on emscripten'),
+    # GES subtimeline requires rsges from gst-plugins-rs which can't be linked
+    # into the GES test binary due to subproject ordering. Test via validate instead.
+    (r'gst-editing-services.ges_subtimeline\.', 'rsges not available in GES test binary — test via validate'),
+    # GES mixer pipeline timeout
+    (r'gst-editing-services.ges_mixers.simple_audio_mixed_with_pipeline', 'audio mixer pipeline timeout on emscripten'),
 ]
 
 
@@ -331,8 +340,12 @@ def setup_tests(test_manager, options):
     if 'CI_COMMIT_SHA' in os.environ:
         test_manager.set_default_blacklist(CI_BLACKLIST)
 
-    test_manager.emscripten_blacklist = EMSCRIPTEN_BLACKLIST
-    test_manager.emscripten_known_issues = EMSCRIPTEN_KNOWN_ISSUES
+    # Detect emscripten by checking if test binaries are .js files
+    mesontests = test_manager.get_meson_tests()
+    is_emscripten = any(t['cmd'][0].endswith('.js') for t in mesontests) if mesontests else False
+    if is_emscripten:
+        test_manager.set_default_blacklist(EMSCRIPTEN_BLACKLIST)
+        test_manager.add_expected_issues(EMSCRIPTEN_KNOWN_ISSUES)
 
     test_manager.add_expected_issues(KNOWN_ISSUES)
 

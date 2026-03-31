@@ -50,6 +50,7 @@ enum
 {
   PROP_0,
   PROP_LOCATION,
+  PROP_EXTRA_HEADERS,
   PROP_MAX
 };
 
@@ -76,6 +77,7 @@ typedef struct _GstWebStreamSrc
   guint http_status;       /* HTTP response status code, 0 = not received */
   gboolean seekable;       /* server supports Range requests */
   guint retry_count;
+  GstStructure *extra_headers;
 } GstWebStreamSrc;
 
 G_DECLARE_FINAL_TYPE (
@@ -370,7 +372,7 @@ EMSCRIPTEN_BINDINGS (gst_web_stream_src)
  * dispatch the fetch to the main thread without blocking. */
 
 // clang-format off
-EM_JS(void, gst_web_stream_src_fetch_on_main, (const char* url, guintptr thiz, guintptr signal_addr, guint32 generation, const char *range), {
+EM_JS(void, gst_web_stream_src_fetch_on_main, (const char* url, guintptr thiz, guintptr signal_addr, guint32 generation, const char *range, const char *extra_headers_json), {
       const fetchUrl = UTF8ToString (url);
       const signalIdx = signal_addr >> 2;
       const gen = generation;
@@ -389,6 +391,14 @@ EM_JS(void, gst_web_stream_src_fetch_on_main, (const char* url, guintptr thiz, g
       var options = { signal: abortCtrl.signal };
       if (rangeStr) {
           options.headers = { 'Range': rangeStr };
+      }
+
+      /* Apply extra headers passed as a JSON string parameter */
+      if (extra_headers_json) {
+          var hdrs = JSON.parse(UTF8ToString(extra_headers_json));
+          _free(extra_headers_json);
+          if (!options.headers) options.headers = {};
+          Object.assign(options.headers, hdrs);
       }
 
       // Fetch data using the Streams API
@@ -537,6 +547,7 @@ gst_web_stream_src_init (GstWebStreamSrc *self)
   self->http_status = 0;
   self->seekable = TRUE;
   self->retry_count = 0;
+  self->extra_headers = NULL;
 }
 
 static void
@@ -556,22 +567,59 @@ gst_web_stream_src_start_fetch (GstWebStreamSrc *self)
      range = NULL;
   }
 
+  /* Serialize extra headers to a JSON string for the EM_JS function.
+   * We pass this as a parameter rather than using Module globals because
+   * EM_ASM (proxied from pthread) and EM_JS (async dispatch) may see
+   * different Module scopes in the Emscripten runtime. */
+  gchar *headers_json = NULL;
+  if (self->extra_headers) {
+    GString *json = g_string_new ("{");
+    gint n = gst_structure_n_fields (self->extra_headers);
+    gint written = 0;
+    for (gint i = 0; i < n; i++) {
+      const gchar *name =
+          gst_structure_nth_field_name (self->extra_headers, i);
+      const gchar *str_val =
+          gst_structure_get_string (self->extra_headers, name);
+      if (str_val) {
+        if (written > 0)
+          g_string_append_c (json, ',');
+        g_string_append_c (json, '"');
+        /* Header names should not need escaping, but be safe */
+        for (const gchar *p = name; *p; p++) {
+          if (*p == '"' || *p == '\\')
+            g_string_append_c (json, '\\');
+          g_string_append_c (json, *p);
+        }
+        g_string_append (json, "\":\"");
+        for (const gchar *p = str_val; *p; p++) {
+          if (*p == '"' || *p == '\\')
+            g_string_append_c (json, '\\');
+          g_string_append_c (json, *p);
+        }
+        g_string_append_c (json, '"');
+        written++;
+      }
+    }
+    g_string_append_c (json, '}');
+    headers_json = g_string_free (json, FALSE);
+  }
+
   /* Fire the async JS fetch on the main browser thread.  We must use
    * async dispatch because sync dispatch deadlocks with the GStreamer
    * seek flow (main thread calls unlock() which waits for create() to
    * return, but create() is blocked waiting for the main thread).
    *
-   * String lifetime: self->uri lives as long as the element.  range is
-   * passed as a freshly allocated copy — the EM_JS frees it with _free()
-   * after calling UTF8ToString.  This avoids use-after-free if a second
-   * start_fetch runs before the main thread processes the first dispatch. */
+   * String lifetime: self->uri lives as long as the element.  range and
+   * headers_json are freshly allocated copies — the EM_JS frees them
+   * with _free() after converting to JS strings. */
   self->fetch_active = TRUE;
   emscripten_async_run_in_main_runtime_thread (
-      EM_FUNC_SIG_VIIIII,
+      EM_FUNC_SIG_VIIIIII,
       gst_web_stream_src_fetch_on_main,
       self->uri, (guintptr) self,
       (guintptr) &self->queue_signal, self->fetch_generation,
-      range);  /* ownership transferred to the EM_JS, freed there */
+      range, headers_json);
 }
 
 static GstFlowReturn
@@ -775,6 +823,15 @@ gst_web_stream_src_set_property (
       gst_web_stream_src_urihandler_set_uri (
           GST_URI_HANDLER (self), g_value_get_string (value), NULL);
       break;
+    case PROP_EXTRA_HEADERS:{
+      const GstStructure *s = gst_value_get_structure (value);
+      GST_OBJECT_LOCK (self);
+      if (self->extra_headers)
+        gst_structure_free (self->extra_headers);
+      self->extra_headers = s ? gst_structure_copy (s) : NULL;
+      GST_OBJECT_UNLOCK (self);
+      break;
+    }
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -792,6 +849,11 @@ gst_web_stream_src_get_property (
       g_value_take_string (value,
           gst_web_stream_src_urihandler_get_uri (GST_URI_HANDLER (self)));
       break;
+    case PROP_EXTRA_HEADERS:
+      GST_OBJECT_LOCK (self);
+      gst_value_set_structure (value, self->extra_headers);
+      GST_OBJECT_UNLOCK (self);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -808,6 +870,8 @@ gst_web_stream_src_finalize (GObject *obj)
   g_cond_clear (&self->qcond);
   g_queue_clear_full (self->q, (GDestroyNotify) gst_buffer_unref);
   g_queue_free (self->q);
+  if (self->extra_headers)
+    gst_structure_free (self->extra_headers);
 
   G_OBJECT_CLASS (gst_web_stream_src_parent_class)->finalize (obj);
 }
@@ -874,6 +938,13 @@ gst_web_stream_src_class_init (GstWebStreamSrcClass *klass)
   g_object_class_install_property (gobject_class, PROP_LOCATION,
       g_param_spec_string ("location", "Location", "URI of resource to read",
           PROP_LOCATION_DEFAULT,
+          GParamFlags (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+
+  g_object_class_install_property (gobject_class, PROP_EXTRA_HEADERS,
+      g_param_spec_boxed ("extra-headers", "Extra Headers",
+          "Extra HTTP request headers as a GstStructure of string values, "
+          "e.g. extra-headers,Authorization=\"Bearer token\"",
+          GST_TYPE_STRUCTURE,
           GParamFlags (G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
   gst_element_class_set_static_metadata (element_class,

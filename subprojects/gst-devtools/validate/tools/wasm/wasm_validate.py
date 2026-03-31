@@ -131,6 +131,18 @@ class COOPCOEPHandler(http.server.SimpleHTTPRequestHandler):
             self.path = actual_path
             return self.do_GET()
 
+        if route == "require-auth":
+            # /test/require-auth/media/path — require X-Test-Auth header
+            auth = self.headers.get("X-Test-Auth")
+            if auth != "secret-token-123":
+                self.send_response(403)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            actual_path = "/" + "/".join(parts[3:])
+            self.path = actual_path
+            return self.do_GET()
+
         self.send_error(404, "Unknown test route")
 
     def translate_path(self, path):

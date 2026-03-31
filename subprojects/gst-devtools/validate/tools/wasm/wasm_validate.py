@@ -91,6 +91,23 @@ class COOPCOEPHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             return
 
+        if route == "no-range":
+            # /test/no-range/media/path — serve file without Range support
+            actual_path = "/" + "/".join(parts[3:])
+            path = self.translate_path(actual_path)
+            try:
+                with open(path, "rb") as f:
+                    data = f.read()
+                self.send_response(200)
+                self.send_header("Content-Type", self.guess_type(path))
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Accept-Ranges", "none")
+                self.end_headers()
+                self.wfile.write(data)
+            except OSError:
+                self.send_error(404, "File not found")
+            return
+
         self.send_error(404, "Unknown test route")
 
     def translate_path(self, path):

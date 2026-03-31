@@ -71,6 +71,7 @@ typedef struct _GstWebStreamSrc
   gboolean fetch_active;
   gboolean seek_pending;
   guint http_status;       /* HTTP response status code, 0 = not received */
+  gboolean seekable;       /* server supports Range requests */
 } GstWebStreamSrc;
 
 G_DECLARE_FINAL_TYPE (
@@ -86,7 +87,14 @@ GST_DEBUG_CATEGORY_STATIC (gst_web_stream_src_debug);
 static gboolean
 gst_web_stream_src_is_seekable (GstBaseSrc *bsrc)
 {
-  return TRUE;
+  GstWebStreamSrc *self = GST_WEB_STREAM_SRC (bsrc);
+  gboolean ret;
+
+  GST_OBJECT_LOCK (self);
+  ret = self->seekable;
+  GST_OBJECT_UNLOCK (self);
+
+  return ret;
 }
 
 static gboolean
@@ -128,6 +136,7 @@ gst_web_stream_src_reset_fetch (GstWebStreamSrc *self)
   g_queue_clear_full (self->q, (GDestroyNotify) gst_buffer_unref);
   g_clear_pointer (&self->fetch_error, g_free);
   self->http_status = 0;
+  self->seekable = TRUE;
   self->accumulated_data_size = 0;
   self->flushing = FALSE;
   GST_OBJECT_UNLOCK (self);
@@ -288,6 +297,31 @@ gst_web_stream_src_http_error_from_js (
 }
 
 static void
+gst_web_stream_src_got_headers_from_js (
+    guintptr thiz, guint32 gen, int status, int accept_ranges_none)
+{
+  GstWebStreamSrc *self = (GstWebStreamSrc *) thiz;
+
+  GST_OBJECT_LOCK (self);
+  if (gen != self->fetch_generation) {
+    GST_OBJECT_UNLOCK (self);
+    return;
+  }
+
+  if (accept_ranges_none) {
+    GST_INFO_OBJECT (self,
+        "Server sent Accept-Ranges: none, not seekable");
+    self->seekable = FALSE;
+  } else if (self->download_start > 0 && status != 206) {
+    GST_WARNING_OBJECT (self,
+        "Range request returned %d instead of 206, not seekable", status);
+    self->seekable = FALSE;
+  }
+
+  GST_OBJECT_UNLOCK (self);
+}
+
+static void
 gst_web_stream_src_set_content_length (GstWebStreamSrc *self, gint64 length)
 {
   GST_INFO_OBJECT (self, "Content-Length: %" G_GINT64_FORMAT, length);
@@ -320,6 +354,8 @@ EMSCRIPTEN_BINDINGS (gst_web_stream_src)
       &gst_web_stream_src_set_content_length_from_js);
   function ("gst_web_stream_src_http_error_from_js",
       &gst_web_stream_src_http_error_from_js);
+  function ("gst_web_stream_src_got_headers_from_js",
+      &gst_web_stream_src_got_headers_from_js);
 }
 
 /* The fetch must run on the main browser thread because the streaming
@@ -359,6 +395,10 @@ EM_JS(void, gst_web_stream_src_fetch_on_main, (const char* url, guintptr thiz, g
                    response.status, response.statusText);
                return null;
              }
+             /* Report seekability info to C++ */
+             const ar = response.headers.get('Accept-Ranges');
+             Module.gst_web_stream_src_got_headers_from_js(thiz, gen,
+                 response.status, ar === 'none' ? 1 : 0);
              /* Extract total file size from response headers.
               * For 206 Partial Content, Content-Length is the range size,
               * not the total — use Content-Range: bytes X-Y/TOTAL instead. */
@@ -491,6 +531,7 @@ gst_web_stream_src_init (GstWebStreamSrc *self)
   self->download_end = -1;
   self->download_offset = 0;
   self->http_status = 0;
+  self->seekable = TRUE;
 }
 
 static void

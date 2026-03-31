@@ -583,6 +583,30 @@ gst_web_stream_src_create (GstPushSrc *psrc, GstBuffer **outbuf)
   return GST_FLOW_OK;
 }
 
+static gboolean
+gst_web_stream_src_query (GstBaseSrc *bsrc, GstQuery *query)
+{
+  switch (GST_QUERY_TYPE (query)) {
+    case GST_QUERY_SCHEDULING:{
+      GstSchedulingFlags flags;
+      gint minsize, maxsize, align;
+
+      if (!GST_BASE_SRC_CLASS (parent_class)->query (bsrc, query))
+        return FALSE;
+
+      gst_query_parse_scheduling (query, &flags, &minsize, &maxsize, &align);
+      flags = (GstSchedulingFlags) (flags
+          | GST_SCHEDULING_FLAG_BANDWIDTH_LIMITED);
+      gst_query_set_scheduling (query, flags, minsize, maxsize, align);
+      return TRUE;
+    }
+    default:
+      break;
+  }
+
+  return GST_BASE_SRC_CLASS (parent_class)->query (bsrc, query);
+}
+
 static GstStateChangeReturn
 gst_web_stream_src_change_state (
     GstElement *element, GstStateChange transition)
@@ -705,6 +729,7 @@ gst_web_stream_src_class_init (GstWebStreamSrcClass *klass)
   basesrc_class->do_seek = gst_web_stream_src_do_seek;
   basesrc_class->unlock = gst_web_stream_src_unlock;
   basesrc_class->unlock_stop = gst_web_stream_src_unlock_stop;
+  basesrc_class->query = gst_web_stream_src_query;
 
   gst_element_class_add_pad_template (
       element_class, gst_static_pad_template_get (&srcpadtemplate));

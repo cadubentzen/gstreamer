@@ -1,0 +1,19 @@
+meta,
+    handles-states=true,
+    tool = "ges-validate-wasm-$(gst_api_version)",
+    ges = "converter-type=gl, compositor-factory=glvideomixerelement",
+    args = {
+        "--videosink glimagesink",
+    }
+
+add-clip, name=bg, asset-id="width=1920, height=1080", pattern=blue, layer-priority=1, type=GESTestClip, duration=10.0
+
+add-clip, name=ball, asset-id="width=1920, height=1080", pattern=ball, layer-priority=0, type=GESTestClip, duration=10.0
+set-child-properties, element-name=ball, posx=100, posy=100, width=480, height=270
+
+set-control-source, element-name=ball, property-name=posx, binding-type=direct-absolute, source-type=interpolation, interpolation-mode=linear
+add-keyframe, element-name=ball, property-name=posx, timestamp=0.0, value=100.0
+add-keyframe, element-name=ball, property-name=posx, timestamp=5.0, value=1340.0
+add-keyframe, element-name=ball, property-name=posx, timestamp=10.0, value=100.0
+
+play

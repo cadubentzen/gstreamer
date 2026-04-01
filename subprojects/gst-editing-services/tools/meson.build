@@ -37,6 +37,7 @@ if host_system == 'emscripten'
         '-sERROR_ON_UNDEFINED_SYMBOLS=1',
         '-Wl,--allow-multiple-definition',
         '-sASSERTIONS=1',
+        '--profiling-funcs',
         '-sEXPORTED_FUNCTIONS=_main,_gst_dots_snapshot,_ges_validate_wasm_get_position,_ges_validate_wasm_get_duration,_ges_validate_wasm_get_layer_count,_ges_validate_wasm_get_clip_count,_ges_validate_wasm_get_clip_start,_ges_validate_wasm_get_clip_duration',
         '-sMIN_WEBGL_VERSION=2',
         '-sMAX_WEBGL_VERSION=2',
@@ -47,10 +48,10 @@ if host_system == 'emscripten'
         '-sFORCE_FILESYSTEM=1',
         '-sASYNCIFY_IMPORTS=["_emval_await","__emscripten_promise_await","emscripten_sleep","_emscripten_receive_on_main_thread_js"]',
         '-sASYNCIFY_STACK_SIZE=1048576',
-        # Remove hot pad data/event/query paths from asyncify to avoid JS
-        # call stack overflow. These never proxy to the main thread.
-        '-sASYNCIFY_REMOVE=gst_validate_pad_monitor_downstream_event_check,gst_validate_pad_monitor_pad_probe,gst_validate_pad_monitor_event_probe,gst_validate_pad_monitor_sink_event_check,gst_validate_pad_monitor_src_event_check,gst_validate_pad_monitor_common_event_check,gst_validate_pad_monitor_query_func,probe_hook_marshal,do_probe_callbacks,gst_pad_push_event_unchecked,gst_pad_push_event,gst_pad_event_default,event_forward_func,gst_pad_forward,gst_pad_send_event_unchecked,gst_pad_send_event,gst_pad_push,gst_pad_chain_data_unchecked,gst_pad_push_data,gst_pad_query,gst_pad_peer_query,gst_pad_query_default,gst_iterator_fold,query_latency_default_fold,gst_pad_iterate_internal_links_default,gst_pad_pull_range,gst_pad_get_range_unchecked,gst_pad_get_range,gst_aggregator_pad_chain_internal,gst_aggregator_default_sink_event,gst_aggregator_default_sink_query,gst_video_aggregator_aggregate,gst_video_aggregator_find_best_format,gst_element_foreach_sink_pad,gst_element_foreach_src_pad,gst_element_foreach_pad,gst_bin_query,gst_bin_src_pads_activate,gst_bin_change_state_func,gst_pipeline_change_state,execute_next_action_full,execute_next_action,_action_set_done,gst_validate_action_set_done,gst_validate_scenario_execute_next_or_restart_looping,gst_validate_execute_action,gst_validate_print_action,gst_validate_printf_valist,gst_validate_printf,g_regex_replace,g_regex_replace_eval,g_match_info_next,pcre2_match_8,match',
+        '-sASYNCIFY_REMOVE=' + ','.join(run_command('grep', '-v', '^$', meson.current_source_dir() / 'asyncify_remove.txt', check: true).stdout().strip().split('\n')),
         '-sINITIAL_MEMORY=536870912',
+        '-sSTACK_SIZE=8388608',
+        '-sDEFAULT_PTHREAD_STACK_SIZE=8388608',
         '-lGL',
       ],
     }}

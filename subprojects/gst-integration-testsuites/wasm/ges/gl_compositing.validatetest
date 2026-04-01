@@ -1,7 +1,7 @@
 meta,
     handles-states=true,
     tool = "ges-validate-wasm-$(gst_api_version)",
-    ges = "converter-type=gl, compositor-factory=glvideomixer",
+    ges = "converter-type=gl, compositor-factory=glvideomixerelement",
     args = {
         "--videosink glimagesink",
     }

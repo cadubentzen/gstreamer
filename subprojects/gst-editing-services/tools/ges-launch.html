@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <script src="coi-serviceworker.js"></script>
   <title>GES Validate WASM Runner</title>
   <style>
     :root {
@@ -428,10 +429,12 @@
           el.scrollTop = el.scrollHeight;
         },
         printErr: function(text) {
-          console.error(text);
-          var el = document.getElementById('output');
-          el.textContent += text + '\n';
-          el.scrollTop = el.scrollHeight;
+          // console.error(text);
+          // if (/validate|action|PASSED|FAILED|critical|warning :|error :|Issues found/i.test(text)) {
+          //   var el = document.getElementById('output');
+          //   el.textContent += text + '\n';
+          //   el.scrollTop = el.scrollHeight;
+          // }
         },
       };
 

@@ -42,6 +42,114 @@ GST_DEBUG_CATEGORY_STATIC (ges_validate_wasm_dbg);
 static gint ret = 0;
 static GMainLoop *mainloop;
 static GstElement *pipeline;
+static GESTimeline *s_timeline;
+
+#define MAX_LAYERS 16
+#define MAX_CLIPS_PER_LAYER 64
+
+static struct {
+  int layer_count;
+  int clip_count[MAX_LAYERS];
+  double clip_start[MAX_LAYERS][MAX_CLIPS_PER_LAYER];
+  double clip_duration[MAX_LAYERS][MAX_CLIPS_PER_LAYER];
+  double timeline_duration;
+  double position;
+} cached_state = { 0 };
+
+static void
+update_cached_state (void)
+{
+  GList *layers, *l;
+  int li;
+
+  if (!s_timeline || !pipeline)
+    return;
+
+  layers = ges_timeline_get_layers (s_timeline);
+  cached_state.layer_count = MIN ((int) g_list_length (layers), MAX_LAYERS);
+
+  for (l = layers, li = 0; l && li < MAX_LAYERS; l = l->next, li++) {
+    GList *clips, *c;
+    int ci;
+
+    clips = ges_layer_get_clips (l->data);
+    cached_state.clip_count[li] = MIN ((int) g_list_length (clips),
+        MAX_CLIPS_PER_LAYER);
+
+    for (c = clips, ci = 0; c && ci < MAX_CLIPS_PER_LAYER; c = c->next, ci++) {
+      cached_state.clip_start[li][ci] =
+          (double) ges_timeline_element_get_start (GES_TIMELINE_ELEMENT
+          (c->data)) / GST_SECOND;
+      cached_state.clip_duration[li][ci] =
+          (double) ges_timeline_element_get_duration (GES_TIMELINE_ELEMENT
+          (c->data)) / GST_SECOND;
+    }
+    g_list_free_full (clips, gst_object_unref);
+  }
+  g_list_free_full (layers, gst_object_unref);
+
+  cached_state.timeline_duration =
+      (double) ges_timeline_get_duration (s_timeline) / GST_SECOND;
+
+  {
+    gint64 pos = 0;
+    if (gst_element_query_position (pipeline, GST_FORMAT_TIME, &pos))
+      cached_state.position = (double) pos / GST_SECOND;
+  }
+}
+
+static gboolean
+update_cached_state_cb (gpointer data)
+{
+  update_cached_state ();
+  return G_SOURCE_CONTINUE;
+}
+
+double
+ges_validate_wasm_get_position (void)
+{
+  return cached_state.position;
+}
+
+double
+ges_validate_wasm_get_duration (void)
+{
+  return cached_state.timeline_duration;
+}
+
+int
+ges_validate_wasm_get_layer_count (void)
+{
+  return cached_state.layer_count;
+}
+
+int
+ges_validate_wasm_get_clip_count (int layer)
+{
+  if (layer < 0 || layer >= cached_state.layer_count)
+    return 0;
+  return cached_state.clip_count[layer];
+}
+
+double
+ges_validate_wasm_get_clip_start (int layer, int clip)
+{
+  if (layer < 0 || layer >= cached_state.layer_count)
+    return 0;
+  if (clip < 0 || clip >= cached_state.clip_count[layer])
+    return 0;
+  return cached_state.clip_start[layer][clip];
+}
+
+double
+ges_validate_wasm_get_clip_duration (int layer, int clip)
+{
+  if (layer < 0 || layer >= cached_state.layer_count)
+    return 0;
+  if (clip < 0 || clip >= cached_state.clip_count[layer])
+    return 0;
+  return cached_state.clip_duration[layer][clip];
+}
 
 typedef struct
 {
@@ -311,6 +419,7 @@ main (int argc, char **argv)
 
   /* Create GES timeline */
   timeline = create_timeline (tokens, n_tokens);
+  s_timeline = timeline;
   if (!timeline) {
     GST_ERROR ("Failed to create timeline");
     g_strfreev (tokens);
@@ -377,6 +486,7 @@ main (int argc, char **argv)
     }
   }
 
+  g_timeout_add (50, update_cached_state_cb, NULL);
   g_main_loop_run (mainloop);
 
   gst_validate_printf (NULL, "\n=======> Test %s (Return value: %i)\n\n",

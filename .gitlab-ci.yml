@@ -1,3 +1,7 @@
+stages:
+  - test
+  - deploy
+
 run-ges-tests:
   stage: test
   image: registry.freedesktop.org/thiblahute/gstreamer/amd64/fedora:2025-03-14.0-1.26
@@ -35,3 +39,22 @@ run-ges-tests:
     reports:
       junit:
         - "$CI_PROJECT_DIR/validate-logs/*.xml"
+
+pages:
+  stage: deploy
+  image: registry.freedesktop.org/thiblahute/gstreamer/amd64/fedora:2026-04-01.0-main
+  tags: ["gstreamer"]
+
+  script:
+    - ci/scripts/build-emscripten.sh build/
+    - ci/scripts/deploy-pages.sh build/
+
+  after_script:
+    - mv build/meson-logs/ meson-logs
+
+  artifacts:
+    expire_in: "14 days"
+    when: always
+    paths:
+      - "meson-logs/"
+      - public

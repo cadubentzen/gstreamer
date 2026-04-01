@@ -1,6 +1,5 @@
 stages:
   - test
-  - deploy
 
 run-ges-tests:
   stage: test
@@ -41,7 +40,7 @@ run-ges-tests:
         - "$CI_PROJECT_DIR/validate-logs/*.xml"
 
 pages:
-  stage: deploy
+  stage: test
   image: registry.freedesktop.org/thiblahute/gstreamer/amd64/fedora:2026-04-01.0-main
   tags: ["gstreamer"]
 

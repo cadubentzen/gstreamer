@@ -475,7 +475,7 @@ gst_web_stream_src_urihandler_get_type (GType type)
 static const gchar *const *
 gst_web_stream_src_urihandler_get_protocols (GType type)
 {
-  static const gchar *protocols[] = { "http", "https", NULL };
+  static const gchar *protocols[] = { "http", "https", "blob", NULL };
 
   return protocols;
 }

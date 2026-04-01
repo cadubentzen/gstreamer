@@ -225,27 +225,50 @@ gst_web_codecs_video_decoder_on_output (guintptr self_, val video_frame)
 
     /* Upload VideoFrame to GL texture.
      *
-     * copyTo() extracts pixels into the WASM heap on the runner thread,
-     * then the proxied glTexImage2D uploads from there. Single copy. */
+     * Two paths depending on whether GLctx is a real WebGLRenderingContext
+     * on this thread (OffscreenCanvas / runner mode) or a proxied handle
+     * (PROXY_ALWAYS, e.g. Node.js headless).
+     *
+     * Zero-copy path: texImage2D(videoFrame) lets the browser transfer a
+     * GPU-resident VideoFrame directly to the WebGL texture without any
+     * CPU readback.
+     *
+     * Fallback path: copyTo() extracts pixels into the WASM heap on the
+     * runner thread, then the proxied glTexImage2D uploads from there. */
     {
-      val options = val::object ();
-      options.set ("format", std::string ("RGBA"));
+      gboolean gl_is_local = (gboolean) EM_ASM_INT ({
+        return GL.currentContextIsProxied ? 0 : 1;
+      });
 
-      int w = video_frame["displayWidth"].as<int> ();
-      int h = video_frame["displayHeight"].as<int> ();
-      int alloc_size = w * h * 4;
-      guint8 *pixels = (guint8 *) g_malloc (alloc_size);
+      if (gl_is_local) {
+        /* Zero-copy path: local GL context on the runner thread. */
+        EM_ASM ({
+          var vf = Emval.toValue ($0);
+          GLctx.texImage2D (GLctx.TEXTURE_2D, 0, GLctx.RGBA,
+              GLctx.RGBA, GLctx.UNSIGNED_BYTE, vf);
+          vf.close ();
+        }, video_frame.as_handle ());
+      } else {
+        /* Fallback: copyTo + glTexImage2D for PROXY_ALWAYS (Node.js, etc.) */
+        val options = val::object ();
+        options.set ("format", std::string ("RGBA"));
 
-      val dest = val::take_ownership ((EM_VAL) EM_ASM_PTR ({
-        return Emval.toHandle (HEAPU8.subarray ($0, $1));
-      }, (int) (uintptr_t) pixels,
-         (int) ((uintptr_t) pixels + alloc_size)));
-      video_frame.call<val> ("copyTo", dest, options).await ();
-      video_frame.call<void> ("close");
+        int w = video_frame["displayWidth"].as<int> ();
+        int h = video_frame["displayHeight"].as<int> ();
+        int alloc_size = w * h * 4;
+        guint8 *pixels = (guint8 *) g_malloc (alloc_size);
 
-      glTexImage2D (GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
-          GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-      g_free (pixels);
+        val dest = val::take_ownership ((EM_VAL) EM_ASM_PTR ({
+          return Emval.toHandle (HEAPU8.subarray ($0, $1));
+        }, (int) (uintptr_t) pixels,
+           (int) ((uintptr_t) pixels + alloc_size)));
+        video_frame.call<val> ("copyTo", dest, options).await ();
+        video_frame.call<void> ("close");
+
+        glTexImage2D (GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0,
+            GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+        g_free (pixels);
+      }
     }
 
     glBindTexture (GL_TEXTURE_2D, 0);

@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>GES Validate WASM Runner</title>
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --surface2: #0f3460;
+      --accent: #e94560;
+      --text: #eee;
+      --text-dim: #999;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: var(--surface);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 1px solid var(--surface2);
+      flex-shrink: 0;
+    }
+
+    header h1 { font-size: 16px; font-weight: 600; color: var(--accent); }
+    header .test-name { font-size: 12px; color: var(--text-dim); font-family: monospace; }
+    header .timecode {
+      margin-left: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+    }
+    header .timecode .dim { color: var(--text-dim); font-size: 12px; }
+
+    .main-area {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .preview-area {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+      min-width: 0;
+    }
+
+    #canvas {
+      max-width: 100%;
+      max-height: 100%;
+      background: #111;
+    }
+
+    .log-area {
+      width: 360px;
+      background: var(--surface);
+      border-left: 1px solid var(--surface2);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .log-area .log-header {
+      padding: 6px 12px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-dim);
+      border-bottom: 1px solid var(--surface2);
+      flex-shrink: 0;
+    }
+
+    #output {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+      font-family: monospace;
+      font-size: 11px;
+      white-space: pre-wrap;
+      color: var(--text-dim);
+      line-height: 1.5;
+    }
+
+    /* Timeline */
+    .timeline-area {
+      height: 200px;
+      background: var(--surface);
+      border-top: 1px solid var(--surface2);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .timeline-header {
+      display: flex;
+      align-items: center;
+      padding: 4px 12px;
+      border-bottom: 1px solid var(--surface2);
+      flex-shrink: 0;
+      gap: 8px;
+    }
+
+    .timeline-header h3 { font-size: 12px; font-weight: 500; }
+
+    .timeline-header button {
+      background: var(--surface2);
+      border: none;
+      color: var(--text);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .timeline-header button:hover { background: var(--accent); }
+
+    .timeline-ruler {
+      height: 24px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--surface2);
+      position: relative;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .timeline-ruler canvas { width: 100%; height: 100%; }
+
+    .timeline-layers {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    .timeline-layer {
+      height: 50px;
+      border-bottom: 1px solid var(--surface2);
+      position: relative;
+      display: flex;
+    }
+
+    .layer-label {
+      width: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      color: var(--text-dim);
+      background: var(--bg);
+      border-right: 1px solid var(--surface2);
+      flex-shrink: 0;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .layer-content {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .timeline-clip {
+      position: absolute;
+      top: 4px;
+      height: calc(100% - 8px);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      font-size: 11px;
+      font-weight: 500;
+      border: 1px solid rgba(255,255,255,0.15);
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      user-select: none;
+    }
+
+    .timeline-playhead {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--accent);
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .timeline-playhead::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -5px;
+      width: 12px;
+      height: 8px;
+      background: var(--accent);
+      clip-path: polygon(0 0, 100% 0, 50% 100%);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>GES Validate WASM Runner</h1>
+    <span class="test-name" id="test-name"></span>
+    <div class="timecode">
+      <span id="position-display">00:00.000</span>
+      <span class="dim"> / </span>
+      <span id="duration-display">00:00.000</span>
+    </div>
+  </header>
+
+  <div class="main-area">
+    <div class="preview-area">
+      <canvas id="canvas" width="1920" height="1080"></canvas>
+    </div>
+    <div class="log-area">
+      <div class="log-header">Log</div>
+      <pre id="output"></pre>
+    </div>
+  </div>
+
+  <div class="timeline-area">
+    <div class="timeline-header">
+      <h3>Timeline</h3>
+      <button onclick="zoomIn()">Zoom +</button>
+      <button onclick="zoomOut()">Zoom &minus;</button>
+    </div>
+    <div class="timeline-ruler">
+      <canvas id="ruler-canvas"></canvas>
+    </div>
+    <div class="timeline-layers" id="timeline-layers"></div>
+  </div>
+
+  <script src="/dots-viewer/dist/gst-dots-wasm-bundle.js"></script>
+  <script>
+    var CLIP_COLORS = [
+      '#e94560', '#533483', '#0f3460', '#e97d20', '#20e9a0',
+      '#2080e9', '#9020e9', '#e92080', '#60e920', '#e9e920'
+    ];
+    var pixelsPerSecond = 60;
+    var prevLayerCount = -1;
+    var prevTotalClips = -1;
+    var isReady = false;
+
+    function formatTime(seconds) {
+      if (!isFinite(seconds) || seconds < 0) seconds = 0;
+      var m = Math.floor(seconds / 60);
+      var s = seconds % 60;
+      return String(m).padStart(2, '0') + ':' + s.toFixed(3).padStart(6, '0');
+    }
+
+    function zoomIn() {
+      pixelsPerSecond = Math.min(400, pixelsPerSecond * 1.3);
+      prevTotalClips = -1; // force refresh
+    }
+
+    function zoomOut() {
+      pixelsPerSecond = Math.max(10, pixelsPerSecond / 1.3);
+      prevTotalClips = -1;
+    }
+
+    function refreshTimeline() {
+      var layerCount = Module._ges_validate_wasm_get_layer_count();
+      var totalDuration = Module._ges_validate_wasm_get_duration();
+      var container = document.getElementById('timeline-layers');
+      container.innerHTML = '';
+
+      for (var l = 0; l < layerCount; l++) {
+        var layerEl = document.createElement('div');
+        layerEl.className = 'timeline-layer';
+
+        var label = document.createElement('div');
+        label.className = 'layer-label';
+        label.textContent = 'Layer ' + l;
+        layerEl.appendChild(label);
+
+        var content = document.createElement('div');
+        content.className = 'layer-content';
+
+        var clipCount = Module._ges_validate_wasm_get_clip_count(l);
+        for (var c = 0; c < clipCount; c++) {
+          var start = Module._ges_validate_wasm_get_clip_start(l, c);
+          var duration = Module._ges_validate_wasm_get_clip_duration(l, c);
+
+          var clipEl = document.createElement('div');
+          clipEl.className = 'timeline-clip';
+          clipEl.style.background = CLIP_COLORS[(l * 7 + c) % CLIP_COLORS.length];
+          clipEl.style.left = (start * pixelsPerSecond) + 'px';
+          clipEl.style.width = Math.max(20, duration * pixelsPerSecond) + 'px';
+          clipEl.textContent = duration.toFixed(1) + 's';
+          clipEl.title = 'Layer ' + l + ' / Clip ' + c + '\nStart: ' + formatTime(start) + '\nDuration: ' + duration.toFixed(2) + 's';
+          content.appendChild(clipEl);
+        }
+
+        layerEl.appendChild(content);
+        container.appendChild(layerEl);
+      }
+
+      drawRuler(totalDuration);
+    }
+
+    function drawRuler(totalDuration) {
+      var rulerCanvas = document.getElementById('ruler-canvas');
+      var rect = rulerCanvas.parentElement.getBoundingClientRect();
+      rulerCanvas.width = rect.width;
+      rulerCanvas.height = rect.height;
+
+      var ctx = rulerCanvas.getContext('2d');
+      ctx.fillStyle = '#111';
+      ctx.fillRect(0, 0, rulerCanvas.width, rulerCanvas.height);
+
+      var tickInterval = 1;
+      if (pixelsPerSecond < 30) tickInterval = 5;
+      else if (pixelsPerSecond < 60) tickInterval = 2;
+      else if (pixelsPerSecond > 200) tickInterval = 0.5;
+
+      var labelOffset = 80;
+      var visibleDuration = Math.max(totalDuration + 5, 30);
+
+      ctx.strokeStyle = '#333';
+      ctx.fillStyle = '#777';
+      ctx.font = '9px monospace';
+      ctx.textAlign = 'center';
+
+      for (var t = 0; t <= visibleDuration; t += tickInterval) {
+        var x = labelOffset + t * pixelsPerSecond;
+        if (x > rulerCanvas.width) break;
+
+        ctx.beginPath();
+        var isMajor = (t % (tickInterval * 2) === 0) || tickInterval >= 1;
+        if (isMajor) {
+          ctx.moveTo(x, 14);
+          ctx.lineTo(x, rulerCanvas.height);
+          ctx.fillText(formatTime(t), x, 12);
+        } else {
+          ctx.moveTo(x, 18);
+          ctx.lineTo(x, rulerCanvas.height);
+        }
+        ctx.stroke();
+      }
+    }
+
+    function updatePlayhead() {
+      var pos = Module._ges_validate_wasm_get_position();
+      var dur = Module._ges_validate_wasm_get_duration();
+
+      document.getElementById('position-display').textContent = formatTime(pos);
+      document.getElementById('duration-display').textContent = formatTime(dur);
+
+      var layers = document.getElementById('timeline-layers');
+      var playhead = layers.querySelector('.timeline-playhead');
+      if (!playhead) {
+        playhead = document.createElement('div');
+        playhead.className = 'timeline-playhead';
+        layers.appendChild(playhead);
+      }
+      playhead.style.left = (80 + pos * pixelsPerSecond) + 'px';
+    }
+
+    function uiLoop() {
+      if (!isReady) { requestAnimationFrame(uiLoop); return; }
+
+      // Detect timeline structure changes
+      var layerCount = Module._ges_validate_wasm_get_layer_count();
+      var totalClips = 0;
+      for (var i = 0; i < layerCount; i++)
+        totalClips += Module._ges_validate_wasm_get_clip_count(i);
+
+      if (layerCount !== prevLayerCount || totalClips !== prevTotalClips) {
+        prevLayerCount = layerCount;
+        prevTotalClips = totalClips;
+        refreshTimeline();
+      }
+
+      updatePlayhead();
+      requestAnimationFrame(uiLoop);
+    }
+
+    // --- Boot ---
+    var params = new URLSearchParams(window.location.search);
+    var testPath = params.get('validate-test');
+    if (!testPath) {
+      document.getElementById('output').textContent = 'Usage: ?validate-test=path/to/test.validatetest';
+      throw new Error('No validate-test parameter provided');
+    }
+
+    document.getElementById('test-name').textContent = testPath;
+    document.getElementById('output').textContent = 'Fetching ' + testPath + '...\n';
+
+    fetch(testPath).then(function(response) {
+      if (!response.ok)
+        throw new Error('Failed to fetch ' + testPath + ': ' + response.status);
+      return response.text();
+    }).then(function(testFile) {
+      document.getElementById('output').textContent += 'Starting...\n';
+
+      var Module = {
+        canvas: document.getElementById('canvas'),
+        locateFile: function(path) { return '/' + path; },
+        onAbort: function(what) { console.error('WASM ABORT: ' + what); },
+        onRuntimeInitialized: function() {
+          isReady = true;
+        },
+        preRun: [function() {
+          FS.writeFile('/test.validatetest', testFile);
+          ENV["GST_DEBUG"] = "*:2";
+          ENV["GST_DEBUG_NO_COLOR"] = "1";
+          ENV["GST_TRACERS"] = "dots";
+        }],
+        print: function(text) {
+          console.log(text);
+          var el = document.getElementById('output');
+          el.textContent += text + '\n';
+          el.scrollTop = el.scrollHeight;
+        },
+        printErr: function(text) {
+          console.error(text);
+          var el = document.getElementById('output');
+          el.textContent += text + '\n';
+          el.scrollTop = el.scrollHeight;
+        },
+      };
+
+      window.Module = Module;
+      var script = document.createElement('script');
+      script.src = '/ges-validate-wasm-1.0.js';
+      document.body.appendChild(script);
+
+      requestAnimationFrame(uiLoop);
+    }).catch(function(err) {
+      document.getElementById('output').textContent += 'ERROR: ' + err.message + '\n';
+    });
+
+    window.addEventListener('resize', function() {
+      if (isReady) {
+        var dur = Module._ges_validate_wasm_get_duration();
+        drawRuler(dur);
+      }
+    });
+  </script>
+</body>
+</html>

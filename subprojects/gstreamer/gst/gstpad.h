@@ -1547,6 +1547,7 @@ gboolean		gst_pad_start_task			(GstPad *pad, GstTaskFunction func,
 								 gpointer user_data, GDestroyNotify notify);
 GST_API
 gboolean		gst_pad_set_task			(GstPad *pad, GstTask *task);
+GST_API
 gboolean		gst_pad_pause_task			(GstPad *pad);
 
 GST_API

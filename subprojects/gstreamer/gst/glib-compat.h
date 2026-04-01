@@ -34,6 +34,40 @@
 
 G_BEGIN_DECLS
 
+#if !GLIB_CHECK_VERSION(2, 88, 0)
+static inline void
+g_destroy_notify_to_func (gpointer data, gpointer user_data)
+{
+  ((GDestroyNotify) user_data) (data);
+}
+
+static inline gint
+g_compare_func_to_compare_data_func (gconstpointer a, gconstpointer b,
+    gpointer user_data)
+{
+  return ((GCompareFunc) user_data) (a, b);
+}
+
+static inline gpointer
+g_copy_to_func (gconstpointer src, gpointer user_data)
+{
+  typedef gpointer (*GCopyFunc1) (gconstpointer);
+  return ((GCopyFunc1) user_data) (src);
+}
+
+
+#define GTypeClassInitFunc1 GClassInitFunc
+#define GTypeInstanceInitFunc1 GInstanceInitFunc
+#define g_type_register_static_simple1 g_type_register_static_simple
+#define g_type_add_interface_static1(instance_type, interface_type, iface_init) \
+  do { \
+    const GInterfaceInfo g_implement_interface_info = { \
+      (GInterfaceInitFunc)(void (*)(void))(iface_init), NULL, NULL \
+    }; \
+    g_type_add_interface_static (instance_type, interface_type, &g_implement_interface_info); \
+  } while (0)
+#endif
+
 G_END_DECLS
 
 #endif /* __GST_GLIB_COMPAT_H__ */

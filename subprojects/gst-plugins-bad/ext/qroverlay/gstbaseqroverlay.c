@@ -258,7 +258,7 @@ gst_base_qr_overlay_draw_cb (GstBaseQROverlay * self,
   QRcode *qrcode;
   gchar *content;
   gboolean reuse_previous = FALSE;
-  GstVideoOverlayComposition *overlay = NULL;
+  GstVideoOverlayComposition *comp = NULL;
   GstBuffer *buffer = gst_sample_get_buffer (sample);
   GstSegment *segment = gst_sample_get_segment (sample);
   GstClockTime rtime = gst_segment_to_running_time (segment, GST_FORMAT_TIME,
@@ -277,7 +277,7 @@ gst_base_qr_overlay_draw_cb (GstBaseQROverlay * self,
       GST_BASE_QR_OVERLAY_GET_CLASS (self)->get_content (GST_BASE_QR_OVERLAY
       (self), buffer, &priv->info, &reuse_previous);
   if (reuse_previous && priv->prev_overlay) {
-    overlay = gst_video_overlay_composition_ref (priv->prev_overlay);
+    comp = gst_video_overlay_composition_ref (priv->prev_overlay);
   } else if (content) {
     GST_INFO_OBJECT (self, "String will be encoded : %s", content);
     qrcode =
@@ -286,16 +286,16 @@ gst_base_qr_overlay_draw_cb (GstBaseQROverlay * self,
 
     if (qrcode) {
       GST_DEBUG_OBJECT (self, "String encoded");
-      overlay = draw_overlay (GST_BASE_QR_OVERLAY (self), qrcode);
+      comp = draw_overlay (GST_BASE_QR_OVERLAY (self), qrcode);
       gst_mini_object_replace (((GstMiniObject **) & priv->prev_overlay),
-          (GstMiniObject *) overlay);
+          (GstMiniObject *) comp);
     } else {
       GST_WARNING_OBJECT (self, "Could not encode content: %s", content);
     }
   }
   g_free (content);
 
-  return overlay;
+  return comp;
 }
 
 /* GObject vmethod implementations */

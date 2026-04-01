@@ -745,7 +745,7 @@ gst_base_text_overlay_init (GTypeInstance * instance,
   gst_element_add_pad (GST_ELEMENT (overlay), overlay->video_sinkpad);
 
   template =
-      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (klass),
+      gst_element_class_get_pad_template (GST_ELEMENT_CLASS (g_class),
       "text_sink");
   if (template) {
     /* text sink */

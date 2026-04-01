@@ -100,7 +100,6 @@ handle_draw_cb (GtkWidget * widget, cairo_t * cr, gint width G_GNUC_UNUSED,
   GstVideoRectangle *r = &anim_state.rect;
   GtkStyleContext *style;
   GdkRGBA color;
-  int width, height;
 
   width = gtk_widget_get_allocated_width (widget);
   height = gtk_widget_get_allocated_height (widget);

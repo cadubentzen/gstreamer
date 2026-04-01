@@ -1771,7 +1771,7 @@ update_select_streams_event (GstPlayBin3 * playbin, GstEvent * event)
   }
 
   gst_event_parse_select_streams (event, &streams);
-  to_use = g_list_copy_deep (streams, g_strdup_copy_func, NULL);
+  to_use = g_list_copy_deep (streams, g_copy_to_func, (gpointer) g_strdup);
 
   /* For each combiner, we want to add all streams of that type to the
    * selection */

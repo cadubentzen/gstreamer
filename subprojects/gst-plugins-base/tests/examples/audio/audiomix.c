@@ -38,7 +38,7 @@ static void
 value_changed_callback (GtkWidget * widget, gdouble value G_GNUC_UNUSED,
     gpointer user_data G_GNUC_UNUSED)
 {
-  gdouble value = gtk_range_get_value (GTK_RANGE (widget));
+  value = gtk_range_get_value (GTK_RANGE (widget));
   g_object_set (volumes[0], "volume", 1.0 - value, NULL);
   g_object_set (volumes[1], "volume", value, NULL);
 }

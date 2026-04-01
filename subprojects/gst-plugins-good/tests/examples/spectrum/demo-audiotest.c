@@ -71,7 +71,7 @@ static void
 on_frequency_changed (GtkRange * range, gdouble value G_GNUC_UNUSED, gpointer user_data)
 {
   GstElement *machine = GST_ELEMENT (user_data);
-  gdouble value = gtk_range_get_value (range);
+  value = gtk_range_get_value (range);
 
   g_object_set (machine, "freq", value, NULL);
 }

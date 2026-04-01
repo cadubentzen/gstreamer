@@ -168,7 +168,8 @@ GST_STATIC_PAD_TEMPLATE ("src",
 
 
 
-static void gst_switch_bin_child_proxy_iface_init (gpointer iface);
+static void gst_switch_bin_child_proxy_iface_init (gpointer iface,
+    gpointer iface_data);
 static GObject *gst_switch_bin_child_proxy_get_child_by_index (GstChildProxy *
     child_proxy, guint index);
 static guint gst_switch_bin_child_proxy_get_children_count (GstChildProxy *

@@ -141,6 +141,9 @@ static char *gst_info_printf_pointer_extension_func (const char *format,
 /* getpid() is not allowed in case of UWP, use GetCurrentProcessId() instead
  * which can be used on both desktop and UWP */
 #endif
+#ifdef __EMSCRIPTEN__
+#  include <emscripten/console.h>
+#endif
 
 /* use glib's abstraction once it's landed
  * https://gitlab.gnome.org/GNOME/glib/-/merge_requests/2475 */
@@ -1774,6 +1777,45 @@ gst_debug_log_default (GstDebugCategory * category, GstDebugLevel level,
     const gchar * file, const gchar * function, gint line,
     GObject * object, GstDebugMessage * message, gpointer user_data)
 {
+#ifdef __EMSCRIPTEN__
+  {
+    const gchar *message_str;
+    const gchar *object_id;
+    GstClockTime elapsed;
+    gchar *msg;
+
+    if (level > gst_debug_category_get_threshold (category))
+      return;
+
+    _gst_debug_log_preamble (message, &file, &message_str, &object_id,
+        &elapsed);
+
+    if (object_id)
+      msg = g_strdup_printf ("%s:%d:%s:<%s> %s",
+          gst_debug_category_get_name (category), line, function,
+          object_id, message_str);
+    else
+      msg = g_strdup_printf ("%s:%d:%s %s",
+          gst_debug_category_get_name (category), line, function,
+          message_str);
+
+    switch (level) {
+      case GST_LEVEL_ERROR:
+        emscripten_console_error (msg);
+        break;
+      case GST_LEVEL_WARNING:
+      case GST_LEVEL_FIXME:
+        emscripten_console_warn (msg);
+        break;
+      default:
+        emscripten_console_log (msg);
+        break;
+    }
+
+    g_free (msg);
+    return;
+  }
+#endif
   gint pid;
   GstClockTime elapsed;
   const gchar *object_id;

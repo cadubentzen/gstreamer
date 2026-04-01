@@ -23,6 +23,7 @@
 #endif
 
 #include <emscripten/html5.h>
+#include <emscripten/em_asm.h>
 #include <unistd.h>
 #include <gst/gst.h>
 #include <gst/gl/gl.h>
@@ -33,12 +34,11 @@
 #define GST_CAT_DEFAULT gst_gl_window_debug
 
 #define gst_gl_window_canvas_parent_class parent_class
-G_DEFINE_TYPE (GstGLWindowCanvas, gst_gl_window_canvas,
-    GST_TYPE_GL_WINDOW);
+G_DEFINE_TYPE (GstGLWindowCanvas, gst_gl_window_canvas, GST_TYPE_GL_WINDOW);
 
 static EM_BOOL
 gst_gl_window_canvas_mouse_cb (int event_type,
-    const EmscriptenMouseEvent *event, void *data)
+    const EmscriptenMouseEvent * event, void *data)
 {
   GstGLWindow *window = GST_GL_WINDOW (data);
   GstGLWindowCanvas *self = GST_GL_WINDOW_CANVAS (window);
@@ -97,13 +97,29 @@ gst_gl_window_canvas_draw_cb (gpointer data)
    * sized changed, we need to ask for it ourselves
    */
 
-  gst_gl_window_get_surface_dimensions (window, &window_width,
-      &window_height);
+  gst_gl_window_get_surface_dimensions (window, &window_width, &window_height);
   context_handle = gst_gl_context_get_gl_context (context);
-  if (!emscripten_webgl_get_drawing_buffer_size (context_handle,
+
+  if (self->shared_context) {
+    /* Local OffscreenCanvas path (PROXY_DISALLOW): the context lives on
+     * this worker thread, so emscripten_webgl_get_drawing_buffer_size()
+     * cannot be used — it unconditionally proxies to the main thread in
+     * the Emscripten JS runtime, where this context is not current.
+     * Query the drawing buffer size directly via the WebGL context. */
+    /* *INDENT-OFF* */
+    width  = EM_ASM_INT ({ return GLctx.drawingBufferWidth;  });
+    height = EM_ASM_INT ({ return GLctx.drawingBufferHeight; });
+    /* *INDENT-ON* */
+    if (window->queue_resize || width != (gint) window_width
+        || height != (gint) window_height) {
+      GST_DEBUG_OBJECT (window, "Resizing to %dx%d from %dx%d", width, height,
+          window_width, window_height);
+      gst_gl_window_resize (window, width, height);
+    }
+  } else if (!emscripten_webgl_get_drawing_buffer_size (context_handle,
           &width, &height)
-      && (window->queue_resize || width != window_width
-          || height != window_height)) {
+      && (window->queue_resize || width != (gint) window_width
+          || height != (gint) window_height)) {
     GST_DEBUG_OBJECT (window, "Resizing to %dx%d from %dx%d", width, height,
         window_width, window_height);
     gst_gl_window_resize (window, width, height);
@@ -120,8 +136,7 @@ gst_gl_window_canvas_draw_cb (gpointer data)
 static void
 gst_gl_window_canvas_draw (GstGLWindow * window)
 {
-  gst_gl_window_send_message (window,
-      gst_gl_window_canvas_draw_cb, window);
+  gst_gl_window_send_message (window, gst_gl_window_canvas_draw_cb, window);
 }
 
 static void
@@ -144,8 +159,7 @@ gst_gl_window_canvas_run (GstGLWindow * window)
      * (like _unlock_create_thread) and return — the GL thread exits
      * but the context stays alive. */
     GST_DEBUG_OBJECT (window, "Shared context — draining and returning");
-    while (g_main_context_iteration (window->main_context, FALSE))
-      ;
+    while (g_main_context_iteration (window->main_context, FALSE));
     return;
   }
 
@@ -183,7 +197,7 @@ gst_gl_window_canvas_new (GstGLDisplay * display)
   }
 
   self = g_object_new (GST_TYPE_GL_WINDOW_CANVAS, NULL);
-  self->canvas = g_strdup ((gchar *)gst_gl_display_get_handle (display));
+  self->canvas = g_strdup ((gchar *) gst_gl_display_get_handle (display));
   /* TODO: register mouse event callbacks on the main thread.
    * Currently skipped because this runs on the GL context thread
    * which cannot access DOM elements. */

@@ -24,6 +24,7 @@
 
 #include <gst/gst.h>
 #include <gst/gl/gl.h>
+#include <emscripten.h>
 #include <emscripten/threading.h>
 #include <emscripten/em_asm.h>
 #include "../gstglcontext_private.h"
@@ -35,7 +36,7 @@
 
 /* FIXME rename this to GstGLContextWebEmscripten */
 /* This is not defined in any header, in emscripten it is forward referenced like this */
-extern void* emscripten_GetProcAddress(const char *name);
+extern void *emscripten_GetProcAddress (const char *name);
 
 struct _GstGLContextEmscriptenPrivate
 {
@@ -53,7 +54,7 @@ gst_gl_context_emscripten_get_gl_context (GstGLContext * context)
   GstGLContextEmscripten *self;
 
   self = GST_GL_CONTEXT_EMSCRIPTEN (context);
-  return (guintptr)self->priv->handle;
+  return (guintptr) self->priv->handle;
 }
 
 static gboolean
@@ -64,7 +65,7 @@ gst_gl_context_emscripten_activate (GstGLContext * context, gboolean activate)
 
   self = GST_GL_CONTEXT_EMSCRIPTEN (context);
   GST_DEBUG_OBJECT (context, "Activating context");
-  result = emscripten_webgl_make_context_current(self->priv->handle);
+  result = emscripten_webgl_make_context_current (self->priv->handle);
   if (!result) {
     GST_DEBUG_OBJECT (context, "Context activated");
     return TRUE;
@@ -83,6 +84,168 @@ _gl_runner_context_quark (void)
   return quark;
 }
 
+/* Transfer the DOM canvas to an OffscreenCanvas and send it to the
+ * runner thread via postMessage with Transferable.  Returns TRUE if
+ * the OffscreenCanvas was successfully received and stored in
+ * specialHTMLTargets[selector] on the current worker thread.
+ *
+ * The mechanism:
+ *  1. Register a message handler on the current worker thread that
+ *     listens for { gst_cmd: "offscreenCanvas" } messages and stores
+ *     the received OffscreenCanvas in specialHTMLTargets.
+ *  2. Use MAIN_THREAD_EM_ASM to call transferControlToOffscreen()
+ *     on the DOM canvas and postMessage the result to this worker.
+ *  3. Yield to the JS event loop via emscripten_sleep(0) so the
+ *     worker can process the queued postMessage and fire the handler.
+ *  4. Check a shared-memory flag to determine success or failure.
+ *
+ * The emscripten_sleep(0) call uses ASYNCIFY to unwind the WASM
+ * stack, yielding control to the JS event loop.  This allows the
+ * addEventListener('message') handler to fire and store the
+ * OffscreenCanvas in specialHTMLTargets before we return.
+ *
+ * This is safe because we are in the NULL->READY state change with
+ * no GL calls active and no stream locks held.
+ */
+static gboolean
+_try_transfer_offscreen_canvas (GstGLContext * context, const gchar * selector)
+{
+  /* Allocate the flag on the heap, not the stack, because
+   * emscripten_sleep() uses ASYNCIFY which unwinds the WASM stack.
+   * During the unwind, the stack frame is serialized and the physical
+   * stack memory may be reused.  The JS message handler's closure
+   * captures the flag's address, so it must remain valid while the
+   * stack is unwound. */
+  volatile int32_t *transfer_flag = g_new0 (int32_t, 1);
+  gboolean result = FALSE;
+  gboolean supported;
+  int retries;
+
+  GST_DEBUG_OBJECT (context,
+      "Attempting OffscreenCanvas transfer for '%s'", selector);
+
+  /* Step 1: Check browser environment and OffscreenCanvas support.
+   * In Node.js there is no document and no transferControlToOffscreen. */
+  /* *INDENT-OFF* */
+  supported = (gboolean) EM_ASM_INT ({
+    return (typeof document !== 'undefined' &&
+            typeof OffscreenCanvas !== 'undefined') ? 1 : 0;
+  });
+  /* *INDENT-ON* */
+
+  if (!supported) {
+    GST_DEBUG_OBJECT (context,
+        "OffscreenCanvas not available (Node.js or unsupported browser)");
+    g_free ((gpointer) transfer_flag);
+    return FALSE;
+  }
+
+  /* Step 2: Register a message handler on this worker thread that will
+   * receive the OffscreenCanvas and store it in specialHTMLTargets.
+   * The handler sets *transfer_flag to 1 on success or -1 on failure. */
+  /* *INDENT-OFF* */
+  EM_ASM ({
+    var selector = UTF8ToString ($0);
+    var flagPtr = $1;
+
+    Module['_gst_offscreen_canvas_handler'] = function (e) {
+      var msgData = e.data;
+      if (msgData && msgData['gst_cmd'] === 'offscreenCanvas' &&
+          msgData['selector'] === selector) {
+        var offscreen = msgData['offscreenCanvas'];
+        if (offscreen) {
+          /* Store in specialHTMLTargets so emscripten_webgl_create_context
+           * can find it via findCanvasEventTarget / findEventTarget */
+          specialHTMLTargets[selector] = offscreen;
+          Atomics.store (HEAP32, flagPtr >> 2, 1);
+        } else {
+          Atomics.store (HEAP32, flagPtr >> 2, -1);
+        }
+
+        /* Remove ourselves after handling */
+        removeEventListener ('message',
+            Module['_gst_offscreen_canvas_handler']);
+        Module['_gst_offscreen_canvas_handler'] = null;
+      }
+    };
+
+    addEventListener ('message', Module['_gst_offscreen_canvas_handler']);
+  }, selector, (int32_t *) transfer_flag);
+  /* *INDENT-ON* */
+
+  /* Step 3: From the browser main thread, find the canvas, call
+   * transferControlToOffscreen(), and postMessage it to our worker.
+   * For error cases (canvas not found, worker not found), the main
+   * thread sets the flag directly since no postMessage is needed. */
+  /* *INDENT-OFF* */
+  MAIN_THREAD_EM_ASM ({
+    var selector = UTF8ToString ($0);
+    var threadId = $1;
+    var flagPtr = $2;
+    var canvas = document.querySelector (selector);
+
+    if (!canvas || typeof canvas.transferControlToOffscreen !== 'function') {
+      /* Signal failure -- canvas not found or API unavailable */
+      Atomics.store (HEAP32, flagPtr >> 2, -1);
+      return;
+    }
+
+    var offscreen = canvas.transferControlToOffscreen ();
+    var worker = PThread.pthreads[threadId];
+    if (!worker) {
+      Atomics.store (HEAP32, flagPtr >> 2, -1);
+      return;
+    }
+
+    worker.postMessage ({
+      gst_cmd: 'offscreenCanvas',
+      selector: selector,
+      offscreenCanvas: offscreen
+    }, [offscreen]);
+  }, selector, pthread_self (), (int32_t *) transfer_flag);
+  /* *INDENT-ON* */
+
+  /* Step 4: Yield to the JS event loop so the worker can process the
+   * queued postMessage.  emscripten_sleep(0) uses ASYNCIFY to unwind
+   * the WASM stack, giving the JS event loop a chance to deliver the
+   * message and fire our addEventListener handler.  We retry a few
+   * times in case the message delivery is delayed. */
+  for (retries = 0; retries < 10 && *transfer_flag == 0; retries++) {
+    emscripten_sleep (0);
+  }
+
+  if (*transfer_flag == 1) {
+    GST_INFO_OBJECT (context,
+        "OffscreenCanvas transferred successfully for '%s'", selector);
+    result = TRUE;
+    goto done;
+  }
+
+  if (*transfer_flag == 0) {
+    GST_WARNING_OBJECT (context,
+        "OffscreenCanvas transfer timed out for '%s'", selector);
+  } else {
+    GST_WARNING_OBJECT (context,
+        "OffscreenCanvas transfer failed for '%s' (flag=%d)",
+        selector, (int) *transfer_flag);
+  }
+
+  /* Clean up the message handler if still registered */
+  /* *INDENT-OFF* */
+  EM_ASM ({
+    if (Module['_gst_offscreen_canvas_handler']) {
+      removeEventListener ('message',
+          Module['_gst_offscreen_canvas_handler']);
+      Module['_gst_offscreen_canvas_handler'] = null;
+    }
+  });
+  /* *INDENT-ON* */
+
+done:
+  g_free ((gpointer) transfer_flag);
+  return result;
+}
+
 static gboolean
 gst_gl_context_emscripten_create_context (GstGLContext * context,
     GstGLAPI gl_api, GstGLContext * other_context, GError ** error)
@@ -97,8 +260,7 @@ gst_gl_context_emscripten_create_context (GstGLContext * context,
 
   if (other_context) {
     g_set_error (error, GST_GL_CONTEXT_ERROR,
-        GST_GL_CONTEXT_ERROR_WRONG_CONFIG,
-        "Shared contexts are not allowed");
+        GST_GL_CONTEXT_ERROR_WRONG_CONFIG, "Shared contexts are not allowed");
     return FALSE;
   }
 
@@ -106,8 +268,8 @@ gst_gl_context_emscripten_create_context (GstGLContext * context,
   canvas = (gchar *) gst_gl_display_get_handle (display);
 
   /* Check if a WebRunner GMainContext was attached to the display.
-   * If so, we're running on the runner's thread — create the GL
-   * context locally without PROXY_ALWAYS for zero-copy rendering. */
+   * If so, we're running on the runner's thread — try to create the GL
+   * context locally with an OffscreenCanvas for zero-copy rendering. */
   runner_ctx = g_object_get_qdata (G_OBJECT (display),
       _gl_runner_context_quark ());
 
@@ -115,26 +277,38 @@ gst_gl_context_emscripten_create_context (GstGLContext * context,
   attrs.majorVersion = 2;
   attrs.alpha = EM_FALSE;
 
-  if (runner_ctx) {
-    /* Runner thread path: the GL context will run on the same thread
-     * as the WebRunner (shared context mode).  Still use PROXY_ALWAYS
-     * so GL calls are proxied to the main thread where #canvas lives.
-     * The benefit is not proxy avoidance but thread merging — the GL
-     * window loop runs on the runner thread, not a separate one. */
+  if (runner_ctx && _try_transfer_offscreen_canvas (context, canvas)) {
+    /* OffscreenCanvas path: the canvas has been transferred to this
+     * worker thread and stored in specialHTMLTargets[selector].
+     * Create the WebGL context locally (no proxy) so GL calls execute
+     * directly on the runner thread.  This enables zero-copy
+     * texImage2D with WebCodecs VideoFrame. */
     GST_DEBUG_OBJECT (context,
-        "Creating WebGL context with shared runner thread");
-    attrs.proxyContextToMainThread = EMSCRIPTEN_WEBGL_CONTEXT_PROXY_ALWAYS;
-    attrs.explicitSwapControl = EM_TRUE;
-    attrs.renderViaOffscreenBackBuffer = EM_TRUE;
+        "Creating local WebGL context on runner thread (OffscreenCanvas)");
+    attrs.proxyContextToMainThread = EMSCRIPTEN_WEBGL_CONTEXT_PROXY_DISALLOW;
+    attrs.explicitSwapControl = EM_FALSE;
+    attrs.renderViaOffscreenBackBuffer = EM_FALSE;
     self->priv->handle = emscripten_webgl_create_context (canvas, &attrs);
+
+    if (!self->priv->handle) {
+      GST_WARNING_OBJECT (context,
+          "Local context creation failed, falling back to PROXY_ALWAYS");
+      goto proxy_always;
+    }
   } else {
-    /* Fallback: dedicated GL thread with PROXY_ALWAYS */
+  proxy_always:
+    /* Fallback: PROXY_ALWAYS path.  Used when:
+     *  - No runner context is set (dedicated GL thread)
+     *  - Running in Node.js (no OffscreenCanvas)
+     *  - OffscreenCanvas transfer failed
+     * GL calls are proxied to the browser main thread where the
+     * DOM canvas lives. */
+    GST_DEBUG_OBJECT (context,
+        "Creating Emscripten WebGL context with PROXY_ALWAYS on %s",
+        (gchar *) canvas);
     attrs.proxyContextToMainThread = EMSCRIPTEN_WEBGL_CONTEXT_PROXY_ALWAYS;
     attrs.explicitSwapControl = EM_TRUE;
     attrs.renderViaOffscreenBackBuffer = EM_TRUE;
-
-    GST_DEBUG_OBJECT (context, "Creating Emscripten WebGL context on %s",
-        (gchar *)canvas);
     self->priv->handle = emscripten_webgl_create_context (canvas, &attrs);
   }
 
@@ -143,8 +317,7 @@ gst_gl_context_emscripten_create_context (GstGLContext * context,
   if (!self->priv->handle) {
     g_set_error (error, GST_GL_CONTEXT_ERROR,
         GST_GL_CONTEXT_ERROR_CREATE_CONTEXT,
-        "Failed to create Emscripten WebGL context on '%s'.",
-        (gchar *) canvas);
+        "Failed to create Emscripten WebGL context on '%s'.", (gchar *) canvas);
     return FALSE;
   }
 
@@ -161,12 +334,22 @@ gst_gl_context_emscripten_destroy_context (GstGLContext * context)
   self->priv->handle = 0;
 }
 
-static void gst_gl_context_emscripten_swap_buffers (GstGLContext * context)
+static void
+gst_gl_context_emscripten_swap_buffers (GstGLContext * context)
 {
-  /* When using a local context on the runner thread (no PROXY_ALWAYS),
-   * the OffscreenCanvas auto-composites to the visible canvas.
-   * When using PROXY_ALWAYS with explicitSwapControl, commit_frame
-   * blits the offscreen FBO. */
+  /* Two paths:
+   *
+   * Local OffscreenCanvas (PROXY_DISALLOW, explicitSwapControl=false):
+   *   The browser auto-composites the OffscreenCanvas to the visible canvas
+   *   when the worker thread's current task completes and control returns to
+   *   the JS event loop.  This is spec-defined behavior for OffscreenCanvas
+   *   obtained via transferControlToOffscreen(), but means frame presentation
+   *   is asynchronous — the drawn content appears only after the worker yields.
+   *   emscripten_webgl_commit_frame() is a no-op in this configuration.
+   *
+   * PROXY_ALWAYS (explicitSwapControl=true):
+   *   emscripten_webgl_commit_frame() blits the offscreen FBO to the visible
+   *   DOM canvas immediately during the proxied call on the main thread. */
   emscripten_webgl_commit_frame ();
 }
 
@@ -201,7 +384,7 @@ gst_gl_context_emscripten_get_proc_address (GstGLAPI gl_api, const gchar * name)
 static guintptr
 gst_gl_context_emscripten_get_current_context (void)
 {
-  return (guintptr) emscripten_webgl_get_current_context();
+  return (guintptr) emscripten_webgl_get_current_context ();
 }
 
 static GThread *
@@ -222,8 +405,7 @@ gst_gl_context_emscripten_create_thread (GstGLContext * context,
     /* Replace the GL window's GMainContext with the runner's so that
      * gst_gl_window_send_message dispatches to the runner's loop. */
     if (context->window && context->window->main_context) {
-      GstGLWindowCanvas *canvas_window =
-          GST_GL_WINDOW_CANVAS (context->window);
+      GstGLWindowCanvas *canvas_window = GST_GL_WINDOW_CANVAS (context->window);
       g_main_context_unref (context->window->main_context);
       context->window->main_context = g_main_context_ref (runner_ctx);
       canvas_window->shared_context = TRUE;

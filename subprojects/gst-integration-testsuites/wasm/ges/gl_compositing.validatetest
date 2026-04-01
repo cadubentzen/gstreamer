@@ -11,8 +11,9 @@ meta,
 # Blue background
 add-clip, name=bg-blue, asset-id="width=1920, height=1080", pattern=blue, layer-priority=2, type=GESTestClip, duration=15.0
 
-# Circular pattern, drifts right to left
+# Circular pattern, drifts right to left, with fisheye effect
 add-clip, name=circular, asset-id="width=1920, height=1080", pattern=circular, layer-priority=1, type=GESTestClip, duration=15.0
+container-add-child, container-name=circular, asset-id="gleffects effect=3", child-type=GESEffect
 set-child-properties, element-name=circular, posx=960, posy=200, width=720, height=720, alpha=0.7
 
 set-control-source, element-name=circular, property-name=posx, binding-type=direct-absolute, source-type=interpolation, interpolation-mode=linear
@@ -26,8 +27,9 @@ add-keyframe, element-name=circular, property-name=alpha, timestamp=2.0, value=0
 add-keyframe, element-name=circular, property-name=alpha, timestamp=13.0, value=0.7
 add-keyframe, element-name=circular, property-name=alpha, timestamp=15.0, value=0.0
 
-# Moving ball PiP, bounces corner to corner
+# Moving ball PiP with glow effect, bounces corner to corner
 add-clip, name=ball, asset-id="width=1920, height=1080", pattern=ball, layer-priority=0, type=GESTestClip, duration=15.0
+container-add-child, container-name=ball, asset-id="gleffects effect=5", child-type=GESEffect
 set-child-properties, element-name=ball, posx=40, posy=40, width=480, height=270
 
 set-control-source, element-name=ball, property-name=posx, binding-type=direct-absolute, source-type=interpolation, interpolation-mode=linear
@@ -45,11 +47,13 @@ add-keyframe, element-name=ball, property-name=posy, timestamp=15.0, value=770.0
 
 # === Green section (15-30s) ===
 
-# Green background
+# Green background with sepia effect
 add-clip, name=bg-green, asset-id="width=1920, height=1080", pattern=green, layer-priority=2, type=GESTestClip, start=15.0, duration=15.0
+container-add-child, container-name=bg-green, asset-id="gleffects effect=2", child-type=GESEffect
 
-# SMPTE bars overlay, swings left to right
+# SMPTE bars overlay with bulge effect, swings left to right
 add-clip, name=smpte, asset-id="width=1920, height=1080", pattern=smpte, layer-priority=1, type=GESTestClip, start=15.0, duration=15.0
+container-add-child, container-name=smpte, asset-id="gleffects effect=14", child-type=GESEffect
 set-child-properties, element-name=smpte, posx=100, posy=100, width=800, height=450, alpha=0.8
 
 set-control-source, element-name=smpte, property-name=posx, binding-type=direct-absolute, source-type=interpolation, interpolation-mode=linear
@@ -63,8 +67,9 @@ add-keyframe, element-name=smpte, property-name=posy, timestamp=5.0, value=530.0
 add-keyframe, element-name=smpte, property-name=posy, timestamp=10.0, value=100.0
 add-keyframe, element-name=smpte, property-name=posy, timestamp=15.0, value=530.0
 
-# Pinwheel PiP, orbits bottom area
+# Pinwheel PiP with blur effect, orbits bottom area
 add-clip, name=pinwheel, asset-id="width=1920, height=1080", pattern=pinwheel, layer-priority=0, type=GESTestClip, start=15.0, duration=15.0
+container-add-child, container-name=pinwheel, asset-id="gleffects effect=10", child-type=GESEffect
 set-child-properties, element-name=pinwheel, posx=700, posy=700, width=400, height=400
 
 set-control-source, element-name=pinwheel, property-name=posx, binding-type=direct-absolute, source-type=interpolation, interpolation-mode=linear

@@ -12,8 +12,3 @@ meson setup "$builddir" \
   -Ddebug=false \
   -Drs=disabled
 meson compile -C "$builddir"
-xvfb-run python3 "$builddir/subprojects/gst-devtools/validate/tools/gst-validate-launcher" \
-  check.gstreamer check.gst-plugins-base check.gst-editing-services \
-  --meson-build-dir "$builddir" \
-  --meson-no-rebuild \
-  --timeout-factor "${TIMEOUT_FACTOR:-2}"

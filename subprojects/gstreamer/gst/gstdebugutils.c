@@ -506,11 +506,24 @@ debug_dump_describe_caps (GstCaps * caps, GstDebugGraphDetails details)
     }
 
   } else {
-    if (GST_CAPS_IS_SIMPLE (caps))
-      media =
-          g_strdup (gst_structure_get_name (gst_caps_get_structure (caps, 0)));
-    else
+    if (GST_CAPS_IS_SIMPLE (caps)) {
+      GstCapsFeatures *features = gst_caps_get_features (caps, 0);
+
+      if (features && !gst_caps_features_is_equal (features,
+              GST_CAPS_FEATURES_MEMORY_SYSTEM_MEMORY)) {
+        gchar *features_str = gst_caps_features_to_string (features);
+        media =
+            g_strdup_printf ("%s(%s)",
+            gst_structure_get_name (gst_caps_get_structure (caps, 0)),
+            features_str);
+        g_free (features_str);
+      } else {
+        media =
+            g_strdup (gst_structure_get_name (gst_caps_get_structure (caps, 0)));
+      }
+    } else {
       media = g_strdup ("*");
+    }
   }
   return media;
 }
@@ -528,14 +541,8 @@ debug_dump_element_pad_link (GstPad * pad, GstElement * element,
   gchar *pad_name, *element_name;
   gchar *peer_pad_name, *peer_element_name;
   const gchar *spc = MAKE_INDENT (indent);
-  // if the dots tracer is active, we want to keep the full caps in the label,
-  // but we don't want to show the caps details in the label itself, as that
-  // would make it too long. So we use a separate attribute for the full caps
-  // that can be shown in the tooltip of the edge in the dots viewer.
-  gboolean use_caps_attr = (details & GST_DEBUG_GRAPH_SHOW_CAPS_DETAILS)
-      && debug_is_dots_tracer_active ();
-  GstDebugGraphDetails caps_details =
-      use_caps_attr ? (details & ~GST_DEBUG_GRAPH_SHOW_CAPS_DETAILS) : details;
+  gboolean use_caps_attr = FALSE;
+  GstDebugGraphDetails caps_details = details;
 
   if ((peer_pad = gst_pad_get_peer (pad))) {
     if ((details & GST_DEBUG_GRAPH_SHOW_MEDIA_TYPE) ||

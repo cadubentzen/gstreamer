@@ -13,9 +13,10 @@ src_dots="subprojects/gst-devtools/dots-viewer/static"
 rm -rf "$public"
 mkdir -p "$public/validate" "$public/ges" "$public/dots-viewer"
 
-# Landing page and service worker
+# Landing page, service worker and favicon
 cp "$src_wasm/pages/index.html" "$public/"
 cp "$src_wasm/pages/coi-serviceworker.js" "$public/"
+cp "$src_wasm/pages/favicon.svg" "$public/"
 
 # WASM binaries from builddir
 cp "$builddir"/ges-validate-wasm-1.0.js "$public/"

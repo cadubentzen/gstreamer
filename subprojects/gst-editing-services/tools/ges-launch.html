@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <script src="coi-serviceworker.js"></script>
   <title>GES Validate WASM Runner</title>
   <style>
@@ -266,12 +267,12 @@
 
     function zoomIn() {
       pixelsPerSecond = Math.min(400, pixelsPerSecond * 1.3);
-      prevTotalClips = -1; // force refresh
+      if (isReady) refreshTimeline();
     }
 
     function zoomOut() {
       pixelsPerSecond = Math.max(10, pixelsPerSecond / 1.3);
-      prevTotalClips = -1;
+      if (isReady) refreshTimeline();
     }
 
     function refreshTimeline() {
@@ -296,7 +297,6 @@
         for (var c = 0; c < clipCount; c++) {
           var start = Module._ges_validate_wasm_get_clip_start(l, c);
           var duration = Module._ges_validate_wasm_get_clip_duration(l, c);
-
           var clipEl = document.createElement('div');
           clipEl.className = 'timeline-clip';
           clipEl.style.background = CLIP_COLORS[(l * 7 + c) % CLIP_COLORS.length];
@@ -375,19 +375,24 @@
     function uiLoop() {
       if (!isReady) { requestAnimationFrame(uiLoop); return; }
 
-      // Detect timeline structure changes
-      var layerCount = Module._ges_validate_wasm_get_layer_count();
-      var totalClips = 0;
-      for (var i = 0; i < layerCount; i++)
-        totalClips += Module._ges_validate_wasm_get_clip_count(i);
+      try {
+        // Detect timeline structure changes
+        var layerCount = Module._ges_validate_wasm_get_layer_count();
+        var totalClips = 0;
+        for (var i = 0; i < layerCount; i++)
+          totalClips += Module._ges_validate_wasm_get_clip_count(i);
 
-      if (layerCount !== prevLayerCount || totalClips !== prevTotalClips) {
-        prevLayerCount = layerCount;
-        prevTotalClips = totalClips;
-        refreshTimeline();
+        if (layerCount !== prevLayerCount || totalClips !== prevTotalClips) {
+          prevLayerCount = layerCount;
+          prevTotalClips = totalClips;
+          refreshTimeline();
+        }
+
+        updatePlayhead();
+      } catch (e) {
+        // Runtime exited (test finished), stop polling
+        return;
       }
-
-      updatePlayhead();
       requestAnimationFrame(uiLoop);
     }
 
@@ -429,7 +434,13 @@
           el.scrollTop = el.scrollHeight;
         },
         printErr: function(text) {
-          // console.error(text);
+          // GST_DEBUG goes to browser console via gstinfo.c emscripten handler.
+          // Only show critical errors in the log panel.
+          if (/abort|error|fatal|critical/i.test(text)) {
+            var el = document.getElementById('output');
+            el.textContent += text + '\n';
+            el.scrollTop = el.scrollHeight;
+          }
           // if (/validate|action|PASSED|FAILED|critical|warning :|error :|Issues found/i.test(text)) {
           //   var el = document.getElementById('output');
           //   el.textContent += text + '\n';

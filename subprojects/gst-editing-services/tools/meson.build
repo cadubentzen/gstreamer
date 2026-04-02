@@ -38,7 +38,7 @@ if host_system == 'emscripten'
         '-Wl,--allow-multiple-definition',
         '-sASSERTIONS=1',
         '--profiling-funcs',
-        '-sEXPORTED_FUNCTIONS=_main,_gst_dots_snapshot,_ges_validate_wasm_get_position,_ges_validate_wasm_get_duration,_ges_validate_wasm_get_layer_count,_ges_validate_wasm_get_clip_count,_ges_validate_wasm_get_clip_start,_ges_validate_wasm_get_clip_duration',
+        '-sEXPORTED_FUNCTIONS=_main,_gst_dots_snapshot,_ges_validate_wasm_get_position,_ges_validate_wasm_get_duration,_ges_validate_wasm_get_layer_count,_ges_validate_wasm_get_clip_count,_ges_validate_wasm_get_clip_start,_ges_validate_wasm_get_clip_duration,_ges_validate_wasm_get_clip_name',
         '-sMIN_WEBGL_VERSION=2',
         '-sMAX_WEBGL_VERSION=2',
         '-sFULL_ES3',

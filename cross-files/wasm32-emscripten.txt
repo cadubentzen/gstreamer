@@ -208,7 +208,7 @@ doc = 'disabled'
 tools = 'disabled'
 
 [gst-editing-services:project options]
-validate = 'disabled'
+validate = 'enabled'
 tools = 'enabled'
 tests = 'enabled'
 examples = 'disabled'

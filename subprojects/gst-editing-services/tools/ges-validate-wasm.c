@@ -52,6 +52,7 @@ static struct {
   int clip_count[MAX_LAYERS];
   double clip_start[MAX_LAYERS][MAX_CLIPS_PER_LAYER];
   double clip_duration[MAX_LAYERS][MAX_CLIPS_PER_LAYER];
+  const gchar *clip_name[MAX_LAYERS][MAX_CLIPS_PER_LAYER];
   double timeline_duration;
   double position;
 } cached_state = { 0 };
@@ -83,6 +84,8 @@ update_cached_state (void)
       cached_state.clip_duration[li][ci] =
           (double) ges_timeline_element_get_duration (GES_TIMELINE_ELEMENT
           (c->data)) / GST_SECOND;
+      cached_state.clip_name[li][ci] =
+          ges_timeline_element_get_name (GES_TIMELINE_ELEMENT (c->data));
     }
     g_list_free_full (clips, gst_object_unref);
   }
@@ -149,6 +152,16 @@ ges_validate_wasm_get_clip_duration (int layer, int clip)
   if (clip < 0 || clip >= cached_state.clip_count[layer])
     return 0;
   return cached_state.clip_duration[layer][clip];
+}
+
+const gchar *
+ges_validate_wasm_get_clip_name (int layer, int clip)
+{
+  if (layer < 0 || layer >= cached_state.layer_count)
+    return "";
+  if (clip < 0 || clip >= cached_state.clip_count[layer])
+    return "";
+  return cached_state.clip_name[layer][clip] ? cached_state.clip_name[layer][clip] : "";
 }
 
 typedef struct

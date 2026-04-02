@@ -1,0 +1,48 @@
+name: Build WASM and deploy demo to GitHub Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "tla_wasm"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    name: Build WASM and deploy
+    runs-on: big-x64-runner
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build WASM
+        run: |
+          docker pull registry.freedesktop.org/thiblahute/gstreamer/amd64/fedora:2026-04-01.0-main
+          docker run --rm --user root \
+            -v ${{ github.workspace }}:/src \
+            -w /src \
+            registry.freedesktop.org/thiblahute/gstreamer/amd64/fedora:2026-04-01.0-main \
+            bash -c "ci/scripts/build-emscripten.sh build/"
+
+      - name: Assemble demo site
+        run: ci/scripts/deploy-pages.sh build/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

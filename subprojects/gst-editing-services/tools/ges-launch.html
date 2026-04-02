@@ -246,7 +246,7 @@
     <div class="timeline-layers" id="timeline-layers"></div>
   </div>
 
-  <script src="/dots-viewer/dist/gst-dots-wasm-bundle.js"></script>
+  <script src="dots-viewer/dist/gst-dots-wasm-bundle.js"></script>
   <script>
     var CLIP_COLORS = [
       '#e94560', '#533483', '#0f3460', '#e97d20', '#20e9a0',
@@ -411,7 +411,7 @@
 
       var Module = {
         canvas: document.getElementById('canvas'),
-        locateFile: function(path) { return '/' + path; },
+        locateFile: function(path) { return path; },
         onAbort: function(what) { console.error('WASM ABORT: ' + what); },
         onRuntimeInitialized: function() {
           isReady = true;
@@ -440,7 +440,7 @@
 
       window.Module = Module;
       var script = document.createElement('script');
-      script.src = '/ges-validate-wasm-1.0.js';
+      script.src = 'ges-validate-wasm-1.0.js';
       document.body.appendChild(script);
 
       requestAnimationFrame(uiLoop);

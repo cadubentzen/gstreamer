@@ -144,6 +144,11 @@
       var Module = {
         canvas: document.getElementById('canvas'),
         locateFile: function(path) { return path; },
+        onAbort: function(what) {
+          console.error('WASM ABORT: ' + what);
+          statusEl.textContent = 'ERROR';
+          statusEl.className = 'fail';
+        },
         preRun: [function() {
           FS.writeFile('/test.validatetest', testFile);
           ENV["GST_DEBUG"] = "*:2";

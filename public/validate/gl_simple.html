@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head><title>GStreamer GL Simple Demo</title></head>
+<body>
+  <h2>videotestsrc → glimagesink</h2>
+  <canvas id="canvas" width="640" height="480" style="border:1px solid #ccc"></canvas>
+  <pre id="output" style="max-height:200px;overflow:auto;font-size:11px"></pre>
+  <script>
+    var Module = {
+      canvas: document.getElementById('canvas'),
+      locateFile: function(path) { return '/' + path; },
+      preRun: [function() {
+        FS.writeFile("/test.validatetest",
+          'meta,\n    args = {\n        "videotestsrc num-buffers=300 ! glimagesink",\n    }\n');
+      }],
+      print: function(text) {
+        console.log(text);
+        document.getElementById('output').textContent += text + '\n';
+      },
+      printErr: function(text) { console.error(text); },
+    };
+  </script>
+  <script src="/gst-validate-wasm-1.0.js"></script>
+</body>
+</html>

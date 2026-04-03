@@ -1,0 +1,42 @@
+meta,
+    handles-states=true,
+    args = {
+        "webstreamsrc location=\"$(GST_WASM_MEDIA_URL)/mp4/qr_h264.mp4\" ! qtdemux name=demux demux.video_0 ! video/x-h264 ! webcodecsviddech264sw ! webdownload ! videoconvert ! video/x-raw,format=I420 ! fakesink name=sink enable-last-sample=true sync=true",
+    }
+
+# Stress-test seeking: rapid backward seeks with QR verification.
+# QR media is 5s @ 30fps. PTS = frame_number * 33333333 ns.
+#   0s → 0,  1s → 999999990,  2s → 1999999980
+set-state, state=playing
+wait, duration=4.0
+set-state, state=paused
+
+# Seek to 2s
+seek, start=2.0, flags=flush+accurate
+check-last-frame-qrcode, sink-name=sink, expected-json-fields=[fields,TIMESTAMP=1999999980]
+
+# Seek to 1s
+seek, start=1.0, flags=flush+accurate
+check-last-frame-qrcode, sink-name=sink, expected-json-fields=[fields,TIMESTAMP=999999990]
+
+# Seek to 0
+seek, start=0.0, flags=flush+accurate
+check-last-frame-qrcode, sink-name=sink, expected-json-fields=[fields,TIMESTAMP=0]
+
+# Repeat — seek to 2s again
+seek, start=2.0, flags=flush+accurate
+check-last-frame-qrcode, sink-name=sink, expected-json-fields=[fields,TIMESTAMP=1999999980]
+
+# Back to 0
+seek, start=0.0, flags=flush+accurate
+check-last-frame-qrcode, sink-name=sink, expected-json-fields=[fields,TIMESTAMP=0]
+
+# Seek to 1s
+seek, start=1.0, flags=flush+accurate
+check-last-frame-qrcode, sink-name=sink, expected-json-fields=[fields,TIMESTAMP=999999990]
+
+# Final seek to 0
+seek, start=0.0, flags=flush+accurate
+check-last-frame-qrcode, sink-name=sink, expected-json-fields=[fields,TIMESTAMP=0]
+
+stop

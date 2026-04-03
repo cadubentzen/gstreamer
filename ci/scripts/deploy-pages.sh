@@ -29,6 +29,9 @@ cp "$builddir"/gst-validate-wasm-1.0.worker.js "$public/" 2>/dev/null || true
 # GES HTML page
 cp "$src_ges/ges-launch.html" "$public/"
 
+# gst-validate pipeline runner page
+cp "$src_wasm/pages/gst-launch.html" "$public/"
+
 # Validate demo HTML pages
 cp "$src_wasm/demos/"*.html "$public/validate/"
 

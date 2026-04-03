@@ -1,0 +1,4 @@
+meta,
+    args = {
+        "webstreamsrc location=\"https://dash.akamaized.net/akamai/bbb_30fps/bbb_30fps_1920x1080_8000k.mp4\" ! qtdemux name=demux demux.video_0 ! video/x-h264 ! webcodecsviddech264hw ! glimagesink",
+    }

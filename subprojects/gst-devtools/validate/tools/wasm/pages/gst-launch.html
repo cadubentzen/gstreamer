@@ -121,6 +121,7 @@
     </div>
   </div>
 
+  <script src="dots-viewer/dist/gst-dots-wasm-bundle.js"></script>
   <script>
     var statusEl = document.getElementById('status');
 
@@ -153,6 +154,7 @@
           FS.writeFile('/test.validatetest', testFile);
           ENV["GST_DEBUG"] = "*:2";
           ENV["GST_DEBUG_NO_COLOR"] = "1";
+          ENV["GST_TRACERS"] = "dots";
         }],
         print: function(text) {
           console.log(text);
